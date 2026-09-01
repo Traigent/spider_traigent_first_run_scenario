@@ -1,0 +1,105 @@
+# What the committed data is, where it came from, and what it is allowed to be used for.
+# The code in this repository is Apache-2.0; the data described here is not. See LICENSE-DATA.
+
+name: spider-300
+display_name: Spider 1.0 -- 300-row first-run slice
+task: text-to-SQL over multi-table SQLite databases
+
+license: CC-BY-SA-4.0
+license_url: https://creativecommons.org/licenses/by-sa/4.0/
+attribution: >-
+  Yu et al., "Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain
+  Semantic Parsing and Text-to-SQL Task", EMNLP 2018. Data from the Spider 1.0 development
+  set, redistributed under CC BY-SA 4.0. This slice is an adapted subset and carries the
+  same licence.
+
+publication:
+  title: "Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain Semantic Parsing and Text-to-SQL Task"
+  venue: EMNLP 2018
+  year: 2018
+  url: https://arxiv.org/abs/1809.08887
+  project: https://yale-lily.github.io/spider
+
+source:
+  hf_repo: xlangai/spider
+  revision: 0c350918f3f29ec754f1181c65cdce76cd6c133c
+  split: dev
+  pool: >-
+    Derived from the frozen 754-row ext pool in the Traigent benchmarks Spider harness, whose
+    rows were each verified to appear verbatim (db_id + question + normalised SQL) in the
+    official 1,034-row Spider dev set.
+
+slice:
+  file: spider_300.jsonl
+  sha256: a3da17845c2bccf9600802aff53df834bc7bb853b4e2c11a0ee848a01a5cdda2
+  n: 300
+  seed: 42
+  builder: build_slice.py
+  row_shape: >-
+    Flat. "input" is the question text, "output" is the gold SQL, and id, db_id, schema,
+    split, difficulty and provenance ride in "metadata".
+  row_id: >-
+    metadata.id is "spider-dev-NNNN", where NNNN is the row's position in the 754-row source
+    pool, so a row can be traced back and excluding one from a run names something stable.
+  splits:
+    tuning: 240
+    holdout: 60
+    note: Split within each difficulty band, so the holdout is as hard as the tuning data.
+  difficulty:
+    easy: 75
+    medium: 75
+    hard: 75
+    very-hard: 75
+    source: >-
+      Spider's own official hardness classifier (Evaluator.eval_hardness from the vendored
+      test-suite evaluation code), applied to the gold query. Spider's "extra" band is written
+      "very-hard" here because that is the vocabulary the first-run readiness scorer reads.
+  filters:
+    - >-
+      Gold query must execute against the committed database. All 754 pool rows pass; none was
+      dropped for this reason.
+    - >-
+      Gold query must return at least one row. 35 of 754 (4.6%) were dropped. An empty gold is
+      gradeable by accident under execution accuracy: any wrong-but-empty prediction matches it.
+    - >-
+      No question may be a paraphrase of one already kept. 2 further rows were dropped. Spider's
+      dev set contains straight restatements of the same question, and the first-run readiness
+      check finds them and marks the data less diverse. Test: three-word shingles, Jaccard, 0.7.
+
+databases:
+  path: databases/
+  count: 18
+  size_kb: 972
+  note: >-
+    The SQLite databases the 300 questions need, committed so execution works from a bare clone.
+    Spider's full database set is ~840 MB across 166 databases and is not redistributed here; the
+    source pool was already restricted to databases under 5 MB, which is why one large dev
+    database (wta_1) is absent along with the questions that need it.
+
+verified:
+  date: 2026-09-01
+  checks:
+    - "300/300 gold queries execute against the committed databases"
+    - "300/300 gold queries return a non-empty result set"
+    - "300/300 unique questions, and no pair reaches 70% shingle similarity"
+    - "300/300 rows carry a unique stable id"
+    - "18/18 required databases present"
+    - "committed schema text matches the real database in every row of the source pool (754/754)"
+
+known_flaws:
+  - text: >-
+      Saturated. The authors built Spider 2.0 because 1.0 stopped discriminating between strong
+      models. Treat a high score here as a sanity check, not a capability claim.
+    source_url: https://arxiv.org/abs/2411.07763
+  - text: >-
+      Execution accuracy is not semantic correctness. Two different queries can return the same
+      rows on one database instance by luck. Dropping empty golds removes the worst case but not
+      the general one.
+    source_url: https://arxiv.org/abs/2010.02840
+  - text: >-
+      The dev set is widely reproduced in papers and pretraining corpora. Treat any number from
+      it as contaminated for modern models.
+    source_url: https://arxiv.org/abs/2405.00332
+  - text: >-
+      300 rows is a demonstration size. It is enough to separate configurations, not enough to
+      settle a production question.

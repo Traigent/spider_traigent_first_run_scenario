@@ -1,0 +1,40 @@
+Licence for the data in this directory
+======================================
+
+The files in this directory -- spider_300.jsonl and everything under databases/ -- are NOT
+covered by the Apache-2.0 licence in the repository root. They are a redistributed and adapted
+subset of the Spider 1.0 dataset and are licensed under:
+
+    Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+    https://creativecommons.org/licenses/by-sa/4.0/
+
+Attribution
+-----------
+
+    Yu, Tao; Zhang, Rui; Yang, Kai; Yasunaga, Michihiro; Wang, Dongxu; Li, Zifan;
+    Ma, James; Li, Irene; Yao, Qingning; Roman, Shanelle; Zhang, Yi; Radev, Dragomir.
+    "Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain Semantic
+    Parsing and Text-to-SQL Task." EMNLP 2018.
+    https://arxiv.org/abs/1809.08887 -- https://yale-lily.github.io/spider
+
+Changes made to the original
+----------------------------
+
+This is an adaptation, and ShareAlike applies to it. What was changed:
+
+  * A 300-row subset of the development split was selected (seed 42), not the whole set.
+  * Rows whose gold query returns an empty result set were removed.
+  * Each row was labelled with a difficulty band, computed with Spider's own official
+    hardness classifier, and assigned to a tuning or holdout split.
+  * Rows were reshaped into one flat JSON object per line.
+  * Only the 18 SQLite databases these 300 questions need are included.
+
+build_slice.py in this directory reproduces all of it.
+
+What ShareAlike means here
+--------------------------
+
+Anything derived from this data must also be shared under CC BY-SA 4.0 with the attribution
+above. That obligation travels with the data, not with the code, and it does not go away if
+the data is copied somewhere else. Publishing this repository, or a generated demo project
+containing these rows, is a redistribution: this file must travel with it.
