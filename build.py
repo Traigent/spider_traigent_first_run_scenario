@@ -109,18 +109,32 @@ EVALUATOR_FACTS = {
 
 PRESETS = {
     "ready": {"agent": "ready", "dataset": "ready", "eval": "exact-match"},
+    "checked": {
+        "agent": "ready",
+        "dataset": "ready",
+        "eval": "exact-match",
+        "calibration": "present",
+    },
     "no-eval": {"agent": "ready", "dataset": "ready", "eval": "missing"},
     "no-labels": {"agent": "ready", "dataset": "unlabeled", "eval": "exact-match"},
     "no-knobs": {"agent": "no-knobs", "dataset": "ready", "eval": "exact-match"},
     "sql-exec-stop": {"agent": "ready", "dataset": "ready", "eval": "exec-match"},
+    "best-case": {
+        "agent": "ready",
+        "dataset": "ready",
+        "eval": "exec-match",
+        "calibration": "present",
+    },
 }
 
 PRESET_NOTES = {
-    "ready": "everything present and tunable",
+    "ready": "everything present and tunable, scorer not yet checked",
+    "checked": "the same, and the team keeps probe answers for its scorer",
     "no-eval": "no way to score an answer",
     "no-labels": "questions with no expected answers",
     "no-knobs": "an agent with nothing to search",
     "sql-exec-stop": "an evaluator that executes the candidate SQL",
+    "best-case": "the highest-scoring project this data allows -- and it runs the SQL",
 }
 
 
@@ -577,7 +591,12 @@ def cmd_list(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "ok": True,
         "presets": [
-            {"name": name, "note": PRESET_NOTES[name], **PRESETS[name]}
+            {
+                "name": name,
+                "note": PRESET_NOTES[name],
+                "calibration": "none",
+                **PRESETS[name],
+            }
             for name in sorted(PRESETS)
         ],
         "states": {
@@ -704,11 +723,13 @@ def render_demo(result: dict[str, Any]) -> str:
 
 
 def render_list(result: dict[str, Any]) -> str:
-    lines = ["PRESET           AGENT      DATASET    EVAL           WHAT IT IS"]
+    lines = [
+        "PRESET           AGENT      DATASET    EVAL           CALIB    WHAT IT IS"
+    ]
     for preset in result["presets"]:
         lines.append(
             f"{preset['name']:<16} {preset['agent']:<10} {preset['dataset']:<10} "
-            f"{preset['eval']:<14} {preset['note']}"
+            f"{preset['eval']:<14} {preset['calibration']:<8} {preset['note']}"
         )
     lines.append("")
     for name, values in result["states"].items():

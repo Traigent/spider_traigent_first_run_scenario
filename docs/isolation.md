@@ -118,8 +118,10 @@ for entry in record["files"]:
 PY
 ```
 
-Anything the run added -- `traigent-runs/`, `.venv-traigent`, `.env` -- will not be in the
-record, because it was not there when the demo was built.
+Anything the run added -- `.venv-traigent`, `.env`, and everything the guide writes under
+`traigent-runs/` -- will not be in the record, because it was not there when the demo was
+built. (With `--calibration present` the project already has one file under `traigent-runs/`,
+its probe answers, and that one *is* in the record.)
 
 Demos are disposable. Build a new one rather than reusing one that has been run: a project
 that has already been through a run carries its notes, its environment and its results, and

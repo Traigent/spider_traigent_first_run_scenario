@@ -79,15 +79,21 @@ def compact_schema(schema):
     return "\n".join(lines)
 
 
-def schema_for_config(schema, config):
-    context = str(config.get("schema_context", "none"))
+def schema_blocks(schema, context):
+    """The schema blocks this setting shows -- none at all, or the one it names.
+
+    'none' is the control arm, so it yields nothing to add to the prompt: not an empty
+    block, and not a sentence saying the schema was withheld. A sentence is content the
+    model reads, and the setting would then be measuring that sentence as well as the
+    schema it stands in for.
+    """
     if context not in SCHEMA_CONTEXTS:
         raise ValueError(f"schema_context {context!r} is not one of {SCHEMA_CONTEXTS}")
     if context == "none":
-        return ""
+        return ()
     if context == "tables":
-        return compact_schema(schema)
-    return schema
+        return (compact_schema(schema),)
+    return (schema,)
 
 
 def build_prompt(question, config):
@@ -97,15 +103,17 @@ def build_prompt(question, config):
         raise KeyError(
             f"no database recorded for this question, so there is nothing to write SQL against: {question!r}"
         )
-    schema_block = schema_for_config(entry["schema"], config)
-    instruction = PROMPT_STYLES[config.get("prompt_style", "direct")]
-    prefix = f"Database schema:\n{schema_block}\n\n" if schema_block else ""
-    return f"{prefix}{instruction}\nQuestion: {question}\nSQL:"
+    context = str(config.get("schema_context", "none"))
+    parts = [PROMPT_STYLES[config.get("prompt_style", "direct")]]
+    parts.append(f"\nQuestion: {question}\nSQL:")
+    for block in schema_blocks(entry["schema"], context):
+        parts.insert(0, f"Database schema:\n{block}\n\n")
+    return "".join(parts)
 
 
 def strip_code_fence(text):
     """The query on its own, with any markdown fence the model added removed."""
-    text = text.strip()
+    text = (text or "").strip()
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
         text = re.sub(r"\n?```$", "", text)
@@ -143,5 +151,6 @@ def run(input_text, config):
             f"{model!r} is not one of the models this agent is configured for"
         )
     temperature = float(config.get("temperature", 0.0))
-    prompt = build_prompt(input_text, config)
-    return strip_code_fence(call_model(model, prompt, temperature) or "")
+    return strip_code_fence(
+        call_model(model, build_prompt(input_text, config), temperature)
+    )

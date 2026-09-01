@@ -49,16 +49,22 @@ it, and the readiness score points the other way.
 
 Measured against the first-run guide at revision `6ec2b9c1` on 2026-09-01:
 
-| declared method | task kind | task-fit | evaluation pillar |
-|---|---|---|---|
-| `execution` | `code-sql` | **25.0 / 25** | 51 |
-| `normalized-exact` | `code-sql` | **8.0 / 25** | 33 |
+| declared method | task kind | task-fit | evaluation pillar | calibrated |
+|---|---|---|---|---|
+| `execution` | `code-sql` | **25.0 / 25** | 51 | **99** |
+| `normalized-exact` | `code-sql` | **8.0 / 25** | 33 | **83** |
 
 The evidence strings are `"execution suits code-sql output"` and `"normalized-exact is a
 poor ruler for code-sql output"`. Both readings are defensible on their own terms --
 execution really is the better ruler for SQL. Together with the prose, they mean the score
 rewards declaring the evaluator the guide forbids, by seventeen points, on the task kind
 this whole repository is about.
+
+That 16-point gap is the whole distance between the two bands this project can reach.
+`--preset checked` scores **86 STRONG** and `--preset best-case` scores **91 EXCELLENT**, and
+the only difference between them is which scorer they ship. EXCELLENT needs an evaluation
+pillar of 95, and the text comparator's calibrated ceiling is 83 -- so the highest band this
+project can read is only available to the evaluator the guide is told to stop.
 
 Three further findings from the same runs:
 
@@ -69,7 +75,14 @@ Three further findings from the same runs:
 - **No bundled script detects SQL execution.** The static evaluator check parses the file and
   says so explicitly -- it "proves nothing about its scoring behavior, which is not executed
   here". Its output is identical for both scorers apart from the filename.
-- **No containment cap is emitted anywhere**, on any combination tried.
+- **No containment cap is emitted anywhere**, on any combination tried. `--preset
+  sql-exec-stop` reaches `recommended_action: proceed`.
+- **A declaration alone buys the top band.** Declaring the *text* comparator as method
+  `exact` with task kind `structured` scores it **92 EXCELLENT with no caps** -- numerically
+  indistinguishable from the reference scenario's published card, with the file unchanged.
+  Declaring the task kind alone changes nothing; it is the method string that pays. This
+  repository does not do it, and a high band should not be read as evidence that anyone
+  checked.
 
 The calibration tool's own `--allow-execution` gate is not a check on this: it refuses to
 import *any* scorer without the flag, identically for a pure string comparator, and with the
@@ -87,6 +100,24 @@ Whether that boundary should be enforced somewhere executable, or whether `code-
 stop awarding full task-fit to an execution evaluator, is a question for the first-run
 guide, not for this repository. **The numbers above are a reading from one revision on one
 date.** Re-measure before quoting them anywhere that matters.
+
+## Checking the scorer
+
+`--calibration present` ships the probe answers a project keeps for its own scorer -- for
+each case a right answer, an equivalent one, a partly-right one and a wrong one -- and the
+guide's `calibrate_evaluator.py` measures whether the scorer separates them. That is what
+clears `evaluator-unvalidated`, and it is worth 41 points to the opening card.
+
+The two scorers get different probes, because equivalence means different things to them.
+The text comparator is given re-spellings of a recorded query: different spacing, quote
+style, keyword case, a trailing semicolon. The execution scorer is given queries written
+differently that return the same rows: an alias, an `IN` with one element, an implicit `ASC`.
+Handing either the other's probes would measure the wrong thing and report a known limit as a
+defect. Every case comes from a real row of the slice, all from the tuning split, and every
+probe query was executed against the shipped databases before being written down.
+
+Measured: `exact-match` passes, `exec-match` passes, and `broken` **fails** -- it returns 1.0
+for the wrong-answer probe, so calibration catches it. That is why cases ship for it too.
 
 ## `broken` and `missing`
 
