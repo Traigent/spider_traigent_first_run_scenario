@@ -393,6 +393,33 @@ class Environments(unittest.TestCase):
             )
 
 
+class TheProjectReadmeDescribesEveryFileInIt(unittest.TestCase):
+    """The generated README is built from what was written, so it cannot drift.
+
+    It can still fail open: a file shipped with no description would simply not be
+    mentioned, which is the defect the generation was written to close, one dict key away.
+    """
+
+    def test_every_shipped_file_has_a_description(self) -> None:
+        with tempfile.TemporaryDirectory() as workspace:
+            for preset in sorted(build.PRESETS):
+                with self.subTest(preset=preset):
+                    out = Path(workspace) / preset
+                    result = run_build("demo", "--preset", preset, "--out", str(out))
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    project = out / "project"
+                    readme = (project / "README.md").read_text()
+                    for path in sorted(project.rglob("*")):
+                        if path.is_dir() or path.name == "README.md":
+                            continue
+                        name = path.relative_to(project).as_posix()
+                        top = name.split("/")[0]
+                        self.assertTrue(
+                            f"`{name}`" in readme or f"`{top}/`" in readme,
+                            f"{preset}: {name} is in the project and not in its README",
+                        )
+
+
 class Guards(unittest.TestCase):
     def setUp(self) -> None:
         self.workspace = tempfile.mkdtemp()

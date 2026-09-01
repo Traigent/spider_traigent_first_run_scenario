@@ -281,7 +281,8 @@ class TheScorerAndTheAgentAgreeAboutWhatTheModelSends(unittest.TestCase):
                     for column in connection.execute(f'PRAGMA table_info("{name}")')
                 ]
                 for (name,) in connection.execute(
-                    "select name from sqlite_master where type='table'"
+                    "select name from sqlite_master where type='table' "
+                    "and name not like 'sqlite_%'"
                 )
             }
             connection.close()
@@ -296,6 +297,16 @@ class TheScorerAndTheAgentAgreeAboutWhatTheModelSends(unittest.TestCase):
                     [c.lower() for c in truth or []],
                     f"{db_id}.{table} is described with columns it does not have",
                 )
+            # Counting only what the parser emitted cannot see a table it dropped, so the
+            # rendered set is compared with the database's own list of tables.
+            self.assertEqual(
+                {
+                    line.partition("(")[0].strip().lower()
+                    for line in agent.compact_schema(schema).splitlines()
+                },
+                set(real),
+                f"{db_id}: the compact view and the database disagree on which tables exist",
+            )
         self.assertGreater(
             checked, 70, "every committed database should have been checked"
         )

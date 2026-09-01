@@ -75,7 +75,11 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def gold_row_count(sql: str, db_file: Path, timeout_seconds: float = 5.0) -> int | None:
-    """Rows the gold query returns, or None when it does not execute at all."""
+    """Rows the gold query returns, or None when it runs and fails.
+
+    A database that is not there is a different problem from a query that does not run, and
+    it stops the build rather than being reported as a broken recorded answer.
+    """
     if not db_file.is_file():
         # sqlite3.connect would CREATE an empty database here, and every query against it
         # would then fail as though the recorded answer were wrong.
@@ -230,11 +234,27 @@ def build(
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
     needed = sorted({row["metadata"]["db_id"] for row in selected})
-    # Rebuilt from scratch: a slice needing fewer databases than the last one would
-    # otherwise leave the extras behind, and nothing downstream looks for extras.
+    # Rebuilt from scratch, because a slice needing fewer databases than the last one would
+    # otherwise leave the extras behind and nothing downstream looks for extras. Only the
+    # per-database directories are removed, and only from a path that is named `databases`:
+    # --databases takes a path from whoever runs this, and an unguarded tree delete on it
+    # would happily take the rows file, this script, or the source pool it reads from.
+    db_dest = db_dest.resolve()
     if db_dest.exists():
-        shutil.rmtree(db_dest)
-    db_dest.mkdir(parents=True)
+        if db_dest.name != "databases":
+            raise SystemExit(
+                f"refusing to rewrite {db_dest}: --databases must name a directory called "
+                "'databases', because its contents are deleted and rebuilt"
+            )
+        if db_dest == source_dbs.resolve() or db_dest in source_dbs.resolve().parents:
+            raise SystemExit(
+                f"refusing to rewrite {db_dest}: it holds the source databases this build "
+                "reads from"
+            )
+        for existing in db_dest.iterdir():
+            if existing.is_dir() and not existing.is_symlink():
+                shutil.rmtree(existing)
+    db_dest.mkdir(parents=True, exist_ok=True)
     for db_id in needed:
         target = db_dest / db_id
         target.mkdir(exist_ok=True)

@@ -67,20 +67,53 @@ def catalog():
 CONSTRAINT_KEYWORDS = ("primary", "foreign", "unique", "constraint", "check")
 
 
+def _outside_quotes(statement):
+    """The statement with quoted spans blanked out, so a scan can count only real syntax.
+
+    A default value or a quoted identifier may contain a parenthesis or a comma. Counting
+    those as syntax loses a column or invents one, which is what splitting on every comma
+    did before -- the same mistake one level down.
+    """
+    masked = []
+    index = 0
+    while index < len(statement):
+        character = statement[index]
+        if character in "'\"`":
+            quote = character
+            masked.append(" ")
+            index += 1
+            while index < len(statement):
+                if statement[index] == quote:
+                    if index + 1 < len(statement) and statement[index + 1] == quote:
+                        masked.append("  ")
+                        index += 2
+                        continue
+                    break
+                masked.append(" ")
+                index += 1
+            masked.append(" ")
+            index += 1
+            continue
+        masked.append(character)
+        index += 1
+    return "".join(masked)
+
+
 def _table_body(statement):
     """The text between a CREATE TABLE's outermost parentheses.
 
     Matched by depth rather than by looking for the last `)`, because a column type carries
     its own parentheses -- `DECIMAL(19,4)` -- and so does a composite key.
     """
-    opened = statement.find("(")
+    syntax = _outside_quotes(statement)
+    opened = syntax.find("(")
     if opened == -1:
         return None
     depth = 0
-    for position in range(opened, len(statement)):
-        if statement[position] == "(":
+    for position in range(opened, len(syntax)):
+        if syntax[position] == "(":
             depth += 1
-        elif statement[position] == ")":
+        elif syntax[position] == ")":
             depth -= 1
             if depth == 0:
                 return statement[opened + 1 : position]
@@ -97,12 +130,13 @@ def _split_top_level(body):
     parts = []
     depth = 0
     current = []
-    for character in body:
-        if character == "(":
+    syntax = _outside_quotes(body)
+    for position, character in enumerate(body):
+        if syntax[position] == "(":
             depth += 1
-        elif character == ")":
+        elif syntax[position] == ")":
             depth -= 1
-        if character == "," and depth == 0:
+        if syntax[position] == "," and depth == 0:
             parts.append("".join(current))
             current = []
             continue
@@ -169,23 +203,27 @@ def strip_code_fence(text):
 
     Both prompt styles ask for SQL only, so this is a backstop rather than the normal path.
     It handles what a model actually does when it ignores that: a ``` or ~~~ fence with or
-    without a language tag, a line of preamble before the fence, and anything trailing after
-    the closing fence.
+    without a language tag, a line of preamble before it, and anything after the closing one.
+
+    A fence is only recognised at the start of a line. Searching the whole reply for the
+    delimiter would find one inside a string literal -- `WHERE code = '```'` is a legal
+    query -- and truncate the answer there.
     """
-    text = (text or "").strip()
-    for fence in ("```", "~~~"):
-        if fence not in text:
-            continue
-        _, _, after = text.partition(fence)
-        # A language tag sits on the fence's own line, so drop the remainder of that line.
-        first_line, newline, rest = after.partition("\n")
-        if newline and not first_line.strip().startswith(
-            ("select", "with", "SELECT", "WITH")
-        ):
-            after = rest
-        body, _, _ = after.partition(fence)
-        return body.strip()
-    return text
+    lines = (text or "").strip().splitlines()
+    opened = None
+    for position, line in enumerate(lines):
+        if line.lstrip().startswith(("```", "~~~")):
+            opened = position
+            break
+    if opened is None:
+        return "\n".join(lines).strip()
+    closer = lines[opened].lstrip()[:3]
+    body = []
+    for line in lines[opened + 1 :]:
+        if line.lstrip().startswith(closer):
+            break
+        body.append(line)
+    return "\n".join(body).strip()
 
 
 def call_model(model, prompt, temperature):

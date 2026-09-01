@@ -5,8 +5,12 @@ answer is, and the disagreement is not a detail.
 
 ## `exact-match` -- compare the text
 
-Normalise both queries -- spacing, quote style, the case of keywords but not of values, a
-trailing semicolon -- and compare them as strings. Nothing runs.
+Drop the comments, normalise what is left -- spacing, quote style, the case of keywords but
+not of values, a trailing semicolon -- and compare the queries as strings. Nothing runs.
+
+Comments are dropped because the `query_plan_cot` setting asks the model to think in them,
+and keeping them marked a correct answer wrong for having planned. The execution scorer
+ignores them for free, so dropping them here is what makes the two rulers agree.
 
 Its limit is honest and known: `SELECT a, b FROM t` and `SELECT b, a FROM t` return exactly
 the same thing, and this marks the second one wrong. A model that answers correctly in a
@@ -22,8 +26,10 @@ itself is scored, and it is the right measure of a SQL answer: it credits a corr
 written differently, which is most of what the text comparison gets wrong.
 
 It gets there by executing SQL that a model wrote. There is no version of execution scoring
-that does not. The scorer keeps it to a local copy of a small database with a five-second
-ceiling per query, which bounds the damage without changing what it is.
+that does not. The scorer keeps it to a local copy of a small database, opened read-only, with
+only reading
+authorised at all, and with a five-second ceiling and a row cap per query. Those bound the
+damage without changing what it is.
 
 ## Why this is the interesting flag
 
@@ -75,7 +81,8 @@ Three different numbers follow from that, and it is worth keeping them apart.
 
 Five points is the distance between the two bands this project can reach, not sixteen. It is
 still decisive, because of where the boundary sits: at dataset 98 and agent 70, EXCELLENT
-needs an evaluation pillar of 94, and the text comparator's calibrated ceiling is 83 -- so
+needs an evaluation pillar of about 94, and the text comparator's calibrated ceiling is 83 --
+so
 the highest band this project can read is only available to the evaluator the guide is told
 to stop.
 

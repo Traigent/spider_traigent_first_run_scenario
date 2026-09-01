@@ -85,7 +85,8 @@ def _split_out_literals(sql):
 
 def normalize(sql):
     """The query with the differences that never change its meaning removed."""
-    code, literals = _split_out_literals(str(sql))
+    # The marker cannot occur in SQL, but it can occur in whatever a model sent.
+    code, literals = _split_out_literals(str(sql).replace(_MARKER, ""))
     code = " ".join(code.lower().split())
 
     # A space matters only between two word characters: `avg (age)` and `c = 'x'` say the
@@ -107,7 +108,7 @@ def normalize(sql):
 
 def score(output, expected, input_data=None, metadata=None):
     """1.0 when the generated query is written the same way as the recorded one."""
-    recorded = expected.get("sql") if isinstance(expected, dict) else expected
+    recorded = expected
     if recorded is None or not str(recorded).strip():
         raise ValueError(
             "this row has no recorded query to compare against, and a row with no answer "

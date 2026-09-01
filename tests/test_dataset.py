@@ -91,7 +91,7 @@ class SliceShape(unittest.TestCase):
         self.assertEqual(collisions, [], f"near-duplicate questions: {collisions[:3]}")
 
     def test_ids_are_present_and_unique(self) -> None:
-        """Every row carries a stable id in the documented `spider-dev-NNNN` form.
+        """Every row carries a stable id in the documented `spider-dev- followed by digits` form.
 
         Asserting only that the id is truthy would accept any string at all, and the
         calibration cases point at rows by this spelling -- an id in some other shape would

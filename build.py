@@ -133,13 +133,13 @@ PRESETS = {
 }
 
 PRESET_NOTES = {
-    "ready": "everything present and tunable, scorer not yet checked",
-    "checked": "the same, and the team keeps probe answers for its scorer",
+    "ready": "tunable and complete, scorer not yet checked",
+    "checked": "tunable and complete, with probe answers kept for the scorer",
     "no-eval": "no way to score an answer",
     "no-labels": "questions with no expected answers",
     "no-knobs": "an agent with nothing to search",
     "sql-exec-stop": "an evaluator that executes the candidate SQL",
-    "best-case": "scored by execution accuracy, the metric Spider itself uses",
+    "best-case": "tunable, complete, probes kept, and scored by running the SQL",
 }
 
 
@@ -543,7 +543,12 @@ def render_readme(
     """
     table = ["| File | |", "|---|---|"]
     for name in shipped:
-        description = FILE_DESCRIPTIONS.get(name)
+        if name not in FILE_DESCRIPTIONS:
+            raise BuildError(
+                f"{name} is shipped with no description, so the project's README would not "
+                "mention it. Add one to FILE_DESCRIPTIONS."
+            )
+        description = FILE_DESCRIPTIONS[name]
         if name == "dataset.jsonl":
             labelled = bool(rows) and "output" in rows[0]
             # Describes the file, and no more than that. Announcing "no expected answers"
@@ -559,26 +564,53 @@ def render_readme(
         if description:
             table.append(f"| `{name}` | {description} |")
 
+    # Every section is written only when the thing it describes is here. A fixed paragraph
+    # about the data reads as a claim that there is data, in a project built to have none.
+    opening = "\nAnswers questions about a database by writing the SQL that gets the answer.\n"
+    if rows:
+        example = rows[0]
+        answer = example.get("output")
+        opening += (
+            f"\nAsk it *\"{example['input']}\"* and it returns\n`{answer}`.\n"
+            if answer
+            else f"\nOne of the questions it is given: *\"{example['input']}\"*\n"
+        )
+
     data_section = ""
     if rows:
-        sample = json.dumps(rows[0], ensure_ascii=False, indent=1, sort_keys=True)
+        # The schema is the longest value by far and its shape is what matters here, not
+        # its content; printed whole it buries the rest of the row.
+        shown = dict(rows[0])
+        shown["metadata"] = dict(shown.get("metadata", {}))
+        schema = shown["metadata"].get("schema")
+        if isinstance(schema, str) and "\n" in schema:
+            shown["metadata"]["schema"] = schema.splitlines()[0] + " ..."
+        sample = json.dumps(shown, ensure_ascii=False, indent=1, sort_keys=True)
         notes = [
             f"- `metadata.{field}` -- {METADATA_NOTES[field]}"
             for field in sorted(rows[0].get("metadata", {}))
             if field in METADATA_NOTES
         ]
         data_section = (
-            "\nRows look like this:\n\n```json\n"
+            "\n## The data\n\nRows look like this:\n\n```json\n"
             + sample
             + "\n```\n\n"
             + "\n".join(notes)
-            + "\n"
+            + "\n\nThese questions come from **Spider**, a text-to-SQL benchmark of"
+            " human-written questions over databases in many different subject areas"
+            " (Yu et al., EMNLP 2018). They are real recorded data, not generated examples.\n"
+            "\nSpider is old enough and public enough that current models have very likely"
+            " seen it, and what is here is a small sample -- enough to tell configurations"
+            " apart, not enough to settle a question about production.\n"
+            "\nThe data is licensed CC BY-SA 4.0 and `LICENSE-DATA` in this directory carries"
+            " the attribution and the terms. It has to stay with the data wherever the data"
+            " goes.\n"
         )
 
     if agent_state == "missing":
         agent_section = (
-            "\nThere is no agent here yet. Answering these questions is the thing that needs\n"
-            "building.\n"
+            "\nThere is no agent here yet. Something that turns a question into SQL is the\n"
+            "thing that needs building.\n"
         )
     else:
         agent_section = (
@@ -588,6 +620,7 @@ def render_readme(
 
     text = template.read_text(encoding="utf-8")
     for key, value in {
+        "OPENING": opening,
         "FILE_TABLE": "\n".join(table),
         "DATA_SECTION": data_section,
         "AGENT_SECTION": agent_section,
@@ -623,14 +656,13 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
     # directory exists. A build that fails half way leaves a directory holding an agent, a
     # dataset and databases and no sign that it is incomplete -- and the retry is then refused
     # because the path exists. Cheaper to refuse up front.
+    out = args.out.expanduser()
+    check_output_path(out)
     if args.guide == "local":
         check_guide_source(args.guide_src)
     interpreter = resolve_interpreter(args.existing_venv)
     if calibration_state == "present":
         check_calibration_source(settings["eval"])
-
-    out = args.out.expanduser()
-    check_output_path(out)
 
     rows = read_dataset()
     selected = (
@@ -656,8 +688,15 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
         )
     except BaseException:
         # A half-built demo is worse than none: it looks like a project, and the path it
-        # occupies blocks the retry.
+        # occupies blocks the retry. Said out loud, because this also catches an interrupt,
+        # and a directory disappearing without a word is its own surprise.
+        print(f"build failed; removing the partial demo at {out}", file=sys.stderr)
         shutil.rmtree(out, ignore_errors=True)
+        if out.exists():
+            print(
+                f"could not remove it: {out} is still there and will refuse the next build",
+                file=sys.stderr,
+            )
         raise
 
 

@@ -43,9 +43,8 @@ What ShareAlike means here
 
 ShareAlike attaches to Adapted Material -- these rows or these databases modified, transformed
 or built upon -- and it applies when you share that material. Share an adaptation and it goes
-out under CC BY-SA 4.0 with the attribution above. It does not reach everything a run produces:
-model outputs, scores and reports are not the data, and an adaptation you keep to yourself is
-not one you have shared.
+out under CC BY-SA 4.0 with the attribution above. It does not reach everything a run
+produces: model outputs, scores and reports are not the data.
 
 That obligation travels with the data, not with the code, and it does not go away if the data
 is copied somewhere else. Publishing this repository, or a generated project containing these

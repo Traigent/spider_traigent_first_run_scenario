@@ -1,30 +1,9 @@
 # Text-to-SQL
-
-Answers questions about a database by writing the SQL that gets the answer.
-
-Ask it *"Show all countries and the number of singers in each country."* and it returns
-`SELECT country ,  count(*) FROM singer GROUP BY country`.
-
+{{OPENING}}
 ## What is here
 
 {{FILE_TABLE}}
-{{DATA_SECTION}}
-## The data
-
-These questions come from **Spider**, a text-to-SQL benchmark of human-written questions over
-databases in many different subject areas (Yu et al., EMNLP 2018). They are real recorded
-data, not generated examples.
-
-Two things worth knowing before reading anything into a score:
-
-- Spider is old enough and public enough that current models have very likely seen it.
-- What is here is a small sample. Enough to tell configurations apart; not enough to settle a
-  question about production.
-
-The data is licensed CC BY-SA 4.0 and `LICENSE-DATA` in this directory carries the
-attribution and the terms. It has to stay with the data wherever the data goes.
-
-## Optimizing it
+{{DATA_SECTION}}## Optimizing it
 {{AGENT_SECTION}}
 To have a coding assistant set that up and run it:
 

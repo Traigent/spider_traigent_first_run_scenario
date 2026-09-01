@@ -47,7 +47,7 @@ records it in `demo.json`.
 
 ```
 ~/demos/first-try/
-├── demo.json          how it was built: every flag, every file's hash, the handoff prompt
+├── demo.json          how it was built: flags, per-file hashes, the handoff prompt
 └── project/           <- point the agent at this
     ├── agent.py       writes SQL. run(question, config) -> query text
     ├── dataset.jsonl  300 questions with the query that answers each
@@ -57,7 +57,9 @@ records it in `demo.json`.
     ├── traigent-runs/ probe answers for the scorer, with --calibration present
     ├── README.md      what a project of this kind would normally document
     ├── .env.example
-    └── LICENSE-DATA   the data's licence, which travels with the data
+    ├── LICENSE-DATA   the data's licence, which travels with the data
+    ├── LICENSE        the code's licence
+    └── NOTICE         which parts are under which licence
 ```
 
 `demo.json` stays **outside** `project/` on purpose. It names the state each component was
@@ -95,7 +97,8 @@ with the evaluator taken out.
 disagree about what a right answer is.
 
 **`exact-match`** compares the generated query with the recorded one as text, after
-normalising spacing, quote style, keyword case and a trailing semicolon. It never runs
+normalising comments away and then spacing, quote style, keyword case and a trailing
+semicolon. It never runs
 anything. Its limit is real: `SELECT a, b` and `SELECT b, a` return the same thing and it
 marks the second one wrong, so it under-counts correct answers.
 
@@ -163,13 +166,24 @@ restructure here was a pure one: a 36-arm differential over every combination of
 settings showed the outgoing model, prompt and temperature byte-identical to the shape it
 replaced, and `tests/test_components.py` fails if the control arm ever gains content again.
 
-The agent has changed once since, deliberately and for a different reason. The compact
-`tables` view was built by splitting the schema on every comma, which turned a column type
-like `DECIMAL(19,4)` into a column named `4)` and leaked composite-key column lists out as
-columns of their own -- eleven tables across nine of the eighteen databases, describing
-tables that do not exist to the model being measured. Parsing by parenthesis depth fixed it,
-and now matches `PRAGMA table_info` for all 74 tables. That changes the 12 `tables` arms of
-the 36 and nothing else, which is the point: `none` and `full` are untouched.
+The agent has changed three times since, each deliberately, and each is worth naming rather
+than leaving under a claim of byte-identity that no longer holds.
+
+The compact `tables` view was built by splitting the schema on every comma, which turned a
+column type like `DECIMAL(19,4)` into a column named `4)` and leaked composite-key column
+lists out as columns of their own -- eleven tables across eight of the eighteen databases,
+describing tables that do not exist to the model being measured. Parsing by parenthesis
+depth fixed it, and it now matches `PRAGMA table_info` for all 74 tables. That changes the
+12 `tables` arms of the 36; `none` and `full` are untouched.
+
+An unconfigured run used to start at `schema_context="none"` -- the deliberately empty
+control -- while the untunable agent always sent the full schema, so the project with
+nothing to tune looked better than the tunable one at its own default. The defaults now
+match its sibling, and the control arm is still there, reachable by asking for it.
+
+Reading a reply was rewritten to handle the markdown a model actually returns, and the same
+code now sits in both agents, because the untunable one was scoring zero on replies the
+tunable one handled.
 
 Two of the four settings are credited, which is all that is available: the agent pillar's
 search-space share is held one step below full until a trial budget is declared, and a
@@ -198,8 +212,11 @@ correctly reporting that one project measures its answers the way the benchmark 
 other approximates it.
 
 The arithmetic is closed, so it is worth stating what the text proxy cannot reach: at dataset
-98 and agent 70, EXCELLENT needs an evaluation pillar of 94, and the text comparator's
-calibrated ceiling is 83. Even a perfect dataset leaves it at 87. If you want a project that
+98 and agent 70, EXCELLENT needs an evaluation pillar of about 94, and the text
+comparator's calibrated ceiling is 83 -- which is why `checked` measures 86 and `best-case`
+measures 91. The figures here are the scorer's own rounded output rather than a derivation,
+so read them as the readings they are; re-measure before quoting them anywhere that matters.
+If you want a project that
 reads EXCELLENT on Spider data, it has to score Spider's way.
 
 **A separate fact about the guide, which does not change either number.** The first-run
@@ -219,7 +236,8 @@ declaration against the source.
 
 This repository does not do that, and no number in the table above depends on it. Every band
 here comes from an evaluator declared as what it is, on probe answers built from real rows,
-with an agent whose settings were made readable without changing what it sends. A high band is not evidence that anyone checked; that is what the calibration step
+with an agent whose settings were made readable without changing what it sends. A high band is
+not evidence that anyone checked; that is what the calibration step
 is for.
 
 ## The data is Spider
@@ -233,8 +251,9 @@ paired with the SQL that answers it.
 > [arXiv:1809.08887](https://arxiv.org/abs/1809.08887) ·
 > [yale-lily.github.io/spider](https://yale-lily.github.io/spider)
 
-300 rows drawn from the development split, with the 18 SQLite databases they need (about
-1.4 MB in total, which is why the data is committed rather than downloaded). Every row was
+300 rows drawn from the development split, with the 18 SQLite databases they need -- the
+rows and the databases together come to about 1.4 MB, which is why the data is committed
+rather than downloaded. Every row was
 checked: each recorded query runs, and returns rows. Difficulty comes from Spider's own
 official hardness classifier, and the 300 are balanced 75 apiece across its four bands.
 

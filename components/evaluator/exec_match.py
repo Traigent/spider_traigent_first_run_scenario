@@ -26,7 +26,9 @@ are worth stating exactly, because "it only reads" is easy to claim and easy to 
 Those bounds limit the damage. They do not change what the scorer is.
 """
 
+import re
 import sqlite3
+import sys
 import time
 from pathlib import Path
 
@@ -40,7 +42,14 @@ QUERY_TIMEOUT_SECONDS = 5.0
 MAX_ROWS = 100_000
 # Everything a scorer needs, and nothing that can name a file of its own.
 READ_ONLY_ACTIONS = frozenset(
-    {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION}
+    {
+        sqlite3.SQLITE_SELECT,
+        sqlite3.SQLITE_READ,
+        sqlite3.SQLITE_FUNCTION,
+        # A recursive CTE reads and nothing else, and denying it would score a legal
+        # answer zero -- the one direction of error that only ever penalises the model.
+        sqlite3.SQLITE_RECURSIVE,
+    }
 )
 
 
@@ -57,7 +66,7 @@ def database_path(db_id):
     return path
 
 
-def execute(sql, db_id):
+def execute(sql, db_id, row_cap=MAX_ROWS):
     """The rows a query returns, or the error that stopped it."""
     started = time.monotonic()
     connection = sqlite3.connect(
@@ -73,13 +82,51 @@ def execute(sql, db_id):
         rows = []
         for row in connection.execute(str(sql)):
             rows.append(row)
-            if len(rows) > MAX_ROWS:
-                return None, f"returned more than {MAX_ROWS} rows"
+            if row_cap is not None and len(rows) > row_cap:
+                return None, f"returned more than {row_cap} rows"
         return rows, None
     except sqlite3.Error as error:
         return None, str(error)
     finally:
         connection.close()
+
+
+_ORDER_BY = re.compile(r"order\s+by\b")
+
+
+def _orders_its_own_rows(sql):
+    """Whether the query itself asks for an order, rather than a subquery inside it.
+
+    Row order counts only when the recorded query asked for one. Searching the whole text
+    for "order by" also finds it inside a subquery -- three of the recorded answers order
+    only within parentheses -- and then a correct answer whose rows come back in a different
+    order is marked wrong. Only an ORDER BY at the top level, outside any literal, counts.
+    """
+    depth = 0
+    index = 0
+    lowered = sql.lower()
+    while index < len(sql):
+        character = sql[index]
+        if character in "'\"":
+            quote = character
+            index += 1
+            while index < len(sql):
+                if sql[index] == quote:
+                    if index + 1 < len(sql) and sql[index + 1] == quote:
+                        index += 2
+                        continue
+                    break
+                index += 1
+            index += 1
+            continue
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+        elif depth == 0 and _ORDER_BY.match(lowered, index):
+            return True
+        index += 1
+    return False
 
 
 def as_multiset(rows):
@@ -99,13 +146,15 @@ def resolve_db_id(metadata, input_data):
 def score(output, expected, input_data=None, metadata=None):
     """1.0 when the generated query returns the same rows as the recorded one."""
     db_id = resolve_db_id(metadata, input_data)
-    expected_sql = expected.get("sql") if isinstance(expected, dict) else expected
+    expected_sql = expected
     if expected_sql is None or not str(expected_sql).strip():
         raise ValueError(
             "this row has no recorded query, so there is nothing to compare against"
         )
 
-    gold_rows, gold_error = execute(expected_sql, db_id)
+    # The recorded query is verified and re-run in CI, so it is not capped: a cap here
+    # would surface as "the recorded query does not run", blaming the data for a limit.
+    gold_rows, gold_error = execute(expected_sql, db_id, row_cap=None)
     if gold_error is not None:
         raise RuntimeError(
             f"the recorded query for this row does not run against {db_id}: {gold_error}. "
@@ -115,8 +164,12 @@ def score(output, expected, input_data=None, metadata=None):
 
     predicted_rows, predicted_error = execute(output, db_id)
     if predicted_error is not None:
+        # A query that did not run is a wrong answer, and scoring it 0.0 is right. Saying
+        # why is still worth a line: a run where every answer arrived wrapped in markdown
+        # and a run where the model was simply wrong otherwise look identical.
+        print(f"exec-match: {db_id}: {predicted_error}", file=sys.stderr)
         return 0.0
-    ordered = "order by" in str(expected_sql).lower()
+    ordered = _orders_its_own_rows(str(expected_sql))
     if ordered:
         return (
             1.0
