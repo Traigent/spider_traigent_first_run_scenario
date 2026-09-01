@@ -30,6 +30,9 @@ SPIDER_DIR = REPO_ROOT / "spider"
 DATASET_PATH = SPIDER_DIR / "spider_300.jsonl"
 DATABASES_PATH = SPIDER_DIR / "databases"
 DATA_LICENCE_PATH = SPIDER_DIR / "LICENSE-DATA"
+# The demo is a copy of Traigent-authored code and third-party data, handed to someone
+# outside this repository. Both sets of terms have to travel with it.
+CODE_LICENCE_PATHS = (REPO_ROOT / "LICENSE", REPO_ROOT / "NOTICE")
 
 MANIFEST_VERSION = 1
 # The demo directory holds two things: the project an agent is pointed at, and the record of
@@ -77,6 +80,8 @@ CALIBRATION_STATES = ("none", "present")
 VENV_STATES = ("none", "one-compatible", "old-python")
 GUIDE_MODES = ("clone", "local")
 
+# The share of each difficulty band the full slice holds back, kept by every smaller draw.
+HOLDOUT_SHARE = 0.2
 MINI_ROWS = 30
 UNLABELED_ROWS = 40
 SAMPLE_SEED = 42
@@ -187,21 +192,42 @@ def check_output_path(out: Path) -> None:
 
 
 def select_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
-    """The rows a given dataset state ships, drawn evenly across difficulty."""
+    """The rows a given dataset state ships.
+
+    Drawn evenly across difficulty, and within each band across the tuning/holdout split in
+    the same proportion the full slice uses. Sampling on difficulty alone would keep the
+    bands balanced and quietly flatten the split -- a 30-row draw came out with a single
+    held-out question in three of the four bands, which cannot check a winner against
+    anything.
+    """
     if state == "ready":
         return list(rows)
     wanted = MINI_ROWS if state == "mini" else UNLABELED_ROWS
-    by_band: dict[str, list[dict[str, Any]]] = {}
+    by_band: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for row in rows:
-        by_band.setdefault(row["metadata"]["difficulty"], []).append(row)
+        band = by_band.setdefault(
+            row["metadata"]["difficulty"], {"tuning": [], "holdout": []}
+        )
+        band[row["metadata"]["split"]].append(row)
+
     rng = random.Random(SAMPLE_SEED)
     per_band, remainder = divmod(wanted, len(by_band))
     picked: list[dict[str, Any]] = []
-    for position, band in enumerate(sorted(by_band)):
+    for position, band_name in enumerate(sorted(by_band)):
         take = per_band + (1 if position < remainder else 0)
-        pool = sorted(by_band[band], key=lambda r: r["input"])
-        rng.shuffle(pool)
-        picked.extend(pool[:take])
+        holdout_take = round(take * HOLDOUT_SHARE)
+        for split, split_take in (
+            ("holdout", holdout_take),
+            ("tuning", take - holdout_take),
+        ):
+            pool = sorted(by_band[band_name][split], key=lambda r: r["input"])
+            rng.shuffle(pool)
+            if len(pool) < split_take:
+                raise BuildError(
+                    f"the slice has {len(pool)} {split} rows in the {band_name} band and "
+                    f"{split_take} are needed for --dataset {state}"
+                )
+            picked.extend(pool[:split_take])
     picked.sort(key=lambda r: (r["metadata"]["difficulty"], r["input"]))
     return picked
 
@@ -253,9 +279,8 @@ def calibration_databases(evaluator_state: str, calibration_state: str) -> set[s
     """
     if calibration_state != "present":
         return set()
-    source = CALIBRATION_SOURCES.get(evaluator_state)
-    if source is None or not source.exists():
-        return set()
+    check_calibration_source(evaluator_state)
+    source = CALIBRATION_SOURCES[evaluator_state]
     cases = json.loads(source.read_text(encoding="utf-8"))
     return {
         case["metadata"]["db_id"]
@@ -279,7 +304,14 @@ def copy_databases(
     return needed
 
 
-def resolve_interpreter(state: str) -> str:
+def resolve_interpreter(state: str) -> str | None:
+    """The interpreter a pre-existing project environment would be built with.
+
+    None when none was asked for. Resolved before anything is written, so a missing
+    interpreter refuses the build instead of abandoning a half-made one.
+    """
+    if state == "none":
+        return None
     if state == "old-python":
         found = shutil.which(OLD_PYTHON)
         if found is None:
@@ -300,16 +332,42 @@ def resolve_interpreter(state: str) -> str:
     )
 
 
-def make_project_venv(out: Path, state: str) -> dict[str, Any] | None:
+def check_guide_source(guide_src: Path | None) -> None:
+    """Refuse a guide checkout that is not one, before the demo directory is created."""
+    if guide_src is None:
+        raise BuildError(
+            "--guide local needs --guide-src pointing at a traigent-first-run checkout"
+        )
+    resolved = guide_src.expanduser().resolve()
+    for required in GUIDE_REQUIRED:
+        if not (resolved / required).exists():
+            raise BuildError(
+                f"{resolved} does not look like a traigent-first-run checkout: "
+                f"{required} is missing"
+            )
+
+
+def check_calibration_source(evaluator_state: str) -> None:
+    """Refuse a calibration request that has no cases to ship, before anything is written."""
+    source = CALIBRATION_SOURCES.get(evaluator_state)
+    if source is None:
+        raise BuildError(
+            f"--calibration present needs an evaluator to calibrate, and "
+            f"--eval {evaluator_state} ships none"
+        )
+    if not source.exists():
+        raise BuildError(f"calibration cases missing from the repository: {source}")
+
+
+def make_project_venv(out: Path, interpreter: str | None) -> dict[str, Any] | None:
     """A pre-existing environment for the demo project, when one is asked for.
 
     This is scenery, not plumbing: nothing in the demo runs from it. It exists so a run can
     start from a project that already has an environment, and so the version of that
     environment can be chosen.
     """
-    if state == "none":
+    if interpreter is None:
         return None
-    interpreter = resolve_interpreter(state)
     venv_dir = out / PROJECT_VENV_NAME
     result = subprocess.run(
         [interpreter, "-m", "venv", str(venv_dir)],
@@ -364,12 +422,7 @@ def copy_calibration(evaluator_state: str, project: Path) -> dict[str, Any] | No
 
 
 def copy_guide(guide_src: Path, out: Path) -> dict[str, Any]:
-    guide_src = guide_src.resolve()
-    for required in GUIDE_REQUIRED:
-        if not (guide_src / required).exists():
-            raise BuildError(
-                f"{guide_src} does not look like a traigent-first-run checkout: {required} is missing"
-            )
+    guide_src = guide_src.expanduser().resolve()
     destination = out / GUIDE_DIRECTORY
     destination.mkdir(parents=True)
     copied = []
@@ -386,18 +439,41 @@ def copy_guide(guide_src: Path, out: Path) -> dict[str, Any]:
         else:
             shutil.copy2(source, destination / name)
         copied.append(name)
-    revision = subprocess.run(
-        ["git", "-C", str(guide_src), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    # Recorded when it can be. Git being absent is not a reason to refuse a build that has
+    # already copied everything it needs, but it must not surface as a traceback either.
+    git_sha: str | None = None
+    try:
+        revision = subprocess.run(
+            ["git", "-C", str(guide_src), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        git_sha = None
+    else:
+        git_sha = revision.stdout.strip() if revision.returncode == 0 else None
     return {
         "directory": GUIDE_DIRECTORY,
         "source": str(guide_src),
         "paths": copied,
-        "git_sha": revision.stdout.strip() if revision.returncode == 0 else None,
+        "git_sha": git_sha,
     }
+
+
+def check_no_dedicated_environment(project: Path) -> None:
+    """Refuse to hand over a project that already contains the guide's own environment.
+
+    The guide creates `.venv-traigent` itself and stops if that path exists, so a demo
+    carrying one anywhere inside it cannot be run at all. Checked over the whole tree,
+    because a copied guide checkout could bring one in.
+    """
+    for path in project.rglob(FORBIDDEN_VENV_NAME):
+        raise BuildError(
+            f"a {FORBIDDEN_VENV_NAME} ended up in the demo at "
+            f"{path.relative_to(project)}. The guide creates that itself and stops if it "
+            "already exists, so a demo carrying one cannot be run."
+        )
 
 
 def inventory(out: Path) -> list[dict[str, Any]]:
@@ -418,9 +494,105 @@ def inventory(out: Path) -> list[dict[str, Any]]:
     return files
 
 
-def render_readme(template: Path, values: dict[str, str]) -> str:
+FILE_DESCRIPTIONS = {
+    "agent.py": "writes the SQL. `run(question, config)` returns a query as text.",
+    "dataset.jsonl": None,  # filled in from what the rows actually carry
+    "catalog.json": "which database each question is about, and that database's structure.",
+    "databases/": None,
+    "evaluator.py": (
+        "marks an answer. `score(output, expected, input_data, metadata)` returns 1.0 or 0.0."
+    ),
+    "traigent-runs/calibration-cases.json": (
+        "probe answers kept for checking the scorer: a right one, an equivalent one, a "
+        "partly-right one and a wrong one."
+    ),
+    ".env.example": "the keys this project would need, with no values in it.",
+    "LICENSE": "the terms the code here is under.",
+    "NOTICE": "who wrote what, and which parts are under which licence.",
+    "LICENSE-DATA": "the licence the questions are under. It travels with them.",
+}
+
+METADATA_NOTES = {
+    "db_id": "which database the question is about.",
+    "schema": "that database's `CREATE TABLE` text.",
+    "split": (
+        "`tuning` or `holdout`. Holdout questions are held back to check a winner against "
+        "questions it was not tuned on."
+    ),
+    "difficulty": "how involved the query the question needs is.",
+    "provenance": "where the row came from.",
+    "id": "a stable identifier for the row.",
+}
+
+
+def render_readme(
+    template: Path,
+    *,
+    handoff: str,
+    shipped: Sequence[str],
+    rows: Sequence[dict[str, Any]],
+    databases: Sequence[str],
+    agent_state: str,
+) -> str:
+    """The project's own README, describing only what this project actually contains.
+
+    Every line of it is derived from the files that were written. A fixed description would
+    tell a reader about files that are not here and fields the rows do not carry -- which, in
+    a project deliberately built with something missing, hands over the very thing the run is
+    supposed to discover.
+    """
+    table = ["| File | |", "|---|---|"]
+    for name in shipped:
+        description = FILE_DESCRIPTIONS.get(name)
+        if name == "dataset.jsonl":
+            labelled = bool(rows) and "output" in rows[0]
+            # Describes the file, and no more than that. Announcing "no expected answers"
+            # would be accurate and would also hand over the thing a run is meant to notice
+            # for itself; the sample row below shows the shape either way.
+            description = (
+                f"{len(rows)} questions with the query that answers each one."
+                if labelled
+                else f"{len(rows)} questions."
+            )
+        elif name == "databases/":
+            description = f"{len(databases)} SQLite databases, one directory each."
+        if description:
+            table.append(f"| `{name}` | {description} |")
+
+    data_section = ""
+    if rows:
+        sample = json.dumps(rows[0], ensure_ascii=False, indent=1, sort_keys=True)
+        notes = [
+            f"- `metadata.{field}` -- {METADATA_NOTES[field]}"
+            for field in sorted(rows[0].get("metadata", {}))
+            if field in METADATA_NOTES
+        ]
+        data_section = (
+            "\nRows look like this:\n\n```json\n"
+            + sample
+            + "\n```\n\n"
+            + "\n".join(notes)
+            + "\n"
+        )
+
+    if agent_state == "missing":
+        agent_section = (
+            "\nThere is no agent here yet. Answering these questions is the thing that needs\n"
+            "building.\n"
+        )
+    else:
+        agent_section = (
+            "\nWhich way of asking works best is not obvious, and the way to find out is to\n"
+            "measure.\n"
+        )
+
     text = template.read_text(encoding="utf-8")
-    for key, value in values.items():
+    for key, value in {
+        "FILE_TABLE": "\n".join(table),
+        "DATA_SECTION": data_section,
+        "AGENT_SECTION": agent_section,
+        "HANDOFF": handoff,
+    }.items():
         text = text.replace("{{" + key + "}}", value)
     return text
 
@@ -444,12 +616,18 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
             "--calibration present needs an evaluator; --eval missing ships none"
         )
 
-    if args.guide == "local" and args.guide_src is None:
-        raise BuildError(
-            "--guide local needs --guide-src pointing at a traigent-first-run checkout"
-        )
     if args.guide == "clone" and args.guide_src is not None:
         raise BuildError("--guide-src only applies to --guide local")
+
+    # Everything that can be checked without writing is checked here, before the output
+    # directory exists. A build that fails half way leaves a directory holding an agent, a
+    # dataset and databases and no sign that it is incomplete -- and the retry is then refused
+    # because the path exists. Cheaper to refuse up front.
+    if args.guide == "local":
+        check_guide_source(args.guide_src)
+    interpreter = resolve_interpreter(args.existing_venv)
+    if calibration_state == "present":
+        check_calibration_source(settings["eval"])
 
     out = args.out.expanduser()
     check_output_path(out)
@@ -467,9 +645,35 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
         )
 
     out.mkdir(parents=True)
+    try:
+        return _write_demo(
+            args,
+            settings,
+            calibration_state,
+            interpreter,
+            out,
+            selected,
+        )
+    except BaseException:
+        # A half-built demo is worse than none: it looks like a project, and the path it
+        # occupies blocks the retry.
+        shutil.rmtree(out, ignore_errors=True)
+        raise
+
+
+def _write_demo(
+    args: argparse.Namespace,
+    settings: dict[str, str],
+    calibration_state: str,
+    interpreter: str | None,
+    out: Path,
+    selected: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Write the demo. Everything here has already been validated."""
     project = out / PROJECT_SUBDIR
     project.mkdir()
     created: list[str] = []
+    projected = [project_row(row, settings["dataset"]) for row in selected]
 
     agent_source = AGENT_FILES[settings["agent"]]
     if agent_source is not None:
@@ -483,10 +687,7 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
 
     databases: list[str] = []
     if selected:
-        write_jsonl(
-            project / "dataset.jsonl",
-            [project_row(row, settings["dataset"]) for row in selected],
-        )
+        write_jsonl(project / "dataset.jsonl", projected)
         created.append("dataset.jsonl")
         write_catalog(project / "catalog.json", selected)
         created.append("catalog.json")
@@ -503,6 +704,10 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
     shutil.copy2(COMPONENTS / "env" / "env.example", project / ".env.example")
     created.append(".env.example")
 
+    for licence in CODE_LICENCE_PATHS:
+        shutil.copy2(licence, project / licence.name)
+        created.append(licence.name)
+
     calibration_record = (
         copy_calibration(settings["eval"], project)
         if calibration_state == "present"
@@ -516,20 +721,27 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
     )
     handoff = HANDOFF_LOCAL if args.guide == "local" else HANDOFF_CLONE
 
-    bands = Counter(row["metadata"]["difficulty"] for row in selected)
-    splits = Counter(row["metadata"].get("split", "unsplit") for row in selected)
-    venv_record = make_project_venv(project, args.existing_venv)
+    # Counted over the rows the project ships, not the rows they were drawn from: an
+    # unlabelled dataset carries no split, and reporting one would describe a file that is
+    # not there.
+    bands = Counter(row["metadata"]["difficulty"] for row in projected)
+    splits = Counter(
+        row["metadata"]["split"] for row in projected if "split" in row["metadata"]
+    )
+    venv_record = make_project_venv(project, interpreter)
 
     readme = render_readme(
         COMPONENTS / "readme" / "DEMO_README.md.tmpl",
-        {
-            "HANDOFF": handoff,
-            "ROWS": str(len(selected)),
-            "DATABASES": str(len(databases)),
-        },
+        handoff=handoff,
+        shipped=created,
+        rows=projected,
+        databases=databases,
+        agent_state=settings["agent"],
     )
     (project / "README.md").write_text(readme, encoding="utf-8")
     created.append("README.md")
+
+    check_no_dedicated_environment(project)
 
     manifest: dict[str, Any] = {
         "manifest_version": MANIFEST_VERSION,
@@ -552,6 +764,8 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
             "evaluator": {
                 "state": settings["eval"],
                 "path": "evaluator.py" if evaluator_source else None,
+                "method": None,
+                "executes_candidate_output": None,
                 **(EVALUATOR_FACTS.get(settings["eval"], {})),
                 "calibration": calibration_record,
             },
@@ -565,12 +779,6 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
     (out / "demo.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-
-    if (project / FORBIDDEN_VENV_NAME).exists():
-        raise BuildError(
-            f"a {FORBIDDEN_VENV_NAME} ended up in the demo. The guide creates that itself and "
-            "stops if it already exists, so a demo carrying one cannot be run."
-        )
 
     return {
         "ok": True,

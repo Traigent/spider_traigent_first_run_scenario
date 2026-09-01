@@ -19,7 +19,6 @@ guess, because SQL written for the wrong database looks fine and is always wrong
 """
 
 import json
-import re
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -43,6 +42,16 @@ PROMPT_STYLES = {
 
 TEMPERATURES = (0.0, 0.7)
 
+# What this agent does when it is handed no configuration: the schema shown in full, one
+# straightforward instruction, no sampling. The same request the untunable version of this
+# agent makes, so the two are the same starting point and differ only in what can vary.
+DEFAULTS = {
+    "model": "gpt-4o-mini",
+    "schema_context": "full",
+    "prompt_style": "direct",
+    "temperature": 0.0,
+}
+
 _catalog = None
 
 
@@ -55,6 +64,53 @@ def catalog():
     return _catalog
 
 
+CONSTRAINT_KEYWORDS = ("primary", "foreign", "unique", "constraint", "check")
+
+
+def _table_body(statement):
+    """The text between a CREATE TABLE's outermost parentheses.
+
+    Matched by depth rather than by looking for the last `)`, because a column type carries
+    its own parentheses -- `DECIMAL(19,4)` -- and so does a composite key.
+    """
+    opened = statement.find("(")
+    if opened == -1:
+        return None
+    depth = 0
+    for position in range(opened, len(statement)):
+        if statement[position] == "(":
+            depth += 1
+        elif statement[position] == ")":
+            depth -= 1
+            if depth == 0:
+                return statement[opened + 1 : position]
+    return statement[opened + 1 :]
+
+
+def _split_top_level(body):
+    """The body's comma-separated parts, ignoring commas nested in parentheses.
+
+    Splitting on every comma turns `DECIMAL(19,4)` into a column named `4)`, and leaks the
+    column list of a composite key out as columns of its own. Either way the compact view
+    describes a table that does not exist, and the model is asked to write SQL against it.
+    """
+    parts = []
+    depth = 0
+    current = []
+    for character in body:
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+        if character == "," and depth == 0:
+            parts.append("".join(current))
+            current = []
+            continue
+        current.append(character)
+    parts.append("".join(current))
+    return parts
+
+
 def compact_schema(schema):
     """One line per table, column names only -- the 'tables' view of the database."""
     lines = []
@@ -62,18 +118,15 @@ def compact_schema(schema):
         statement = statement.strip()
         if not statement.lower().startswith("create table"):
             continue
-        head, _, body = statement.partition("(")
+        head, _, _ = statement.partition("(")
         table = head.split()[-1].strip("\"`[]'")
+        body = _table_body(statement)
+        if body is None:
+            continue
         columns = []
-        for part in body.rsplit(")", 1)[0].split(","):
+        for part in _split_top_level(body):
             words = part.strip().split()
-            if words and words[0].lower() not in (
-                "primary",
-                "foreign",
-                "unique",
-                "constraint",
-                "check",
-            ):
+            if words and words[0].lower() not in CONSTRAINT_KEYWORDS:
                 columns.append(words[0].strip("\"`[]'"))
         lines.append(f"{table}({', '.join(columns)})")
     return "\n".join(lines)
@@ -103,8 +156,8 @@ def build_prompt(question, config):
         raise KeyError(
             f"no database recorded for this question, so there is nothing to write SQL against: {question!r}"
         )
-    context = str(config.get("schema_context", "none"))
-    parts = [PROMPT_STYLES[config.get("prompt_style", "direct")]]
+    context = str(config.get("schema_context", DEFAULTS["schema_context"]))
+    parts = [PROMPT_STYLES[config.get("prompt_style", DEFAULTS["prompt_style"])]]
     parts.append(f"\nQuestion: {question}\nSQL:")
     for block in schema_blocks(entry["schema"], context):
         parts.insert(0, f"Database schema:\n{block}\n\n")
@@ -112,12 +165,27 @@ def build_prompt(question, config):
 
 
 def strip_code_fence(text):
-    """The query on its own, with any markdown fence the model added removed."""
+    """The query on its own, with any markdown wrapping the model added removed.
+
+    Both prompt styles ask for SQL only, so this is a backstop rather than the normal path.
+    It handles what a model actually does when it ignores that: a ``` or ~~~ fence with or
+    without a language tag, a line of preamble before the fence, and anything trailing after
+    the closing fence.
+    """
     text = (text or "").strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-        text = re.sub(r"\n?```$", "", text)
-    return text.strip()
+    for fence in ("```", "~~~"):
+        if fence not in text:
+            continue
+        _, _, after = text.partition(fence)
+        # A language tag sits on the fence's own line, so drop the remainder of that line.
+        first_line, newline, rest = after.partition("\n")
+        if newline and not first_line.strip().startswith(
+            ("select", "with", "SELECT", "WITH")
+        ):
+            after = rest
+        body, _, _ = after.partition(fence)
+        return body.strip()
+    return text
 
 
 def call_model(model, prompt, temperature):
@@ -145,12 +213,12 @@ def call_model(model, prompt, temperature):
 
 def run(input_text, config):
     """Answer one question with SQL, under an explicit configuration."""
-    model = config.get("model", "gpt-4o-mini")
+    model = config.get("model", DEFAULTS["model"])
     if model not in MODELS:
         raise ValueError(
             f"{model!r} is not one of the models this agent is configured for"
         )
-    temperature = float(config.get("temperature", 0.0))
+    temperature = float(config.get("temperature", DEFAULTS["temperature"]))
     return strip_code_fence(
         call_model(model, build_prompt(input_text, config), temperature)
     )

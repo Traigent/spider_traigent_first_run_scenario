@@ -76,6 +76,10 @@ def read_jsonl(path: Path) -> list[dict[str, Any]]:
 
 def gold_row_count(sql: str, db_file: Path, timeout_seconds: float = 5.0) -> int | None:
     """Rows the gold query returns, or None when it does not execute at all."""
+    if not db_file.is_file():
+        # sqlite3.connect would CREATE an empty database here, and every query against it
+        # would then fail as though the recorded answer were wrong.
+        raise SystemExit(f"source database missing: {db_file}")
     connection = sqlite3.connect(str(db_file), timeout=timeout_seconds)
     connection.text_factory = lambda raw: raw.decode("utf-8", "replace")
     try:
@@ -97,17 +101,22 @@ def shingles(question: str) -> set[tuple[str, ...]]:
 
 
 def drop_near_duplicates(
-    rows: list[dict[str, Any]],
-) -> tuple[list[dict[str, Any]], int]:
+    candidates: list[tuple[int, dict[str, Any]]],
+) -> tuple[list[tuple[int, dict[str, Any]]], int]:
     """The pool with paraphrases of an already-kept question removed.
+
+    Returns the rows it keeps, paired with their pool index. Selecting the survivors by
+    question text instead would re-admit every exact repeat of a kept question -- and two
+    copies of one question can land on opposite sides of the tuning/holdout split, which is
+    the contamination this step exists to prevent.
 
     Comparing every pair is fine at this size and avoids the early-stop behaviour that makes
     a bounded scan report an incomplete answer.
     """
-    kept: list[dict[str, Any]] = []
+    kept: list[tuple[int, dict[str, Any]]] = []
     kept_shingles: list[set[tuple[str, ...]]] = []
     dropped = 0
-    for row in rows:
+    for index, row in candidates:
         current = shingles(row["input"]["question"])
         duplicate = False
         for existing in kept_shingles:
@@ -118,7 +127,7 @@ def drop_near_duplicates(
         if duplicate:
             dropped += 1
             continue
-        kept.append(row)
+        kept.append((index, row))
         kept_shingles.append(current)
     return kept, dropped
 
@@ -175,12 +184,10 @@ def build(
             continue
         usable.append((index, row))
 
-    deduped, near_duplicates = drop_near_duplicates([row for _, row in usable])
-    kept_questions = {row["input"]["question"] for row in deduped}
+    deduped, near_duplicates = drop_near_duplicates(usable)
     by_band: dict[str, list[tuple[int, dict[str, Any]]]] = {band: [] for band in BANDS}
-    for index, row in usable:
-        if row["input"]["question"] in kept_questions:
-            by_band[difficulties[index]].append((index, row))
+    for index, row in deduped:
+        by_band[difficulties[index]].append((index, row))
 
     print(
         f"pool={len(pool)} dropped-empty-gold={empty_gold} "
@@ -223,7 +230,11 @@ def build(
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
     needed = sorted({row["metadata"]["db_id"] for row in selected})
-    db_dest.mkdir(parents=True, exist_ok=True)
+    # Rebuilt from scratch: a slice needing fewer databases than the last one would
+    # otherwise leave the extras behind, and nothing downstream looks for extras.
+    if db_dest.exists():
+        shutil.rmtree(db_dest)
+    db_dest.mkdir(parents=True)
     for db_id in needed:
         target = db_dest / db_id
         target.mkdir(exist_ok=True)

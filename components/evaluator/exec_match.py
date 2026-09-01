@@ -9,9 +9,21 @@ against the copy of the database in this project. Row order is ignored unless it
 for; the rows are compared as a multiset.
 
 This means the scorer runs model-written SQL. That is the whole mechanism -- there is no
-version of execution scoring that does not do it. A query is executed on a local copy of a
-small database, read-only in practice, with a five-second ceiling on how long any one of
-them may run. Those bounds limit the damage; they do not change what the scorer is.
+version of execution scoring that does not do it. Three bounds are placed on it, and they
+are worth stating exactly, because "it only reads" is easy to claim and easy to have wrong:
+
+* The database is opened read-only, so a query that writes fails instead of writing. This
+  matters more than it sounds. SQLite runs DDL outside the implicit transaction Python
+  opens for INSERT/UPDATE/DELETE, so without this a hallucinated `DROP TABLE` really did
+  drop the table, permanently -- and every later row on that database then failed and
+  blamed the recorded answer for it.
+* Only reading is authorised at all, which read-only mode by itself does not give:
+  `ATTACH` and `VACUUM INTO` name their own files and would otherwise write outside the
+  database.
+* One query may run for five seconds and return a bounded number of rows. The time limit
+  alone does not bound memory: a cross join can produce a gigabyte well inside it.
+
+Those bounds limit the damage. They do not change what the scorer is.
 """
 
 import sqlite3
@@ -22,6 +34,18 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 DATABASE_ROOT = PROJECT_ROOT / "databases"
 
 QUERY_TIMEOUT_SECONDS = 5.0
+# Comparing result sets is the point, and no recorded answer here returns anything like this
+# many rows. The cap exists so a runaway cross join cannot exhaust memory inside the time
+# limit; a query that reaches it is wrong by construction.
+MAX_ROWS = 100_000
+# Everything a scorer needs, and nothing that can name a file of its own.
+READ_ONLY_ACTIONS = frozenset(
+    {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ, sqlite3.SQLITE_FUNCTION}
+)
+
+
+def _authorise_reads_only(action, *_arguments):
+    return sqlite3.SQLITE_OK if action in READ_ONLY_ACTIONS else sqlite3.SQLITE_DENY
 
 
 def database_path(db_id):
@@ -37,15 +61,21 @@ def execute(sql, db_id):
     """The rows a query returns, or the error that stopped it."""
     started = time.monotonic()
     connection = sqlite3.connect(
-        str(database_path(db_id)), timeout=QUERY_TIMEOUT_SECONDS
+        f"file:{database_path(db_id)}?mode=ro", uri=True, timeout=QUERY_TIMEOUT_SECONDS
     )
     connection.text_factory = lambda raw: raw.decode("utf-8", "replace")
     try:
+        connection.set_authorizer(_authorise_reads_only)
         connection.set_progress_handler(
             lambda: 1 if time.monotonic() - started > QUERY_TIMEOUT_SECONDS else 0,
             10_000,
         )
-        return connection.execute(str(sql)).fetchall(), None
+        rows = []
+        for row in connection.execute(str(sql)):
+            rows.append(row)
+            if len(rows) > MAX_ROWS:
+                return None, f"returned more than {MAX_ROWS} rows"
+        return rows, None
     except sqlite3.Error as error:
         return None, str(error)
     finally:

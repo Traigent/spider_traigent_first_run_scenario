@@ -2,53 +2,30 @@
 
 Answers questions about a database by writing the SQL that gets the answer.
 
-Ask it *"How many singers are from each country?"* and it returns
-`SELECT country, count(*) FROM singer GROUP BY country`.
+Ask it *"Show all countries and the number of singers in each country."* and it returns
+`SELECT country ,  count(*) FROM singer GROUP BY country`.
 
 ## What is here
 
-| File | |
-|---|---|
-| `agent.py` | writes the SQL. `run(question, config)` returns a query as text. |
-| `dataset.jsonl` | {{ROWS}} questions with the query that answers each one. |
-| `catalog.json` | which database each question is about, and that database's structure. |
-| `databases/` | {{DATABASES}} SQLite databases, one directory each. |
-| `evaluator.py` | marks an answer. `score(output, expected, input_data, metadata)` returns 1.0 or 0.0. |
-
-Rows look like this:
-
-```json
-{"input": "How many singers are from each country?",
- "output": "SELECT country, count(*) FROM singer GROUP BY country",
- "metadata": {"db_id": "concert_singer", "schema": "CREATE TABLE ...",
-              "split": "tuning", "difficulty": "medium", "provenance": "real"}}
-```
-
-`split` separates the questions used for tuning from the ones held back to check a winner
-against questions it was not tuned on. `difficulty` is the complexity of the query the
-question needs.
-
+{{FILE_TABLE}}
+{{DATA_SECTION}}
 ## The data
 
-These questions and queries come from **Spider**, a text-to-SQL benchmark of human-written
-questions over databases in many different subject areas (Yu et al., EMNLP 2018). They are
-real recorded data, not generated examples.
+These questions come from **Spider**, a text-to-SQL benchmark of human-written questions over
+databases in many different subject areas (Yu et al., EMNLP 2018). They are real recorded
+data, not generated examples.
 
 Two things worth knowing before reading anything into a score:
 
 - Spider is old enough and public enough that current models have very likely seen it.
-- The questions here are a small sample. Enough to tell configurations apart; not enough to
-  settle a question about production.
+- What is here is a small sample. Enough to tell configurations apart; not enough to settle a
+  question about production.
 
 The data is licensed CC BY-SA 4.0 and `LICENSE-DATA` in this directory carries the
 attribution and the terms. It has to stay with the data wherever the data goes.
 
 ## Optimizing it
-
-The agent has settings that change its answers -- which model, how much of the database
-structure it is shown, whether it plans before answering, and its temperature. Which
-combination is best is not obvious, and the way to find out is to measure.
-
+{{AGENT_SECTION}}
 To have a coding assistant set that up and run it:
 
 ```text
