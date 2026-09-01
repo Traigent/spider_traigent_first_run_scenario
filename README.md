@@ -108,35 +108,42 @@ measured problem with how the two are scored.
 
 ## What each preset scores
 
-Measured with the first-run guide's own `preflight.py` and `readiness.py`, at guide revision
-`6ec2b9c1` on 2026-09-01. The point of the table is that the presets are actually different:
-each one lands the run somewhere else.
+Measured with the first-run guide's own `preflight.py` and `readiness.py` at the opening
+gate, at guide revision `6ec2b9c1` on 2026-09-01. The point of the table is that the presets
+are actually different: each one lands the run somewhere else.
 
 | preset | opening | band | what the guide is told to do next |
 |---|---|---|---|
 | `ready` | 45 | PARTIAL | proceed |
 | `no-eval` | 39 | PARTIAL | connect an evaluator |
 | `no-labels` | 19 | NOT READY | label the data |
-| `no-knobs` | 45 | PARTIAL | find something to vary |
+| `no-knobs` | 45 | PARTIAL | proceed |
 | `sql-exec-stop` | 45 | PARTIAL | proceed -- **no containment cap is raised** |
 
 The dataset pillar scores **98** on the full slice, with every dataset check passing.
 
-The `ready` agent scores **70** on the agent pillar with all four settings credited, and
-`no-knobs` scores **0** with the `agent-no-varying-knobs` cap raised -- which is the
-difference between the two being real rather than declared.
+Two of those rows deserve a note, because both look like something is broken and neither is.
 
-70 is the ceiling at this stage, and not a comment on the agent: the search-space score is
-held one step below full whenever no trial budget has been declared, and a trial budget can
-only be declared in a document that does not exist until a run produces one. The published
-reference scenario scores the same 70 for the same reason.
+**The agent pillar reads 0 at the opening gate, for every preset** -- including `ready`,
+whose agent has four settings that demonstrably change the request. The opening read is a
+narrow static one, and when it cannot follow a setting to the call it records that it could
+not, rather than assuming either way. The card says as much itself: the ceiling "records that
+limit, not a finding that the agent has no setting". Scoring it as measured-zero rather than
+as unmeasured is deliberate -- unmeasured lets the pillar renormalize out of the average,
+which once made a run that found nothing outscore a run that found four settings. So
+`ready` and `no-knobs` are not separated here. They separate later, from the read the guide
+performs during an actual run.
 
-`agent.py` is written so that reading `run()` top to bottom is the whole story -- it reads
-all four settings itself and hands the finished request to the provider call as a list of
-text blocks, one per thing a setting decides. Two consequences are worth knowing, and the
-file says so too: the request is a multi-block content array rather than one string, and
-`schema_context="none"` sends a block saying the schema was not shown rather than omitting
-it, because a provider rejects an empty block.
+Do not write agent code to move that number. An agent shaped to be followable by the static
+read is not a more tunable agent, and shaping one costs something real: an earlier version of
+`agent.py` here was restructured for exactly that, and the restructure changed
+`schema_context="none"` from sending no schema to sending a sentence saying the schema was
+not shown -- which stops that arm being a clean control, because the setting is then partly
+measuring the sentence. It has been reverted. `tests/test_components.py` now has a test that
+fails if the control arm ever gains content again.
+
+**`sql-exec-stop` reaches `proceed` with no containment cap.** That is the finding, not a
+build error. See [docs/eval-methods.md](docs/eval-methods.md).
 
 ## The data is Spider
 

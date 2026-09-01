@@ -16,10 +16,6 @@ The questions arrive as plain text, so the database each one belongs to is looke
 catalog.json, which sits beside the dataset and maps every question to its database and
 schema. A question that is not in the catalog is raised rather than answered against a
 guess, because SQL written for the wrong database looks fine and is always wrong.
-
-run() reads all four settings itself and hands the finished request to call_model as a list
-of text blocks -- one block per thing a setting decides. Reading run() top to bottom is
-therefore the whole story of how a configuration becomes a request.
 """
 
 import json
@@ -35,11 +31,7 @@ MODELS = {
     "claude-3-5-haiku-latest": "anthropic",
 }
 
-SCHEMA_VIEWS = {
-    "none": "You are not shown this database's schema; infer table and column names.",
-    "tables": "The schema below lists one line per table, with that table's columns.",
-    "full": "The schema below is the full CREATE TABLE text for this database.",
-}
+SCHEMA_CONTEXTS = ("none", "tables", "full")
 
 PROMPT_STYLES = {
     "direct": "Output the SQLite query only -- no explanation, no markdown.",
@@ -87,23 +79,28 @@ def compact_schema(schema):
     return "\n".join(lines)
 
 
-def schema_text(question, schema_context):
-    """As much of this question's database as the chosen view shows.
+def schema_for_config(schema, config):
+    context = str(config.get("schema_context", "none"))
+    if context not in SCHEMA_CONTEXTS:
+        raise ValueError(f"schema_context {context!r} is not one of {SCHEMA_CONTEXTS}")
+    if context == "none":
+        return ""
+    if context == "tables":
+        return compact_schema(schema)
+    return schema
 
-    The three views are the three real amounts of structure a model can be given, and
-    'none' still sends a block -- the request always has the same shape, and the shape
-    is not what the setting changes.
-    """
+
+def build_prompt(question, config):
+    """The exact text sent to the model, assembled from the settings that shape it."""
     entry = catalog().get(question)
     if entry is None:
         raise KeyError(
             f"no database recorded for this question, so there is nothing to write SQL against: {question!r}"
         )
-    if schema_context == "none":
-        return "(schema not shown)"
-    if schema_context == "tables":
-        return compact_schema(entry["schema"])
-    return entry["schema"]
+    schema_block = schema_for_config(entry["schema"], config)
+    instruction = PROMPT_STYLES[config.get("prompt_style", "direct")]
+    prefix = f"Database schema:\n{schema_block}\n\n" if schema_block else ""
+    return f"{prefix}{instruction}\nQuestion: {question}\nSQL:"
 
 
 def strip_code_fence(text):
@@ -115,12 +112,8 @@ def strip_code_fence(text):
     return text.strip()
 
 
-def call_model(model, blocks, temperature):
-    """One completion from whichever provider serves this model.
-
-    The request text arrives already split into blocks, so the settings that shaped it
-    stay readable at the call itself rather than inside a string assembled elsewhere.
-    """
+def call_model(model, prompt, temperature):
+    """One completion from whichever provider serves this model."""
     if MODELS[model] == "anthropic":
         from anthropic import Anthropic
 
@@ -128,7 +121,7 @@ def call_model(model, blocks, temperature):
             model=model,
             max_tokens=512,
             temperature=temperature,
-            messages=[{"role": "user", "content": blocks}],
+            messages=[{"role": "user", "content": prompt}],
         )
         return answer.content[0].text
     from openai import OpenAI
@@ -137,7 +130,7 @@ def call_model(model, blocks, temperature):
         model=model,
         temperature=temperature,
         max_tokens=512,
-        messages=[{"role": "user", "content": blocks}],
+        messages=[{"role": "user", "content": prompt}],
     )
     return answer.choices[0].message.content
 
@@ -149,22 +142,6 @@ def run(input_text, config):
         raise ValueError(
             f"{model!r} is not one of the models this agent is configured for"
         )
-    temperature = config.get("temperature", 0.0)
-    if temperature not in TEMPERATURES:
-        raise ValueError(
-            f"{temperature!r} is not one of the temperatures this agent runs at"
-        )
-    schema_context = config.get("schema_context", "none")
-    prompt_style = config.get("prompt_style", "direct")
-    return strip_code_fence(
-        call_model(
-            model,
-            [
-                {"type": "text", "text": SCHEMA_VIEWS[schema_context]},
-                {"type": "text", "text": schema_text(input_text, schema_context)},
-                {"type": "text", "text": PROMPT_STYLES[prompt_style]},
-                {"type": "text", "text": f"Question: {input_text}\nSQL:"},
-            ],
-            temperature,
-        )
-    )
+    temperature = float(config.get("temperature", 0.0))
+    prompt = build_prompt(input_text, config)
+    return strip_code_fence(call_model(model, prompt, temperature) or "")

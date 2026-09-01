@@ -231,28 +231,32 @@ class Agents(unittest.TestCase):
     def test_the_tunable_agent_declares_four_settings(self) -> None:
         module = load(AGENT_DIR / "agent_ready.py", "agent_probe")
         self.assertGreaterEqual(len(module.MODELS), 2)
-        self.assertEqual(len(module.SCHEMA_VIEWS), 3)
+        self.assertEqual(len(module.SCHEMA_CONTEXTS), 3)
         self.assertEqual(len(module.PROMPT_STYLES), 2)
         self.assertEqual(len(module.TEMPERATURES), 2)
+
+    def prepared(self, name: str):
+        """The agent, with a known database and the provider call captured."""
+        module = load(AGENT_DIR / "agent_ready.py", name)
+        schema = "CREATE TABLE singer (\nid INTEGER,\nname TEXT,\ncountry TEXT\n);"
+        question = "How many singers are there?"
+        module._catalog = {question: {"db_id": "concert_singer", "schema": schema}}
+        sent: list[tuple[str, str, float]] = []
+
+        def capture(model, prompt, temperature):
+            sent.append((model, prompt, temperature))
+            return "SELECT count(*) FROM singer"
+
+        module.call_model = capture
+        return module, question, sent
 
     def test_each_setting_changes_the_request(self) -> None:
         """A setting that does not change what is sent is not a setting.
 
-        This drives the real entry point with the provider call stubbed, so what is asserted
-        is the request that would actually go out, not the output of a helper.
+        Driven through run() with the provider call stubbed, so what is asserted is the
+        request that would actually go out rather than a helper's return value.
         """
-        module = load(AGENT_DIR / "agent_ready.py", "agent_probe_request")
-        schema = "CREATE TABLE singer (\nid INTEGER,\nname TEXT,\ncountry TEXT\n);"
-        question = "How many singers are there?"
-        module._catalog = {question: {"db_id": "concert_singer", "schema": schema}}
-
-        sent: list[tuple] = []
-
-        def capture(model, blocks, temperature):
-            sent.append((model, tuple(block["text"] for block in blocks), temperature))
-            return "SELECT count(*) FROM singer"
-
-        module.call_model = capture
+        module, question, sent = self.prepared("agent_probe_request")
         base = {
             "model": "gpt-4o-mini",
             "schema_context": "none",
@@ -274,36 +278,25 @@ class Agents(unittest.TestCase):
             len(set(sent)), len(changes), "two settings send the same request"
         )
         rendered = dict(zip(changes, sent))
-        self.assertNotIn("singer(", " ".join(rendered["base"][1]))
-        self.assertIn(
-            "singer(id, name, country)", " ".join(rendered["schema_tables"][1])
-        )
-        self.assertIn("CREATE TABLE singer", " ".join(rendered["schema_full"][1]))
+        self.assertIn("singer(id, name, country)", rendered["schema_tables"][1])
+        self.assertIn("CREATE TABLE singer", rendered["schema_full"][1])
 
-    def test_no_request_block_is_ever_empty(self) -> None:
-        """Providers reject an empty text block, so 'no schema' still sends something."""
-        module = load(AGENT_DIR / "agent_ready.py", "agent_probe_blocks")
-        question = "How many singers are there?"
-        module._catalog = {
-            question: {"db_id": "concert_singer", "schema": "CREATE TABLE s (a);"}
-        }
-        seen: list[str] = []
-        module.call_model = lambda model, blocks, temperature: (
-            seen.extend(block["text"] for block in blocks) or "SELECT 1"
-        )
-        for context in module.SCHEMA_VIEWS:
-            module.run(question, {"schema_context": context})
-        self.assertTrue(
-            all(text.strip() for text in seen), "an empty block would be rejected"
-        )
+    def test_the_none_arm_sends_no_schema_at_all(self) -> None:
+        """schema_context='none' is the control arm, and has to be empty.
 
-    def test_an_unsupported_setting_value_raises(self) -> None:
-        module = load(AGENT_DIR / "agent_ready.py", "agent_probe_values")
-        module._catalog = {"q": {"db_id": "d", "schema": "CREATE TABLE t (a);"}}
-        with self.assertRaises(ValueError):
-            module.run("q", {"model": "some-model-we-never-configured"})
-        with self.assertRaises(ValueError):
-            module.run("q", {"temperature": 0.42})
+        Not "no schema, but a sentence saying so" -- a sentence is content the model reads,
+        and then the setting is partly measuring that sentence rather than measuring what
+        showing a schema is worth. The request must differ by the schema and nothing else.
+        """
+        module, question, sent = self.prepared("agent_probe_control")
+        base = {"model": "gpt-4o-mini", "prompt_style": "direct", "temperature": 0.0}
+        module.run(question, {**base, "schema_context": "none"})
+        module.run(question, {**base, "schema_context": "full"})
+        control, shown = sent[0][1], sent[1][1]
+
+        for word in ("schema", "Schema", "CREATE TABLE", "singer("):
+            self.assertNotIn(word, control, f"the control arm mentions {word!r}")
+        self.assertIn(control, shown, "the two arms differ by more than the schema")
 
     def test_the_fixed_agent_ignores_its_configuration(self) -> None:
         source = (AGENT_DIR / "agent_no_knobs.py").read_text(encoding="utf-8")
@@ -311,11 +304,21 @@ class Agents(unittest.TestCase):
             "config.get", source, "this agent is supposed to have nothing to vary"
         )
 
+    def test_an_unsupported_setting_value_raises(self) -> None:
+        """Answering under a setting the agent does not have would be a quiet wrong result."""
+        module, question, _ = self.prepared("agent_probe_values")
+        with self.assertRaises(ValueError):
+            module.run(question, {"model": "some-model-we-never-configured"})
+        with self.assertRaises(ValueError):
+            module.run(question, {"schema_context": "some-view-that-does-not-exist"})
+
     def test_an_unknown_question_raises_rather_than_guessing(self) -> None:
         module = load(AGENT_DIR / "agent_ready.py", "agent_probe_missing")
         module._catalog = {}
         with self.assertRaises(KeyError):
-            module.schema_text("a question nobody recorded", "full")
+            module.build_prompt(
+                "a question nobody recorded", {"schema_context": "full"}
+            )
 
 
 if __name__ == "__main__":
