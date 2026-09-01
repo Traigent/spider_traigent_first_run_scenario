@@ -13,9 +13,11 @@ import importlib.util
 import inspect
 import json
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 
@@ -45,6 +47,24 @@ def imported_modules(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module:
             names.add(node.module.split(".")[0])
     return names
+
+
+def recording_provider(sent: list[str]):
+    """A stand-in for the OpenAI client that records a request instead of sending one.
+
+    The agent with no settings reaches the provider directly rather than through a helper a
+    test can replace, so the request is captured where it would leave the process.
+    """
+
+    def create(**request):
+        sent.append(json.dumps(request, sort_keys=True, default=repr))
+        message = types.SimpleNamespace(content="SELECT count(*) FROM singer")
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
+
+    client = types.SimpleNamespace(
+        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=create))
+    )
+    return types.SimpleNamespace(OpenAI=lambda *args, **kwargs: client)
 
 
 class EveryComponentParses(unittest.TestCase):
@@ -203,6 +223,155 @@ class ExecutionComparison(unittest.TestCase):
             )
 
 
+class TheScorerAndTheAgentAgreeAboutWhatTheModelSends(unittest.TestCase):
+    """The three defects that made a knob unwinnable or a table imaginary.
+
+    Each of these shipped once. Each is the kind that a green suite and a plausible-looking
+    result would have hidden: the run completes, the numbers come out, and they are wrong
+    for a reason that has nothing to do with the agent being measured.
+    """
+
+    def test_a_planned_answer_is_not_marked_wrong_for_its_plan(self) -> None:
+        """`query_plan_cot` asks the model to think in SQL comments before answering.
+
+        The text comparator used to keep those comments and weld them onto the query, so an
+        answer identical to the recorded one scored 0.0 whenever the plan setting was on --
+        on the default scorer, in most presets. A sweep would have concluded that planning
+        hurts, with confidence, from a bug in the ruler.
+        """
+        scorer = load(EVALUATOR_DIR / "exact_match.py", "cot_probe")
+        gold = "SELECT avg(age) FROM Dogs"
+        for plan in (
+            f"-- one table, one aggregate\n{gold}",
+            f"/* one table, one aggregate */ {gold}",
+            f"-- step one\n-- step two\n{gold}",
+        ):
+            with self.subTest(plan=plan.splitlines()[0]):
+                self.assertEqual(
+                    scorer.score(
+                        output=plan, expected=gold, input_data=None, metadata=None
+                    ),
+                    1.0,
+                )
+
+    def test_the_compact_schema_describes_tables_that_exist(self) -> None:
+        """The `tables` view is checked against the databases, not against itself.
+
+        It used to be built by splitting on every comma, so `DECIMAL(19,4)` produced a
+        column called `4)` and a composite key leaked its column list out as columns. Eleven
+        tables across nine databases described something that was not there, and
+        `schema_context` is the setting most likely to move a score.
+        """
+        agent = load(AGENT_DIR / "agent_ready.py", "schema_probe")
+        schemas: dict[str, str] = {}
+        for line in (
+            (REPO_ROOT / "spider" / "spider_300.jsonl").read_text().splitlines()
+        ):
+            row = json.loads(line)
+            schemas.setdefault(row["metadata"]["db_id"], row["metadata"]["schema"])
+
+        checked = 0
+        for db_id, schema in sorted(schemas.items()):
+            connection = sqlite3.connect(
+                str(REPO_ROOT / "spider" / "databases" / db_id / f"{db_id}.sqlite")
+            )
+            real = {
+                name.lower(): [
+                    column[1]
+                    for column in connection.execute(f'PRAGMA table_info("{name}")')
+                ]
+                for (name,) in connection.execute(
+                    "select name from sqlite_master where type='table'"
+                )
+            }
+            connection.close()
+            for rendered in agent.compact_schema(schema).splitlines():
+                table, _, columns = rendered.partition("(")
+                named = [c.strip() for c in columns.rstrip(")").split(",") if c.strip()]
+                truth = real.get(table.strip().lower())
+                checked += 1
+                self.assertIsNotNone(truth, f"{db_id}: no table called {table}")
+                self.assertEqual(
+                    [c.lower() for c in named],
+                    [c.lower() for c in truth or []],
+                    f"{db_id}.{table} is described with columns it does not have",
+                )
+        self.assertGreater(
+            checked, 70, "every committed database should have been checked"
+        )
+
+    def test_the_execution_scorer_cannot_change_the_database(self) -> None:
+        """A scorer that runs model-written SQL must not be able to write.
+
+        SQLite runs DDL outside the transaction Python opens for INSERT/UPDATE/DELETE, so a
+        hallucinated `DROP TABLE` used to succeed permanently -- and every later row on that
+        database then failed and blamed the recorded answer for it.
+        """
+        with tempfile.TemporaryDirectory() as workspace:
+            out = Path(workspace) / "demo"
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "build.py"),
+                    "demo",
+                    "--dataset",
+                    "mini",
+                    "--eval",
+                    "exec-match",
+                    "--out",
+                    str(out),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            project = out / "project"
+            scorer = load(project / "evaluator.py", "write_probe")
+            db_id = sorted(
+                d.name for d in (project / "databases").iterdir() if d.is_dir()
+            )[0]
+            database = project / "databases" / db_id / f"{db_id}.sqlite"
+
+            def tables() -> list[str]:
+                connection = sqlite3.connect(str(database))
+                try:
+                    return sorted(
+                        name
+                        for (name,) in connection.execute(
+                            "select name from sqlite_master where type='table'"
+                        )
+                    )
+                finally:
+                    connection.close()
+
+            before = tables()
+            attacks = {
+                "drop": f"DROP TABLE {before[0]}",
+                "create": "CREATE TABLE zzz_injected (a int)",
+                "delete": f"DELETE FROM {before[0]}",
+                "attach": f"ATTACH DATABASE '{project / 'zzz.sqlite'}' AS z",
+                "vacuum": f"VACUUM INTO '{project / 'zzz_vacuum.sqlite'}'",
+            }
+            for name, sql in attacks.items():
+                with self.subTest(attack=name):
+                    self.assertEqual(
+                        scorer.score(
+                            output=sql,
+                            expected="SELECT 1",
+                            input_data=None,
+                            metadata={"db_id": db_id},
+                        ),
+                        0.0,
+                    )
+                    self.assertEqual(tables(), before, f"{name} changed the database")
+            self.assertEqual(
+                sorted(path.name for path in project.glob("zzz*")),
+                [],
+                "the scorer wrote a file of its own",
+            )
+
+
 class AlwaysCorrectScorer(unittest.TestCase):
     def test_it_marks_anything_correct(self) -> None:
         scorer = load(EVALUATOR_DIR / "broken.py", "broken_probe")
@@ -216,6 +385,136 @@ class AlwaysCorrectScorer(unittest.TestCase):
                 ),
                 1.0,
             )
+
+
+class ProbesBelongToTheScorerTheyShipWith(unittest.TestCase):
+    """Each scorer separates the probe answers that ship with it, and `broken` does not.
+
+    docs/eval-methods.md states this as a measurement -- exact-match passes, exec-match
+    passes, broken fails -- and says handing either real scorer the other's probes would
+    measure the wrong thing. Nothing ran a shipped scorer over its shipped probes, so the
+    pairing in build.py could point one at another's cases and calibration would still read
+    as having passed.
+
+    Built through `build.py demo` rather than read out of components/, because the execution
+    scorer needs the databases a real project has beside it.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workspace = tempfile.mkdtemp()
+        cls.scorers = {}
+        cls.cases = {}
+        for state in ("exact-match", "exec-match", "broken"):
+            out = Path(cls.workspace) / state
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "build.py"),
+                    "demo",
+                    "--dataset",
+                    "mini",
+                    "--eval",
+                    state,
+                    "--calibration",
+                    "present",
+                    "--out",
+                    str(out),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            assert result.returncode == 0, result.stderr
+            project = out / "project"
+            cls.scorers[state] = load(
+                project / "evaluator.py", f"calibrated_{state.replace('-', '_')}"
+            )
+            cls.cases[state] = json.loads(
+                (project / build.RUNS_DIRECTORY / build.CALIBRATION_FILE).read_text()
+            )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.workspace, ignore_errors=True)
+
+    def probe(self, scorer: str, case: dict, name: str) -> float:
+        return self.scorers[scorer].score(
+            output=case["probes"][name],
+            expected=case["expected"],
+            input_data=case["input_data"],
+            metadata=case["metadata"],
+        )
+
+    def check_it_separates_right_from_wrong(self, state: str) -> None:
+        cases = self.cases[state]
+        self.assertGreaterEqual(
+            len(cases), 2, f"{state} ships too few cases to calibrate"
+        )
+        for case in cases:
+            with self.subTest(evaluator=state, case=case["name"]):
+                self.assertEqual(
+                    self.probe(state, case, "good"),
+                    1.0,
+                    "the recorded answer is not marked right",
+                )
+                self.assertEqual(
+                    self.probe(state, case, "equivalent_good"),
+                    1.0,
+                    "an answer this scorer counts as equivalent is not marked right",
+                )
+                self.assertEqual(
+                    self.probe(state, case, "bad"),
+                    0.0,
+                    "a wrong answer is not marked wrong",
+                )
+
+    def test_the_text_comparison_passes_its_own_probes(self) -> None:
+        self.check_it_separates_right_from_wrong("exact-match")
+
+    def test_the_execution_scorer_passes_its_own_probes(self) -> None:
+        self.check_it_separates_right_from_wrong("exec-match")
+
+    def test_the_always_correct_scorer_fails_its_own_probes(self) -> None:
+        """`broken` ships probes so that calibration catches it, which means failing them.
+
+        A full mark for the wrong-answer probe is the failure, and it is the reason cases
+        ship for a scorer that is not one.
+        """
+        cases = self.cases["broken"]
+        self.assertGreaterEqual(
+            len(cases), 2, "broken ships too few cases to calibrate"
+        )
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                self.assertEqual(
+                    self.probe("broken", case, "bad"),
+                    1.0,
+                    "broken marked a wrong answer wrong, so calibration would not catch it",
+                )
+
+    def test_the_execution_probes_are_not_the_text_comparison_probes(self) -> None:
+        """The execution cases are equivalents the text comparison marks wrong.
+
+        That is the difference between the two sets. The execution probes are queries
+        written differently that return the same rows -- an alias, an `IN` with one element,
+        an implicit ASC -- and the text comparison rejects every one of them, which is the
+        limit it is documented to have. The text comparison's own probes are re-spellings
+        that the execution scorer also accepts, so giving the execution scorer that set
+        instead leaves everything above green. This is what sees it.
+        """
+        for case in self.cases["exec-match"]:
+            with self.subTest(case=case["name"]):
+                self.assertEqual(
+                    self.scorers["exact-match"].score(
+                        output=case["probes"]["equivalent_good"],
+                        expected=case["expected"],
+                        input_data=case["input_data"],
+                        metadata=case["metadata"],
+                    ),
+                    0.0,
+                    "the text comparison accepts this probe, so it is not an execution probe",
+                )
 
 
 class Agents(unittest.TestCase):
@@ -298,10 +597,54 @@ class Agents(unittest.TestCase):
             self.assertNotIn(word, control, f"the control arm mentions {word!r}")
         self.assertIn(control, shown, "the two arms differ by more than the schema")
 
+    def prepared_fixed(self, name: str):
+        """The agent with no settings, with a known database and the provider recorded."""
+        module = load(AGENT_DIR / "agent_no_knobs.py", name)
+        schema = "CREATE TABLE singer (\nid INTEGER,\nname TEXT,\ncountry TEXT\n);"
+        question = "How many singers are there?"
+        module._catalog = {question: {"db_id": "concert_singer", "schema": schema}}
+        sent: list[str] = []
+
+        previous = sys.modules.get("openai")
+
+        def restore() -> None:
+            if previous is None:
+                sys.modules.pop("openai", None)
+            else:
+                sys.modules["openai"] = previous
+
+        self.addCleanup(restore)
+        sys.modules["openai"] = recording_provider(sent)
+        return module, question, sent
+
     def test_the_fixed_agent_ignores_its_configuration(self) -> None:
-        source = (AGENT_DIR / "agent_no_knobs.py").read_text(encoding="utf-8")
-        self.assertNotIn(
-            "config.get", source, "this agent is supposed to have nothing to vary"
+        """Every configuration produces the same request, because there is nothing to vary.
+
+        This is the arm with no settings, and what makes it that arm is what goes out, not
+        how the file is spelled. Reading the source for a phrase would pass an agent that
+        reaches into its configuration by some other route, so this drives run() with the
+        provider call recorded and compares the requests themselves.
+        """
+        module, question, sent = self.prepared_fixed("agent_probe_fixed")
+        configurations = (
+            {},
+            {"model": "gpt-4o"},
+            {"model": "gpt-4o-mini", "temperature": 0.7},
+            {"schema_context": "none", "prompt_style": "query_plan_cot"},
+            {"schema_context": "full", "prompt_style": "direct", "temperature": 1.0},
+        )
+        for configuration in configurations:
+            module.run(question, configuration)
+
+        self.assertEqual(
+            len(sent),
+            len(configurations),
+            "the agent did not send one request per configuration",
+        )
+        self.assertEqual(
+            len(set(sent)),
+            1,
+            "a setting changed what the agent with no settings sends",
         )
 
     def test_an_unsupported_setting_value_raises(self) -> None:

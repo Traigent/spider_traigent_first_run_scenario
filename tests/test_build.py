@@ -22,13 +22,30 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import build  # noqa: E402
 
-# The prompt a customer is given to start a run. It is pinned byte for byte in four other
-# places across the product, each with its own test and no shared file between them. This is
-# the fifth pin: if one of them drifts, the ones that did not drift say so.
+# The prompt a customer is given to start a run. The same two lines are copied byte for byte
+# into six other product files: traigent-first-run/README.md; the scenarios repo's README.md,
+# GUIDE.md and skills/traigent-first-run-scenarios/SKILL.md; its presentation/src/content.ts;
+# and traigent-web/public/agent-setup/prompt.md. traigent-web/src/components/LeadFunnel.jsx
+# builds the same two lines with the repository URL interpolated.
+#
+# Only traigent-web pins any of them, and not in separate files: its
+# scripts/tests/customer_journey.test.mjs asserts both public/agent-setup/prompt.md and
+# LeadFunnel.jsx against one shared literal in that one file, and its
+# scripts/funnel_component.test.mjs asserts the rendered copy button against a second literal
+# of its own. The five copies in traigent-first-run and traigent-first-run-scenarios, the
+# customer-facing README among them, are pinned nowhere. So this is not the fifth of five
+# independent pins: it covers what build.py prints and records, and nothing else.
 EXPECTED_HANDOFF = (
     "Help me run my first Traigent optimization.\n"
     "Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md."
 )
+
+# How many rows the two smaller draws ship. Written out here rather than read back from
+# build.py, because checking the builder's output against the builder's own constant passes
+# whatever that constant is changed to and reports nothing. README publishes `mini` as 30 in
+# its flag table, so it is a number a reader already relies on.
+EXPECTED_MINI_ROWS = 30
+EXPECTED_UNLABELED_ROWS = 40
 
 
 def run_build(*args: str) -> subprocess.CompletedProcess[str]:
@@ -185,8 +202,24 @@ class ComponentStates(unittest.TestCase):
             for line in (project / "dataset.jsonl").read_text().splitlines()
             if line
         ]
-        self.assertEqual(len(rows), build.MINI_ROWS)
+        self.assertEqual(len(rows), EXPECTED_MINI_ROWS)
         self.assertEqual(len({row["metadata"]["difficulty"] for row in rows}), 4)
+
+    def test_the_smaller_draw_is_the_same_draw_every_time(self) -> None:
+        """Two builds of the same dataset state ship byte-identical rows.
+
+        `mini` and `unlabeled` are sampled, and the sample is seeded so that everyone who
+        builds one gets the same questions. Without that, two people following the guide
+        compare scores that were never measured on the same rows, and nothing in either
+        project says so.
+        """
+        first = self.make("--dataset", "mini") / "dataset.jsonl"
+        second = self.make("--dataset", "mini") / "dataset.jsonl"
+        self.assertEqual(
+            first.read_bytes(),
+            second.read_bytes(),
+            "two builds of --dataset mini drew different rows",
+        )
 
     def test_unlabelled_rows_carry_no_answer(self) -> None:
         """No expected output, and therefore no split -- there is nothing to hold back."""
@@ -196,7 +229,7 @@ class ComponentStates(unittest.TestCase):
             for line in (project / "dataset.jsonl").read_text().splitlines()
             if line
         ]
-        self.assertEqual(len(rows), build.UNLABELED_ROWS)
+        self.assertEqual(len(rows), EXPECTED_UNLABELED_ROWS)
         for row in rows:
             self.assertNotIn("output", row)
             self.assertNotIn("split", row["metadata"])
@@ -286,7 +319,11 @@ class Calibration(unittest.TestCase):
             (("--dataset", "missing"), "databases"),
         ):
             with self.subTest(args=args):
-                out = Path(self.workspace) / f"bad{args[1]}"
+                # Named after the flag, not its value. Both subtests pass "missing", so
+                # naming it after the value gave the two of them one shared path, where a
+                # refusal to write over an existing directory would read as the refusal
+                # this test is actually about.
+                out = Path(self.workspace) / f"bad{args[0].lstrip('-')}"
                 result = run_build(
                     "demo", "--out", str(out), "--calibration", "present", *args
                 )

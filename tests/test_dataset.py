@@ -29,6 +29,10 @@ EXPECTED_BANDS = {"easy": 75, "medium": 75, "hard": 75, "very-hard": 75}
 EXPECTED_SPLITS = {"tuning": 240, "holdout": 60}
 SHINGLE_SIZE = 3
 SIMILARITY_THRESHOLD = 0.7
+# The documented id format. Every id says which Spider dev row it came from, and the
+# calibration cases name rows by exactly this spelling, so it is a format other files read
+# and not only a label.
+ID_PATTERN = r"^spider-dev-\d+$"
 
 
 def load_rows() -> list[dict]:
@@ -87,8 +91,15 @@ class SliceShape(unittest.TestCase):
         self.assertEqual(collisions, [], f"near-duplicate questions: {collisions[:3]}")
 
     def test_ids_are_present_and_unique(self) -> None:
+        """Every row carries a stable id in the documented `spider-dev-NNNN` form.
+
+        Asserting only that the id is truthy would accept any string at all, and the
+        calibration cases point at rows by this spelling -- an id in some other shape would
+        name a row nothing can find.
+        """
         ids = [row["metadata"]["id"] for row in self.rows]
-        self.assertTrue(all(ids), "every row needs a stable id")
+        for index, row_id in enumerate(ids):
+            self.assertRegex(str(row_id), ID_PATTERN, f"row {index} has id {row_id!r}")
         self.assertEqual(len(set(ids)), len(ids), "ids are not unique")
 
     def test_metadata_fields(self) -> None:
