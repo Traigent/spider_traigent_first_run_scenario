@@ -73,6 +73,7 @@ EVALUATOR_FILES = {
     "missing": None,
 }
 DATASET_STATES = ("ready", "mini", "unlabeled", "missing")
+CALIBRATION_STATES = ("none", "present")
 VENV_STATES = ("none", "one-compatible", "old-python")
 GUIDE_MODES = ("clone", "local")
 
@@ -85,6 +86,16 @@ SAMPLE_SEED = 42
 COMPATIBLE_PYTHONS = ("python3.13", "python3.12", "python3.11")
 OLD_PYTHON = "python3.10"
 PROJECT_VENV_NAME = ".venv-project"
+# Where a project keeps the probe answers it uses to check its own scorer. The guide reads
+# this path, and a project that has one can have its evaluator validated at the opening gate
+# instead of being held at the unvalidated ceiling.
+RUNS_DIRECTORY = "traigent-runs"
+CALIBRATION_FILE = "calibration-cases.json"
+CALIBRATION_SOURCES = {
+    "exact-match": COMPONENTS / "calibration" / "exact_match.json",
+    "exec-match": COMPONENTS / "calibration" / "exec_match.json",
+    "broken": COMPONENTS / "calibration" / "broken.json",
+}
 # The guide creates this itself and stops if it already exists, so a demo must never have one.
 FORBIDDEN_VENV_NAME = ".venv-traigent"
 
@@ -220,8 +231,29 @@ def write_catalog(path: Path, rows: Sequence[dict[str, Any]]) -> None:
     )
 
 
-def copy_databases(rows: Sequence[dict[str, Any]], destination: Path) -> list[str]:
-    needed = sorted({row["metadata"]["db_id"] for row in rows})
+def calibration_databases(evaluator_state: str, calibration_state: str) -> set[str]:
+    """Databases the shipped probe answers refer to.
+
+    The probes name their own rows, which need not be among the rows the dataset ships -- so
+    a smaller dataset must not leave a probe pointing at a database that is not here.
+    """
+    if calibration_state != "present":
+        return set()
+    source = CALIBRATION_SOURCES.get(evaluator_state)
+    if source is None or not source.exists():
+        return set()
+    cases = json.loads(source.read_text(encoding="utf-8"))
+    return {
+        case["metadata"]["db_id"]
+        for case in cases
+        if isinstance(case.get("metadata"), dict) and case["metadata"].get("db_id")
+    }
+
+
+def copy_databases(
+    rows: Sequence[dict[str, Any]], destination: Path, also: set[str] | None = None
+) -> list[str]:
+    needed = sorted({row["metadata"]["db_id"] for row in rows} | (also or set()))
     destination.mkdir(parents=True, exist_ok=True)
     for db_id in needed:
         source = DATABASES_PATH / db_id / f"{db_id}.sqlite"
@@ -293,6 +325,30 @@ def make_project_venv(out: Path, state: str) -> dict[str, Any] | None:
     }
 
 
+def copy_calibration(evaluator_state: str, project: Path) -> dict[str, Any] | None:
+    """The probe answers this project keeps for its own scorer.
+
+    Each evaluator gets its own cases, because what counts as an equivalent answer is not the
+    same question for a scorer that compares text as for one that compares rows.
+    """
+    source = CALIBRATION_SOURCES.get(evaluator_state)
+    if source is None:
+        raise BuildError(
+            f"--calibration present needs an evaluator to calibrate, and --eval {evaluator_state} "
+            "ships none"
+        )
+    if not source.exists():
+        raise BuildError(f"calibration cases missing from the repository: {source}")
+    runs = project / RUNS_DIRECTORY
+    runs.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, runs / CALIBRATION_FILE)
+    cases = json.loads(source.read_text(encoding="utf-8"))
+    return {
+        "path": f"{RUNS_DIRECTORY}/{CALIBRATION_FILE}",
+        "case_count": len(cases),
+    }
+
+
 def copy_guide(guide_src: Path, out: Path) -> dict[str, Any]:
     guide_src = guide_src.resolve()
     for required in GUIDE_REQUIRED:
@@ -360,13 +416,19 @@ def render_readme(template: Path, values: dict[str, str]) -> str:
 
 def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
     settings = dict(PRESETS[args.preset]) if args.preset else {}
-    for name in ("agent", "dataset", "eval"):
+    for name in ("agent", "dataset", "eval", "calibration"):
         chosen = getattr(args, name.replace("-", "_"))
         if chosen is not None:
             settings[name] = chosen
     settings.setdefault("agent", "ready")
     settings.setdefault("dataset", "ready")
     settings.setdefault("eval", "exact-match")
+    settings.setdefault("calibration", "none")
+    calibration_state = settings["calibration"]
+    if calibration_state == "present" and settings["eval"] == "missing":
+        raise BuildError(
+            "--calibration present needs an evaluator; --eval missing ships none"
+        )
 
     if args.guide == "local" and args.guide_src is None:
         raise BuildError(
@@ -384,6 +446,11 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
         if settings["dataset"] != "missing"
         else []
     )
+    if calibration_state == "present" and not selected:
+        raise BuildError(
+            "--calibration present needs the databases its probes run against, and "
+            "--dataset missing ships none"
+        )
 
     out.mkdir(parents=True)
     project = out / PROJECT_SUBDIR
@@ -409,7 +476,11 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
         created.append("dataset.jsonl")
         write_catalog(project / "catalog.json", selected)
         created.append("catalog.json")
-        databases = copy_databases(selected, project / "databases")
+        databases = copy_databases(
+            selected,
+            project / "databases",
+            calibration_databases(settings["eval"], calibration_state),
+        )
         created.append("databases/")
         # The rows are CC BY-SA; their licence travels with them, always.
         shutil.copy2(DATA_LICENCE_PATH, project / "LICENSE-DATA")
@@ -417,6 +488,14 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
 
     shutil.copy2(COMPONENTS / "env" / "env.example", project / ".env.example")
     created.append(".env.example")
+
+    calibration_record = (
+        copy_calibration(settings["eval"], project)
+        if calibration_state == "present"
+        else None
+    )
+    if calibration_record is not None:
+        created.append(f"{RUNS_DIRECTORY}/{CALIBRATION_FILE}")
 
     guide_record = (
         copy_guide(args.guide_src, project) if args.guide == "local" else None
@@ -460,6 +539,7 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
                 "state": settings["eval"],
                 "path": "evaluator.py" if evaluator_source else None,
                 **(EVALUATOR_FACTS.get(settings["eval"], {})),
+                "calibration": calibration_record,
             },
             "project_venv": venv_record,
             "guide": guide_record,
@@ -482,7 +562,9 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
         "ok": True,
         "out": str(out),
         "project": str(project),
-        "components": {k: settings[k] for k in ("agent", "dataset", "eval")},
+        "components": {
+            k: settings[k] for k in ("agent", "dataset", "eval", "calibration")
+        },
         "rows": len(selected),
         "databases": len(databases),
         "project_venv": venv_record,
@@ -502,6 +584,7 @@ def cmd_list(args: argparse.Namespace) -> dict[str, Any]:
             "agent": sorted(AGENT_FILES),
             "dataset": list(DATASET_STATES),
             "eval": sorted(EVALUATOR_FILES),
+            "calibration": list(CALIBRATION_STATES),
             "existing-venv": list(VENV_STATES),
             "guide": list(GUIDE_MODES),
         },
@@ -551,6 +634,28 @@ def cmd_check(args: argparse.Namespace) -> dict[str, Any]:
     if not DATA_LICENCE_PATH.exists():
         problems.append(f"data licence missing: {DATA_LICENCE_PATH}")
 
+    gold_queries = {row["output"] for row in rows}
+    for state, source in CALIBRATION_SOURCES.items():
+        if not source.exists():
+            problems.append(f"calibration cases missing: {source}")
+            continue
+        cases = json.loads(source.read_text(encoding="utf-8"))
+        if len(cases) < 2:
+            problems.append(
+                f"{source.name}: at least two cases are required, found {len(cases)}"
+            )
+        for case in cases:
+            if case["expected"] not in gold_queries:
+                problems.append(
+                    f"{source.name}: case {case.get('name', '?')!r} expects a query that is not "
+                    "a recorded answer in the slice"
+                )
+            db_id = (case.get("metadata") or {}).get("db_id")
+            if db_id and not (DATABASES_PATH / db_id / f"{db_id}.sqlite").exists():
+                problems.append(
+                    f"{source.name}: case names database {db_id}, which is not committed"
+                )
+
     bands = Counter(row["metadata"]["difficulty"] for row in rows)
     splits = Counter(row["metadata"]["split"] for row in rows)
 
@@ -578,7 +683,12 @@ def render_demo(result: dict[str, Any]) -> str:
         "",
         f"  agent      {result['components']['agent']}",
         f"  dataset    {result['components']['dataset']} ({result['rows']} rows, {result['databases']} databases)",
-        f"  evaluator  {result['components']['eval']}",
+        f"  evaluator  {result['components']['eval']}"
+        + (
+            "  (+ calibration cases)"
+            if result["components"]["calibration"] == "present"
+            else ""
+        ),
     ]
     if result["project_venv"]:
         venv = result["project_venv"]
@@ -679,6 +789,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="eval",
         choices=sorted(EVALUATOR_FILES),
         help="exact-match (does not execute) | exec-match (runs the SQL) | broken | missing",
+    )
+    demo.add_argument(
+        "--calibration",
+        choices=CALIBRATION_STATES,
+        help="ship the probe answers a project would use to check its own scorer",
     )
     demo.add_argument(
         "--existing-venv",

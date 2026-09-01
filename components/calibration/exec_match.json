@@ -1,0 +1,80 @@
+[
+  {
+    "name": "aggregate over one table - the same average written through a table alias",
+    "score_mode": "binary",
+    "outcome_classes": [
+      "identical query returns the recorded rows",
+      "an aliased rewrite returning the same rows is accepted",
+      "the same aggregate over a filtered subset returns different rows and is rejected",
+      "a different aggregate over the same table is rejected"
+    ],
+    "expected": "SELECT avg(age) FROM Dogs",
+    "input_data": {
+      "question": "Compute the average age of all the dogs."
+    },
+    "metadata": {
+      "row_id": "spider-dev-0377",
+      "db_id": "dog_kennels",
+      "split": "tuning",
+      "scoring_path": "row-comparison"
+    },
+    "probes": {
+      "good": "SELECT avg(age) FROM Dogs",
+      "equivalent_good": "SELECT AVG(T1.age) FROM Dogs AS T1",
+      "partial": "SELECT avg(age) FROM Dogs WHERE abandoned_yn = '1'",
+      "bad": "SELECT count(*) FROM Dogs"
+    }
+  },
+  {
+    "name": "two columns with a filter - the same rows reached through an alias and IN instead of equality",
+    "score_mode": "binary",
+    "outcome_classes": [
+      "identical query returns the recorded rows",
+      "an aliased IN-predicate rewrite returning the same row is accepted",
+      "the same shape with a different filter value is rejected",
+      "the same two columns in the other order is a different row and is rejected"
+    ],
+    "expected": "SELECT Population ,  LifeExpectancy FROM country WHERE Name  =  \"Brazil\"",
+    "input_data": {
+      "question": "What are the population and life expectancies in Brazil?"
+    },
+    "metadata": {
+      "row_id": "spider-dev-0742",
+      "db_id": "world_1",
+      "split": "tuning",
+      "scoring_path": "row-comparison"
+    },
+    "probes": {
+      "good": "SELECT Population ,  LifeExpectancy FROM country WHERE Name  =  \"Brazil\"",
+      "equivalent_good": "SELECT c.Population, c.LifeExpectancy FROM country AS c WHERE c.Name IN ('Brazil')",
+      "partial": "SELECT LifeExpectancy , Population FROM country WHERE Name = 'Brazil'",
+      "bad": "SELECT Population , LifeExpectancy FROM country WHERE Name = 'Argentina'"
+    }
+  },
+  {
+    "name": "an ordered listing - the recorded order asked for explicitly, so the reversed order is a wrong answer",
+    "score_mode": "binary",
+    "outcome_classes": [
+      "identical query returns the recorded rows in the recorded order",
+      "an aliased rewrite that leaves ASC implicit is accepted",
+      "the same rows in the opposite order are rejected because the recorded query asked for an order",
+      "a filtered subset is rejected"
+    ],
+    "expected": "SELECT Name FROM singer ORDER BY Net_Worth_Millions ASC",
+    "input_data": {
+      "question": "List the name of singers in ascending order of net worth."
+    },
+    "metadata": {
+      "row_id": "spider-dev-0480",
+      "db_id": "singer",
+      "split": "tuning",
+      "scoring_path": "row-comparison-ordered"
+    },
+    "probes": {
+      "good": "SELECT Name FROM singer ORDER BY Net_Worth_Millions ASC",
+      "equivalent_good": "SELECT s.Name FROM singer AS s ORDER BY s.Net_Worth_Millions",
+      "partial": "SELECT Name FROM singer ORDER BY Net_Worth_Millions DESC",
+      "bad": "SELECT Name FROM singer WHERE Citizenship = 'France' ORDER BY Net_Worth_Millions ASC"
+    }
+  }
+]

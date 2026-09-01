@@ -219,6 +219,81 @@ class ComponentStates(unittest.TestCase):
             self.assertEqual(evaluator["executes_candidate_output"], executes, state)
 
 
+class Calibration(unittest.TestCase):
+    """The probe answers a project keeps for checking its own scorer."""
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.workspace, ignore_errors=True)
+
+    def make(self, *args: str) -> Path:
+        out = Path(self.workspace) / f"demo{len(list(Path(self.workspace).iterdir()))}"
+        result = run_build("demo", "--out", str(out), *args)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return out
+
+    def test_none_by_default(self) -> None:
+        project = self.make("--dataset", "mini") / "project"
+        self.assertFalse((project / build.RUNS_DIRECTORY).exists())
+
+    def test_present_ships_cases_for_the_chosen_scorer(self) -> None:
+        for state in ("exact-match", "exec-match", "broken"):
+            with self.subTest(evaluator=state):
+                out = self.make(
+                    "--dataset", "mini", "--eval", state, "--calibration", "present"
+                )
+                cases_path = (
+                    out / "project" / build.RUNS_DIRECTORY / build.CALIBRATION_FILE
+                )
+                self.assertTrue(cases_path.exists())
+                cases = json.loads(cases_path.read_text())
+                self.assertGreaterEqual(
+                    len(cases), 2, "calibration needs at least two cases"
+                )
+                for case in cases:
+                    self.assertEqual(
+                        sorted(case["probes"]),
+                        ["bad", "equivalent_good", "good", "partial"],
+                    )
+                record = json.loads((out / "demo.json").read_text())["components"][
+                    "evaluator"
+                ]
+                self.assertEqual(record["calibration"]["case_count"], len(cases))
+
+    def test_the_probes_bring_their_databases_with_them(self) -> None:
+        """A probe names its own row, which need not be one the dataset shipped.
+
+        `mini` copies only the databases its 30 rows use, so without this the exec-match
+        probes point at a database that is not in the project and calibration cannot run.
+        """
+        out = self.make(
+            "--dataset", "mini", "--eval", "exec-match", "--calibration", "present"
+        )
+        project = out / "project"
+        cases = json.loads(
+            (project / build.RUNS_DIRECTORY / build.CALIBRATION_FILE).read_text()
+        )
+        shipped = {
+            path.name for path in (project / "databases").iterdir() if path.is_dir()
+        }
+        for case in cases:
+            db_id = case["metadata"]["db_id"]
+            self.assertIn(db_id, shipped, f"probe names {db_id}, which was not copied")
+
+    def test_calibration_needs_something_to_calibrate(self) -> None:
+        for args, expected in (
+            (("--eval", "missing"), "evaluator"),
+            (("--dataset", "missing"), "databases"),
+        ):
+            with self.subTest(args=args):
+                out = Path(self.workspace) / f"bad{args[1]}"
+                result = run_build(
+                    "demo", "--out", str(out), "--calibration", "present", *args
+                )
+                self.assertEqual(result.returncode, 2)
+                self.assertIn(expected, result.stderr)
+
+
 class Environments(unittest.TestCase):
     def setUp(self) -> None:
         self.workspace = tempfile.mkdtemp()
