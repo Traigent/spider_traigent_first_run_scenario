@@ -84,7 +84,7 @@ Presets are shorthand for the combinations worth having a name:
 | `no-labels` | questions with no expected answers |
 | `no-knobs` | an agent with nothing to search |
 | `sql-exec-stop` | an evaluator that runs the SQL the model wrote |
-| `best-case` | the highest-scoring project this data allows -- and it runs the SQL |
+| `best-case` | the same, scored by execution accuracy -- the metric Spider itself uses |
 
 Individual flags override a preset, so `--preset ready --eval missing` is the ready project
 with the evaluator taken out.
@@ -99,16 +99,18 @@ normalising spacing, quote style, keyword case and a trailing semicolon. It neve
 anything. Its limit is real: `SELECT a, b` and `SELECT b, a` return the same thing and it
 marks the second one wrong, so it under-counts correct answers.
 
-**`exec-match`** runs both queries against the database and compares the rows. This is how
-Spider itself is scored and it is the honest measure of a SQL answer -- but it gets there by
-executing SQL that a model wrote.
+**`exec-match`** runs both queries against the database and compares the rows they return.
+This is Spider's own metric -- execution accuracy -- and it is the faithful way to mark a SQL
+answer, because it credits a correct query written differently from the recorded one. It
+reaches that by executing SQL the model wrote.
 
-The Traigent first-run guide treats that second one as out of scope: its
-`references/run-safety.md` says a scorer that "submits candidate output to a code or SQL
-engine" ends the run before the evaluator executes. So the two presets ask different
-questions. `ready` asks whether a first run works. `sql-exec-stop` asks whether that
-boundary holds. [docs/eval-methods.md](docs/eval-methods.md) has the detail, including a
-measured problem with how the two are scored.
+The first-run guide's `references/run-safety.md` currently declines to execute a scorer that
+does so, ending the run before the evaluator executes. So the presets ask different
+questions: `checked` asks whether a first run works end to end on a non-executing proxy,
+`best-case` asks what the project scores when marked the benchmark's way, and
+`sql-exec-stop` asks whether that boundary holds.
+[docs/eval-methods.md](docs/eval-methods.md) has the detail, including a measured problem
+with how the two scorers are graded.
 
 ## What each preset scores
 
@@ -157,27 +159,51 @@ budget only exists in a document a real run produces. Four configurations alread
 ceiling, so crediting the other two settings would add exactly zero. The published reference
 scenario scores the same 70 for the same reason.
 
-### Why EXCELLENT needs the evaluator the guide stops
+### Why `best-case` scores higher than `checked`
 
-`best-case` differs from `checked` in one way: it scores by running the SQL rather than by
-comparing text. That is worth 5 points and it is the whole gap between STRONG and EXCELLENT.
+The two projects are identical except for how an answer is marked.
 
-The reason is not arbitrary. `normalized-exact` scores **8/25** on task fit for `code-sql`
-where `execution` scores **25/25** -- because comparing SQL as text genuinely under-counts
-correct answers, which `evaluator.py`'s own docstring admits. The arithmetic is closed: at
-dataset 98 and agent 70, EXCELLENT needs an evaluation pillar of 95, and the text
-comparator's calibrated ceiling is 83. Even a perfect dataset leaves it at 87.
+**`best-case` marks answers the way Spider marks them.** Spider is scored by *execution
+accuracy*: run the generated query and the recorded one, compare the rows they return. Every
+Spider figure in the literature and on the official leaderboard is that measure. So
+`best-case` is the configuration faithful to the benchmark this data comes from, and it reads
+**91, EXCELLENT**.
 
-So the only configuration of this project that reads EXCELLENT is the one whose evaluator the
-guide's own `run-safety.md` says to stop before executing. That is a finding about the ruler,
-not a defect in the project, and it is the sharpest form of what
-[docs/eval-methods.md](docs/eval-methods.md) records.
+**`checked` marks answers by comparing query text**, which never runs anything. That is a
+proxy for the benchmark metric, and a lossy one: a correct query written differently from the
+recorded one is marked wrong. The readiness score charges exactly that -- task fit **8/25**
+for `code-sql`, against **25/25** for execution -- and the result is **86, STRONG**.
 
-There is a shortcut, and it is not taken here. Declaring the evaluator method as `exact` and
-the task kind as `structured` makes the *text* comparator read **92 EXCELLENT with no caps**,
-numerically indistinguishable from the reference scenario's published card, with the file
-unchanged. Nothing checks a declaration against the source. Do not do it, and do not read a
-high band as evidence that anyone checked.
+Both numbers are what the guide's own tooling returns, on artifacts anyone can rebuild from
+this repository. The five-point gap is not a penalty or a concession; it is the score
+correctly reporting that one project measures its answers the way the benchmark does and the
+other approximates it.
+
+The arithmetic is closed, so it is worth stating what the text proxy cannot reach: at dataset
+98 and agent 70, EXCELLENT needs an evaluation pillar of 95, and the text comparator's
+calibrated ceiling is 83. Even a perfect dataset leaves it at 87. If you want a project that
+reads EXCELLENT on Spider data, it has to score Spider's way.
+
+**A separate fact about the guide, which does not change either number.** The first-run
+guide's `references/run-safety.md` currently declines to execute a scorer that runs
+model-written SQL, and `--preset sql-exec-stop` and `--preset best-case` both fall under that.
+So the Spider-faithful configuration is one the guide will not run today. That is a property
+of the guide's policy, recorded as a finding in
+[docs/eval-methods.md](docs/eval-methods.md) -- not a qualification on what these projects
+score.
+
+### One thing that would not be truthful
+
+Declaring the evaluator method as `exact` with task kind `structured` makes the *text*
+comparator read **92, EXCELLENT, no caps** -- numerically indistinguishable from the reference
+scenario's published card, with the evaluator file completely unchanged. Nothing checks a
+declaration against the source.
+
+This repository does not do that, and no number in the table above depends on it. Every band
+here comes from an evaluator declared as what it is, on probe answers built from real rows,
+with an agent whose behaviour is byte-identical across the restructure that made its settings
+readable. A high band is not evidence that anyone checked; that is what the calibration step
+is for.
 
 ## The data is Spider
 

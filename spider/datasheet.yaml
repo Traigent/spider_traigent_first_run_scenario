@@ -4,6 +4,10 @@
 name: spider-300
 display_name: Spider 1.0 -- 300-row first-run slice
 task: text-to-SQL over multi-table SQLite databases
+official_metric: >-
+  Execution accuracy -- run the predicted and recorded queries and compare the rows they
+  return. This is what the Spider leaderboard reports and what its literature quotes.
+  Comparing query text is a proxy for it, and a lossy one.
 
 license: CC-BY-SA-4.0
 license_url: https://creativecommons.org/licenses/by-sa/4.0/

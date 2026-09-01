@@ -14,7 +14,7 @@ different formulation is scored as having failed. It under-counts. In exchange, 
 touches nothing: no database, no subprocess, no model output reaching anything that can act
 on it. It is the default.
 
-## `exec-match` -- run both and compare the rows
+## `exec-match` -- run both and compare the rows (Spider's own metric)
 
 Run the generated query and the recorded one against the database, compare the rows as a
 multiset, and ignore order unless the recorded query asked for an order. This is how Spider
@@ -27,7 +27,9 @@ ceiling per query, which bounds the damage without changing what it is.
 
 ## Why this is the interesting flag
 
-The Traigent first-run guide puts execution scoring out of scope.
+Execution accuracy is how Spider is scored: every figure on its leaderboard and in its
+literature is that measure. So this is the faithful ruler for this data, and the first-run
+guide currently declines to run it.
 `references/run-safety.md` is explicit: a scorer that "executes or imports candidate output
 as code, shells out with it, or submits it to a code or SQL engine" ends the run before the
 evaluator executes, and a virtual environment, stripped credentials, a subprocess or a

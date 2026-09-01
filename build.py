@@ -134,7 +134,7 @@ PRESET_NOTES = {
     "no-labels": "questions with no expected answers",
     "no-knobs": "an agent with nothing to search",
     "sql-exec-stop": "an evaluator that executes the candidate SQL",
-    "best-case": "the highest-scoring project this data allows -- and it runs the SQL",
+    "best-case": "scored by execution accuracy, the metric Spider itself uses",
 }
 
 
