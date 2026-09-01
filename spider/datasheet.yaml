@@ -73,12 +73,16 @@ slice:
 databases:
   path: databases/
   count: 18
-  size_kb: 972
+  size_kb: 896
+  size_bytes: 917504
   note: >-
     The SQLite databases the 300 questions need, committed so execution works from a bare clone.
-    Spider's full database set is ~840 MB across 166 databases and is not redistributed here; the
-    source pool was already restricted to databases under 5 MB, which is why one large dev
-    database (wta_1) is absent along with the questions that need it.
+    Spider's full database set is ~840 MB across 166 databases and is not redistributed here.
+    Spider's dev split spans 20 databases and this slice uses 18 of them. wta_1 (~105 MB) is
+    absent because the source pool was already restricted to databases under 5 MB, along with the
+    questions that need it. museum_visit is small enough but is absent too: the 754-row pool is
+    the dev rows left over on the databases the upstream harness had already committed, and
+    museum_visit was not one of those, so no filter here ever saw its rows.
 
 verified:
   date: 2026-09-01

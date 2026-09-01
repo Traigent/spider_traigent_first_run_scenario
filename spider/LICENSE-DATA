@@ -1,9 +1,10 @@
-Licence for the data in this directory
-======================================
+Licence for the data this file sits beside
+==========================================
 
-The files in this directory -- spider_300.jsonl and everything under databases/ -- are NOT
-covered by the Apache-2.0 licence in the repository root. They are a redistributed and adapted
-subset of the Spider 1.0 dataset and are licensed under:
+This file travels with the data it describes: the rows file beside it -- spider_300.jsonl in the
+source repository, dataset.jsonl in a generated project -- and everything under databases/.
+Those are NOT covered by the Apache-2.0 licence that covers the code they ship with. They are a
+redistributed and adapted subset of the Spider 1.0 dataset and are licensed under:
 
     Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
     https://creativecommons.org/licenses/by-sa/4.0/
@@ -22,19 +23,30 @@ Changes made to the original
 
 This is an adaptation, and ShareAlike applies to it. What was changed:
 
+  * Only 18 of the development split's 20 databases are drawn from, so the questions on the
+    other two are not represented at all. wta_1 (about 105 MB) was excluded by a 5 MB size
+    limit; museum_visit is not in the source pool this slice was built from.
   * A 300-row subset of the development split was selected (seed 42), not the whole set.
   * Rows whose gold query returns an empty result set were removed.
+  * Rows whose question paraphrases one already kept were removed -- 2 of them, by three-word
+    shingles and Jaccard similarity at 0.7.
   * Each row was labelled with a difficulty band, computed with Spider's own official
     hardness classifier, and assigned to a tuning or holdout split.
   * Rows were reshaped into one flat JSON object per line.
-  * Only the 18 SQLite databases these 300 questions need are included.
+  * Only the SQLite databases these 300 questions need are included, not Spider's full
+    166-database set.
 
-build_slice.py in this directory reproduces all of it.
+spider/build_slice.py in the source repository reproduces all of it.
 
 What ShareAlike means here
 --------------------------
 
-Anything derived from this data must also be shared under CC BY-SA 4.0 with the attribution
-above. That obligation travels with the data, not with the code, and it does not go away if
-the data is copied somewhere else. Publishing this repository, or a generated demo project
-containing these rows, is a redistribution: this file must travel with it.
+ShareAlike attaches to Adapted Material -- these rows or these databases modified, transformed
+or built upon -- and it applies when you share that material. Share an adaptation and it goes
+out under CC BY-SA 4.0 with the attribution above. It does not reach everything a run produces:
+model outputs, scores and reports are not the data, and an adaptation you keep to yourself is
+not one you have shared.
+
+That obligation travels with the data, not with the code, and it does not go away if the data
+is copied somewhere else. Publishing this repository, or a generated project containing these
+rows, is a redistribution: this file must travel with it.

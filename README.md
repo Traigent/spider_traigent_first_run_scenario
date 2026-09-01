@@ -68,7 +68,7 @@ put in, and an agent that can read that is not being tested on anything.
 | Flag | Values |
 |---|---|
 | `--agent` | `ready` · `no-knobs` · `missing` |
-| `--dataset` | `ready` (300) · `mini` (30) · `unlabeled` · `missing` |
+| `--dataset` | `ready` (300) · `mini` (30) · `unlabeled` (40) · `missing` |
 | `--eval` | `exact-match` · `exec-match` · `broken` · `missing` |
 | `--calibration` | `none` · `present` (probe answers for the scorer) |
 | `--existing-venv` | `none` · `one-compatible` · `old-python` |
@@ -83,8 +83,8 @@ Presets are shorthand for the combinations worth having a name:
 | `no-eval` | no way to score an answer |
 | `no-labels` | questions with no expected answers |
 | `no-knobs` | an agent with nothing to search |
-| `sql-exec-stop` | an evaluator that runs the SQL the model wrote |
-| `best-case` | the same, scored by execution accuracy -- the metric Spider itself uses |
+| `sql-exec-stop` | an evaluator that runs the SQL the model wrote -- Spider's own metric |
+| `best-case` | the same, and the team keeps probe answers for its scorer |
 
 Individual flags override a preset, so `--preset ready --eval missing` is the ready project
 with the evaluator taken out.
@@ -115,9 +115,16 @@ with how the two scorers are graded.
 ## What each preset scores
 
 Measured with the first-run guide's own `preflight.py`, `calibrate_evaluator.py` and
-`readiness.py`, at guide revision `6ec2b9c1` on 2026-09-01, with the agent read the guide
-performs at its first stage. The point of the table is that the presets are genuinely
-different: each lands the run somewhere else.
+`readiness.py`, at guide revision `6ec2b9c1` on 2026-09-01.
+
+These are not the numbers a bare clone reads. The **86** and the **91** need the guide's
+assistant to have read the agent's source itself and handed that read to `readiness.py` as
+`--agent-knobs`. No such document is in this repository, and none can be: it is the
+assistant's own reading, produced during a run. Without it the `agent-no-varying-knobs`
+ceiling holds every preset at 45 or below.
+
+The point of the table is that the presets are genuinely different: each lands the run
+somewhere else.
 
 | preset | overall | band | what the guide is told to do next | caps |
 |---|---|---|---|---|
@@ -129,11 +136,14 @@ different: each lands the run somewhere else.
 | `checked` | **86** | **STRONG** | proceed | none |
 | `best-case` | **91** | **EXCELLENT** | proceed | none |
 
-Dataset pillar is **98** on the full slice in every one of them.
+Dataset pillar is **98** in the six presets that ship the full 300-row labelled slice --
+every one above except `no-labels`, which ships 40 rows with no expected answer and no
+holdout split, and so has nothing for that pillar to read.
 
 ### What moves a project up
 
-Two ceilings hold `ready` at 45, and each has exactly one remedy.
+Two ceilings sit at 45, and each has exactly one remedy. `ready` carries only the first.
+The second is what `--agent no-knobs` adds, which is why `no-knobs` shows two caps.
 
 **`evaluator-unvalidated`** -- a scorer nobody has checked cannot support a claim. It clears
 when the project keeps probe answers for its own scorer and a calibration run measures that
@@ -149,9 +159,17 @@ its settings are readable; never change what it sends to make them readable.** A
 version was restructured for the score and, in the process, changed `schema_context="none"`
 from sending no schema to sending a sentence saying the schema was not shown -- which stops
 that arm being a control, because the setting is then partly measuring the sentence. The
-version here is a pure restructure: a 36-arm differential over every combination of the four
-settings shows the outgoing model, prompt and temperature are byte-identical to the shape it
+restructure here was a pure one: a 36-arm differential over every combination of the four
+settings showed the outgoing model, prompt and temperature byte-identical to the shape it
 replaced, and `tests/test_components.py` fails if the control arm ever gains content again.
+
+The agent has changed once since, deliberately and for a different reason. The compact
+`tables` view was built by splitting the schema on every comma, which turned a column type
+like `DECIMAL(19,4)` into a column named `4)` and leaked composite-key column lists out as
+columns of their own -- eleven tables across nine of the eighteen databases, describing
+tables that do not exist to the model being measured. Parsing by parenthesis depth fixed it,
+and now matches `PRAGMA table_info` for all 74 tables. That changes the 12 `tables` arms of
+the 36 and nothing else, which is the point: `none` and `full` are untouched.
 
 Two of the four settings are credited, which is all that is available: the agent pillar's
 search-space share is held one step below full until a trial budget is declared, and a
@@ -180,7 +198,7 @@ correctly reporting that one project measures its answers the way the benchmark 
 other approximates it.
 
 The arithmetic is closed, so it is worth stating what the text proxy cannot reach: at dataset
-98 and agent 70, EXCELLENT needs an evaluation pillar of 95, and the text comparator's
+98 and agent 70, EXCELLENT needs an evaluation pillar of 94, and the text comparator's
 calibrated ceiling is 83. Even a perfect dataset leaves it at 87. If you want a project that
 reads EXCELLENT on Spider data, it has to score Spider's way.
 
@@ -201,8 +219,7 @@ declaration against the source.
 
 This repository does not do that, and no number in the table above depends on it. Every band
 here comes from an evaluator declared as what it is, on probe answers built from real rows,
-with an agent whose behaviour is byte-identical across the restructure that made its settings
-readable. A high band is not evidence that anyone checked; that is what the calibration step
+with an agent whose settings were made readable without changing what it sends. A high band is not evidence that anyone checked; that is what the calibration step
 is for.
 
 ## The data is Spider
@@ -222,8 +239,8 @@ checked: each recorded query runs, and returns rows. Difficulty comes from Spide
 official hardness classifier, and the 300 are balanced 75 apiece across its four bands.
 
 **The data is licensed CC BY-SA 4.0, not Apache-2.0 like the code**, and ShareAlike applies
-to anything derived from it. `spider/LICENSE-DATA` carries the attribution and the terms,
-and is copied into every generated project alongside the rows.
+to an adaptation of it that you share. `spider/LICENSE-DATA` carries the attribution and the
+terms, and is copied into every generated project alongside the rows.
 
 Two things to know before reading anything into a score: Spider is old enough and public
 enough that current models have very likely seen it, and 300 rows is a demonstration size --
@@ -241,12 +258,19 @@ enough to tell configurations apart, not enough to settle a question about produ
 ## Working on this repository
 
 ```bash
+python -m pip install -r requirements-dev.txt
+
 python build.py check
 python -m unittest discover -s tests -v
+black --check build.py spider tests components
+ruff check build.py spider tests components
+mypy --strict build.py spider/build_slice.py
 ```
 
 `check` validates the components and the committed data. The tests re-run all 300 recorded
-queries, so they take a moment; that is the point of them.
+queries, so they take a moment; that is the point of them. `requirements-dev.txt` exists only
+to pin the last three checkers, and CI runs all five commands, so skipping them here is what
+turns a pull request red there.
 
 To rebuild the data slice itself -- rarely needed, and it requires the source Spider pool:
 

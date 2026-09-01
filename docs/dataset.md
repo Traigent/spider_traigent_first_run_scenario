@@ -20,9 +20,9 @@ This is real recorded data. Not generated, not synthetic, not written for this r
 **CC BY-SA 4.0.** The code in this repository is Apache-2.0; the data is not, and the two
 are not interchangeable.
 
-ShareAlike means anything derived from this data carries the same licence. That obligation
-travels with the data, so `spider/LICENSE-DATA` is copied into every generated project
-beside the rows, and it needs to stay with them anywhere else they go.
+ShareAlike means an adaptation of this data that you share carries the same licence. That
+obligation travels with the data, so `spider/LICENSE-DATA` is copied into every generated
+project beside the rows, and it needs to stay with them anywhere else they go.
 `spider/LICENSE-DATA` carries the attribution, the licence, and the list of changes made to
 the original.
 
@@ -31,7 +31,7 @@ the original.
 | | |
 |---|---|
 | `spider/spider_300.jsonl` | 300 questions with their queries, ~450 KB |
-| `spider/databases/` | the 18 SQLite databases those questions ask about, ~970 KB |
+| `spider/databases/` | the 18 SQLite databases those questions ask about, ~900 KB |
 | `spider/datasheet.yaml` | provenance, hashes, licence, and the flaws below, in machine-readable form |
 | `spider/build_slice.py` | how the 300 were chosen, and how to redo it |
 
@@ -39,8 +39,13 @@ About 1.4 MB in total. That is small enough to commit, which is the point: a clo
 a working demo with no download and no network.
 
 Spider's full database set is about 840 MB across 166 databases and is **not** redistributed
-here. The pool these rows were drawn from was already restricted to databases under 5 MB,
-which is why one large development database and the questions that need it are absent.
+here. Spider's development split spans 20 databases; these 300 rows use 18 of them, and the
+two that are missing are missing for different reasons. `wta_1` is about 105 MB, and the pool
+these rows were drawn from was already restricted to databases under 5 MB, so it and its
+questions never entered that pool. `museum_visit` is small enough, but it is not in the pool
+either: the 754 rows are the development rows left over on the databases the upstream
+benchmark harness had already committed, and `museum_visit` was not one of those. Neither
+database was dropped by anything below -- there were no rows from either one to drop.
 
 ## A row
 

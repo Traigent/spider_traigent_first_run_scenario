@@ -30,10 +30,10 @@ ceiling per query, which bounds the damage without changing what it is.
 Execution accuracy is how Spider is scored: every figure on its leaderboard and in its
 literature is that measure. So this is the faithful ruler for this data, and the first-run
 guide currently declines to run it.
-`references/run-safety.md` is explicit: a scorer that "executes or imports candidate output
-as code, shells out with it, or submits it to a code or SQL engine" ends the run before the
-evaluator executes, and a virtual environment, stripped credentials, a subprocess or a
-timeout "do not make that execution safe".
+`references/run-safety.md` is explicit: a scorer that "executes or imports candidate/model
+output as code, shells out with it, or submits it to a code or SQL engine" ends the run
+before the evaluator executes, and a virtual environment, stripped credentials, a subprocess
+or a timeout "do not make that execution safe".
 
 So the two presets ask different questions:
 
@@ -59,14 +59,25 @@ Measured against the first-run guide at revision `6ec2b9c1` on 2026-09-01:
 The evidence strings are `"execution suits code-sql output"` and `"normalized-exact is a
 poor ruler for code-sql output"`. Both readings are defensible on their own terms --
 execution really is the better ruler for SQL. Together with the prose, they mean the score
-rewards declaring the evaluator the guide forbids, by seventeen points, on the task kind
-this whole repository is about.
+rewards declaring the evaluator the guide forbids, on the task kind this whole repository is
+about, by **17 points of task fit**: 25.0/25 against 8.0/25.
 
-That 16-point gap is the whole distance between the two bands this project can reach.
-`--preset checked` scores **86 STRONG** and `--preset best-case` scores **91 EXCELLENT**, and
-the only difference between them is which scorer they ship. EXCELLENT needs an evaluation
-pillar of 95, and the text comparator's calibrated ceiling is 83 -- so the highest band this
-project can read is only available to the evaluator the guide is told to stop.
+Three different numbers follow from that, and it is worth keeping them apart.
+
+- **17 points of task fit**, out of 25. That is the sub-score above, and it is the size of
+  the reward for the declaration.
+- **16 points of evaluation pillar**, out of 100. Task fit is one input to that pillar;
+  calibrated, the two rows come out at 99 and 83.
+- **5 points of overall score.** The evaluation pillar carries 35% of the overall weight, so
+  those 16 pillar points are worth 5.6 of it: `--preset checked` reads **86 STRONG** and
+  `--preset best-case` reads **91 EXCELLENT**, and the only difference between them is which
+  scorer they ship.
+
+Five points is the distance between the two bands this project can reach, not sixteen. It is
+still decisive, because of where the boundary sits: at dataset 98 and agent 70, EXCELLENT
+needs an evaluation pillar of 94, and the text comparator's calibrated ceiling is 83 -- so
+the highest band this project can read is only available to the evaluator the guide is told
+to stop.
 
 Three further findings from the same runs:
 
