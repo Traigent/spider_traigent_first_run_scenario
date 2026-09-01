@@ -17,7 +17,6 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
-import types
 import unittest
 from pathlib import Path
 
@@ -28,6 +27,18 @@ import build  # noqa: E402
 
 EVALUATOR_DIR = REPO_ROOT / "components" / "evaluator"
 AGENT_DIR = REPO_ROOT / "components" / "agent"
+# One agent per vendor, because the guide's opening read credits the model setting only from
+# values it can see in the agent's own source. The behaviour tests use the default vendor;
+# the ones that matter across all three say so.
+DEFAULT_PROVIDER_DIR = AGENT_DIR / build.DEFAULT_PROVIDER
+
+
+def every_agent():
+    for provider in build.PROVIDERS:
+        for state in ("ready", "no_knobs"):
+            yield provider, state, AGENT_DIR / provider / f"agent_{state}.py"
+
+
 SCORER_ARGUMENTS = ("output", "expected", "input_data", "metadata")
 EXECUTION_MODULES = {"sqlite3", "subprocess", "socket", "requests", "httpx"}
 
@@ -49,36 +60,28 @@ def imported_modules(path: Path) -> set[str]:
     return names
 
 
-def recording_provider(sent: list[str]):
-    """A stand-in for the OpenAI client that records a request instead of sending one.
-
-    The agent with no settings reaches the provider directly rather than through a helper a
-    test can replace, so the request is captured where it would leave the process.
-    """
-
-    def create(**request):
-        sent.append(json.dumps(request, sort_keys=True, default=repr))
-        message = types.SimpleNamespace(content="SELECT count(*) FROM singer")
-        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=message)])
-
-    client = types.SimpleNamespace(
-        chat=types.SimpleNamespace(completions=types.SimpleNamespace(create=create))
-    )
-    return types.SimpleNamespace(OpenAI=lambda *args, **kwargs: client)
-
-
 class EveryComponentParses(unittest.TestCase):
     def test_components_are_valid_python(self) -> None:
-        for path in sorted(EVALUATOR_DIR.glob("*.py")) + sorted(AGENT_DIR.glob("*.py")):
+        for path in sorted(EVALUATOR_DIR.glob("*.py")) + [
+            p for _, _, p in every_agent()
+        ]:
             with self.subTest(component=path.name):
                 ast.parse(path.read_text(encoding="utf-8"), str(path))
 
     def test_every_state_the_cli_offers_has_a_file(self) -> None:
-        for state, path in {**build.AGENT_FILES, **build.EVALUATOR_FILES}.items():
+        for state, path in build.EVALUATOR_FILES.items():
             if path is not None:
                 self.assertTrue(
                     path.exists(), f"{state} names a file that is not there"
                 )
+        for provider, state, path in every_agent():
+            self.assertTrue(
+                path.exists(), f"{provider}/{state} names a file that is not there"
+            )
+        for provider in build.PROVIDERS:
+            self.assertTrue(
+                build.env_file(provider).exists(), f"{provider} has no env template"
+            )
 
     def test_scorers_take_the_arguments_the_guide_passes(self) -> None:
         for path in sorted(EVALUATOR_DIR.glob("*.py")):
@@ -223,6 +226,87 @@ class ExecutionComparison(unittest.TestCase):
             )
 
 
+class TheVendorVariantsDoNotDrift(unittest.TestCase):
+    """One agent per vendor, and they must stay one agent.
+
+    The roster has to be a literal in each agent's own source, because the guide's opening
+    read credits a setting only from values it can see there -- so the file is duplicated
+    three times. Duplicated files diverge: this repository has already shipped a fix to one
+    agent's reply handling and not the other, and the untunable arm then scored lower for a
+    reason that had nothing to do with having no settings. Everything below the header must
+    therefore be the same bytes in all three.
+    """
+
+    BODY_STARTS_AT = "_catalog = None"
+
+    def body(self, path: Path) -> str:
+        source = path.read_text(encoding="utf-8")
+        self.assertIn(self.BODY_STARTS_AT, source, f"{path} has no recognisable body")
+        return source[source.index(self.BODY_STARTS_AT) :]
+
+    def test_each_agent_is_one_agent_across_vendors(self) -> None:
+        for state in ("agent_ready", "agent_no_knobs"):
+            with self.subTest(agent=state):
+                bodies = {
+                    provider: self.body(AGENT_DIR / provider / f"{state}.py")
+                    for provider in build.PROVIDERS
+                }
+                reference = bodies[build.DEFAULT_PROVIDER]
+                for provider, body in bodies.items():
+                    self.assertEqual(
+                        body,
+                        reference,
+                        f"{state} for {provider} has drifted from {build.DEFAULT_PROVIDER}",
+                    )
+
+    def test_a_vendor_says_what_it_needs_before_it_calls_anything(self) -> None:
+        """A missing package must name itself, not surface as a connection error.
+
+        Bedrock signs through boto3, which the first-run guide's pinned stack does not
+        install -- without this check that arrives as `APIConnectionError: No module named
+        'boto3'` from inside the transport, which reads like a network problem.
+        """
+        for provider, state, path in every_agent():
+            with self.subTest(provider=provider, agent=state):
+                module = load(path, f"requires_probe_{provider}_{state}")
+                self.assertIsInstance(module.REQUIRES, tuple)
+                if not module.REQUIRES:
+                    continue
+                absent = object()
+                real = importlib.util.find_spec
+
+                def missing(name: str, *args: object, **kwargs: object) -> object:
+                    return None if name in module.REQUIRES else real(name)
+
+                importlib.util.find_spec = missing
+                try:
+                    with self.assertRaises(RuntimeError) as raised:
+                        module.call_model(module.MODELS[0], "SELECT 1", 0.0)
+                finally:
+                    importlib.util.find_spec = real
+                for name in module.REQUIRES:
+                    self.assertIn(name, str(raised.exception))
+                self.assertIsNot(absent, None)
+
+    def test_every_variant_names_its_own_vendor_and_credentials(self) -> None:
+        """The header is the part that is allowed to differ, so it has to be right."""
+        for provider, state, path in every_agent():
+            with self.subTest(provider=provider, agent=state):
+                module = load(path, f"vendor_probe_{provider}_{state}")
+                self.assertTrue(module.CREDENTIALS, "no credential names declared")
+                for name in module.CREDENTIALS:
+                    self.assertRegex(name, r"^[A-Z][A-Z0-9_]+$")
+                self.assertTrue(module.MODELS, "no models declared")
+                for model in module.MODELS:
+                    self.assertTrue(model.strip(), "an empty model id")
+                declared = set(build.env_file(provider).read_text().split())
+                for name in module.CREDENTIALS:
+                    self.assertTrue(
+                        any(line.startswith(f"{name}=") for line in declared),
+                        f"{provider}: the agent needs {name} and the env template omits it",
+                    )
+
+
 class TheScorerAndTheAgentAgreeAboutWhatTheModelSends(unittest.TestCase):
     """The three defects that made a knob unwinnable or a table imaginary.
 
@@ -262,7 +346,7 @@ class TheScorerAndTheAgentAgreeAboutWhatTheModelSends(unittest.TestCase):
         tables across nine databases described something that was not there, and
         `schema_context` is the setting most likely to move a score.
         """
-        agent = load(AGENT_DIR / "agent_ready.py", "schema_probe")
+        agent = load(DEFAULT_PROVIDER_DIR / "agent_ready.py", "schema_probe")
         schemas: dict[str, str] = {}
         for line in (
             (REPO_ROOT / "spider" / "spider_300.jsonl").read_text().splitlines()
@@ -530,7 +614,7 @@ class ProbesBelongToTheScorerTheyShipWith(unittest.TestCase):
 
 class Agents(unittest.TestCase):
     def test_both_agents_answer_a_question(self) -> None:
-        for path in sorted(AGENT_DIR.glob("*.py")):
+        for _, _, path in every_agent():
             with self.subTest(agent=path.name):
                 tree = ast.parse(path.read_text(encoding="utf-8"))
                 functions = {
@@ -539,7 +623,7 @@ class Agents(unittest.TestCase):
                 self.assertIn("run", functions, f"{path.name} has no run()")
 
     def test_the_tunable_agent_declares_four_settings(self) -> None:
-        module = load(AGENT_DIR / "agent_ready.py", "agent_probe")
+        module = load(DEFAULT_PROVIDER_DIR / "agent_ready.py", "agent_probe")
         self.assertGreaterEqual(len(module.MODELS), 2)
         self.assertEqual(len(module.SCHEMA_CONTEXTS), 3)
         self.assertEqual(len(module.PROMPT_STYLES), 2)
@@ -547,7 +631,7 @@ class Agents(unittest.TestCase):
 
     def prepared(self, name: str):
         """The agent, with a known database and the provider call captured."""
-        module = load(AGENT_DIR / "agent_ready.py", name)
+        module = load(DEFAULT_PROVIDER_DIR / "agent_ready.py", name)
         schema = "CREATE TABLE singer (\nid INTEGER,\nname TEXT,\ncountry TEXT\n);"
         question = "How many singers are there?"
         module._catalog = {question: {"db_id": "concert_singer", "schema": schema}}
@@ -568,14 +652,14 @@ class Agents(unittest.TestCase):
         """
         module, question, sent = self.prepared("agent_probe_request")
         base = {
-            "model": "gpt-4o-mini",
+            "model": next(iter(module.MODELS)),
             "schema_context": "none",
             "prompt_style": "direct",
             "temperature": 0.0,
         }
         changes = {
             "base": {},
-            "model": {"model": "gpt-4o"},
+            "model": {"model": list(module.MODELS)[1]},
             "schema_tables": {"schema_context": "tables"},
             "schema_full": {"schema_context": "full"},
             "planning": {"prompt_style": "query_plan_cot"},
@@ -599,7 +683,11 @@ class Agents(unittest.TestCase):
         showing a schema is worth. The request must differ by the schema and nothing else.
         """
         module, question, sent = self.prepared("agent_probe_control")
-        base = {"model": "gpt-4o-mini", "prompt_style": "direct", "temperature": 0.0}
+        base = {
+            "model": next(iter(module.MODELS)),
+            "prompt_style": "direct",
+            "temperature": 0.0,
+        }
         module.run(question, {**base, "schema_context": "none"})
         module.run(question, {**base, "schema_context": "full"})
         control, shown = sent[0][1], sent[1][1]
@@ -609,23 +697,22 @@ class Agents(unittest.TestCase):
         self.assertIn(control, shown, "the two arms differ by more than the schema")
 
     def prepared_fixed(self, name: str):
-        """The agent with no settings, with a known database and the provider recorded."""
-        module = load(AGENT_DIR / "agent_no_knobs.py", name)
+        """The agent with no settings, with a known database and the request recorded.
+
+        Both agents now reach their vendor through the same `call_model`, so both can be
+        recorded the same way -- no faking a provider package.
+        """
+        module = load(DEFAULT_PROVIDER_DIR / "agent_no_knobs.py", name)
         schema = "CREATE TABLE singer (\nid INTEGER,\nname TEXT,\ncountry TEXT\n);"
         question = "How many singers are there?"
         module._catalog = {question: {"db_id": "concert_singer", "schema": schema}}
-        sent: list[str] = []
+        sent: list[tuple[str, str, float]] = []
 
-        previous = sys.modules.get("openai")
+        def capture(model, prompt, temperature):
+            sent.append((model, prompt, temperature))
+            return "SELECT count(*) FROM singer"
 
-        def restore() -> None:
-            if previous is None:
-                sys.modules.pop("openai", None)
-            else:
-                sys.modules["openai"] = previous
-
-        self.addCleanup(restore)
-        sys.modules["openai"] = recording_provider(sent)
+        module.call_model = capture
         return module, question, sent
 
     def test_the_fixed_agent_ignores_its_configuration(self) -> None:
@@ -639,8 +726,8 @@ class Agents(unittest.TestCase):
         module, question, sent = self.prepared_fixed("agent_probe_fixed")
         configurations = (
             {},
-            {"model": "gpt-4o"},
-            {"model": "gpt-4o-mini", "temperature": 0.7},
+            {"model": list(module.MODELS)[1]},
+            {"model": next(iter(module.MODELS)), "temperature": 0.7},
             {"schema_context": "none", "prompt_style": "query_plan_cot"},
             {"schema_context": "full", "prompt_style": "direct", "temperature": 1.0},
         )
@@ -667,7 +754,7 @@ class Agents(unittest.TestCase):
             module.run(question, {"schema_context": "some-view-that-does-not-exist"})
 
     def test_an_unknown_question_raises_rather_than_guessing(self) -> None:
-        module = load(AGENT_DIR / "agent_ready.py", "agent_probe_missing")
+        module = load(DEFAULT_PROVIDER_DIR / "agent_ready.py", "agent_probe_missing")
         module._catalog = {}
         with self.assertRaises(KeyError):
             module.build_prompt(

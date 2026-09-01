@@ -471,7 +471,7 @@ class RepositoryCheck(unittest.TestCase):
 
     def test_every_preset_names_real_states(self) -> None:
         for name, preset in build.PRESETS.items():
-            self.assertIn(preset["agent"], build.AGENT_FILES, name)
+            self.assertIn(preset["agent"], build.AGENT_STATES, name)
             self.assertIn(preset["dataset"], build.DATASET_STATES, name)
             self.assertIn(preset["eval"], build.EVALUATOR_FILES, name)
             self.assertIn(name, build.PRESET_NOTES, f"{name} has no description")

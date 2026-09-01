@@ -72,6 +72,7 @@ put in, and an agent that can read that is not being tested on anything.
 | `--agent` | `ready` · `no-knobs` · `missing` |
 | `--dataset` | `ready` (300) · `mini` (30) · `unlabeled` (40) · `missing` |
 | `--eval` | `exact-match` · `exec-match` · `broken` · `missing` |
+| `--provider` | `openrouter` (default) · `bedrock` · `direct` |
 | `--calibration` | `none` · `present` (probe answers for the scorer) |
 | `--existing-venv` | `none` · `one-compatible` · `old-python` |
 | `--guide` | `clone` · `local` (with `--guide-src`) |
@@ -90,6 +91,41 @@ Presets are shorthand for the combinations worth having a name:
 
 Individual flags override a preset, so `--preset ready --eval missing` is the ready project
 with the evaluator taken out.
+
+## Which vendor answers
+
+The agent's `model` setting is one of the four things being measured, so which models it
+chooses between matters. `--provider` picks the roster and the credentials the project asks
+for:
+
+| | models | credentials |
+|---|---|---|
+| `openrouter` | Qwen3 Coder, GPT-OSS 120B, Llama 3.3 70B | `OPENROUTER_API_KEY` |
+| `bedrock` | Claude Haiku 4.5, Claude 3.5 Sonnet, Llama 3.1 70B | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| `direct` | GPT-4o mini, GPT-4o, Claude 3.5 Haiku | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` |
+
+OpenRouter is the default because one key reaches every model in its roster, which makes a
+sweep across the `model` setting a single credential away rather than three.
+
+**Bedrock needs one thing the first-run guide does not install.** Its pinned stack is
+`traigent`, `litellm` and `python-dotenv`; LiteLLM signs Bedrock requests through `boto3`,
+which is not among them. Measured in a clean environment built from exactly that stack:
+OpenRouter reaches the network and fails only on a deliberately invalid key, while Bedrock
+raises `No module named 'boto3'` before any request goes out. So a Bedrock run needs
+`boto3` installed into that environment first. The agent checks for it and says so by name
+rather than letting it arrive as a connection error.
+
+Every roster is called through **LiteLLM**, and that is not a style choice. The environment
+the first-run guide builds installs `traigent`, `litellm` and `python-dotenv` and no vendor
+package at all -- so an agent that did `import anthropic` would fail on the machine it is
+meant to run on. Going through LiteLLM is also what lets one agent reach Bedrock, which
+signs with AWS credentials rather than an API key.
+
+There is one agent file per vendor rather than one agent reading a roster from somewhere
+else, and that is forced: the guide credits a setting only from values it can read in the
+selected agent's own source, so a roster imported from a sibling module scores zero. The
+three copies are otherwise the same file, and
+`tests/test_components.py::TheVendorVariantsDoNotDrift` fails if they stop being.
 
 ## The two SQL evaluators
 

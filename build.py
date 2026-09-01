@@ -64,11 +64,25 @@ GUIDE_PATHS = (
 )
 GUIDE_REQUIRED = ("GUIDE.md", "skills")
 
-AGENT_FILES = {
-    "ready": COMPONENTS / "agent" / "agent_ready.py",
-    "no-knobs": COMPONENTS / "agent" / "agent_no_knobs.py",
-    "missing": None,
-}
+# Which vendor serves the models the agent chooses between. LiteLLM carries all three, so
+# the only thing that changes between them is the roster of model ids -- but that roster has
+# to be a literal in the agent's own source, because the guide's opening read credits a
+# setting only from values it can see there. Hence one agent per vendor rather than one
+# agent reading a roster from somewhere else.
+PROVIDERS = ("openrouter", "bedrock", "direct")
+AGENT_STATES = ("ready", "no-knobs", "missing")
+
+
+def agent_file(state: str, provider: str) -> Path | None:
+    if state == "missing":
+        return None
+    return COMPONENTS / "agent" / provider / f"agent_{state.replace('-', '_')}.py"
+
+
+def env_file(provider: str) -> Path:
+    return COMPONENTS / "env" / f"{provider}.env.example"
+
+
 EVALUATOR_FILES = {
     "exact-match": COMPONENTS / "evaluator" / "exact_match.py",
     "exec-match": COMPONENTS / "evaluator" / "exec_match.py",
@@ -82,6 +96,7 @@ GUIDE_MODES = ("clone", "local")
 
 # The share of each difficulty band the full slice holds back, kept by every smaller draw.
 HOLDOUT_SHARE = 0.2
+DEFAULT_PROVIDER = "openrouter"
 MINI_ROWS = 30
 UNLABELED_ROWS = 40
 SAMPLE_SEED = 42
@@ -635,7 +650,7 @@ def render_readme(
 
 def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
     settings = dict(PRESETS[args.preset]) if args.preset else {}
-    for name in ("agent", "dataset", "eval", "calibration"):
+    for name in ("agent", "dataset", "eval", "calibration", "provider"):
         chosen = getattr(args, name.replace("-", "_"))
         if chosen is not None:
             settings[name] = chosen
@@ -643,6 +658,7 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
     settings.setdefault("dataset", "ready")
     settings.setdefault("eval", "exact-match")
     settings.setdefault("calibration", "none")
+    settings.setdefault("provider", DEFAULT_PROVIDER)
     calibration_state = settings["calibration"]
     if calibration_state == "present" and settings["eval"] == "missing":
         raise BuildError(
@@ -714,7 +730,7 @@ def _write_demo(
     created: list[str] = []
     projected = [project_row(row, settings["dataset"]) for row in selected]
 
-    agent_source = AGENT_FILES[settings["agent"]]
+    agent_source = agent_file(settings["agent"], settings["provider"])
     if agent_source is not None:
         shutil.copy2(agent_source, project / "agent.py")
         created.append("agent.py")
@@ -740,7 +756,7 @@ def _write_demo(
         shutil.copy2(DATA_LICENCE_PATH, project / "LICENSE-DATA")
         created.append("LICENSE-DATA")
 
-    shutil.copy2(COMPONENTS / "env" / "env.example", project / ".env.example")
+    shutil.copy2(env_file(settings["provider"]), project / ".env.example")
     created.append(".env.example")
 
     for licence in CODE_LICENCE_PATHS:
@@ -847,7 +863,8 @@ def cmd_list(args: argparse.Namespace) -> dict[str, Any]:
             for name in sorted(PRESETS)
         ],
         "states": {
-            "agent": sorted(AGENT_FILES),
+            "agent": list(AGENT_STATES),
+            "provider": list(PROVIDERS),
             "dataset": list(DATASET_STATES),
             "eval": sorted(EVALUATOR_FILES),
             "calibration": list(CALIBRATION_STATES),
@@ -861,23 +878,31 @@ def cmd_list(args: argparse.Namespace) -> dict[str, Any]:
 def cmd_check(args: argparse.Namespace) -> dict[str, Any]:
     problems: list[str] = []
 
-    for state, path in {**AGENT_FILES, **EVALUATOR_FILES}.items():
+    component_paths = {
+        f"{state}/{provider}": agent_file(state, provider)
+        for state in AGENT_STATES
+        for provider in PROVIDERS
+    }
+    component_paths.update(EVALUATOR_FILES)
+    for provider in PROVIDERS:
+        component_paths[f"env/{provider}"] = env_file(provider)
+    for state, path in component_paths.items():
         if path is None:
             continue
         if not path.exists():
             problems.append(f"component missing: {path}")
+            continue
+        if path.suffix != ".py":
             continue
         try:
             compile(path.read_text(encoding="utf-8"), str(path), "exec")
         except SyntaxError as error:
             problems.append(f"component does not parse: {path}: {error}")
 
-    for extra in (
-        COMPONENTS / "env" / "env.example",
-        COMPONENTS / "readme" / "DEMO_README.md.tmpl",
-    ):
-        if not extra.exists():
-            problems.append(f"component missing: {extra}")
+    if not (COMPONENTS / "readme" / "DEMO_README.md.tmpl").exists():
+        problems.append(
+            f"component missing: {COMPONENTS / 'readme' / 'DEMO_README.md.tmpl'}"
+        )
 
     rows = read_dataset()
     if len(rows) != 300:
@@ -1044,7 +1069,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     demo.add_argument(
         "--agent",
-        choices=sorted(AGENT_FILES),
+        choices=AGENT_STATES,
         help="ready (tunable) | no-knobs (nothing to search) | missing",
     )
     demo.add_argument(
@@ -1057,6 +1082,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="eval",
         choices=sorted(EVALUATOR_FILES),
         help="exact-match (does not execute) | exec-match (runs the SQL) | broken | missing",
+    )
+    demo.add_argument(
+        "--provider",
+        choices=PROVIDERS,
+        help="which vendor serves the models the agent chooses between",
     )
     demo.add_argument(
         "--calibration",

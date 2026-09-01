@@ -1,5 +1,7 @@
 """Turns a question about a database into the SQL that answers it.
 
+The models here are served by the model's own vendor. Straight to each vendor, so this roster needs a key for both of them.
+
 Four settings change the request, and they are the point of the exercise -- each one is a
 real difference in what gets sent, not a label:
 
@@ -18,17 +20,25 @@ schema. A question that is not in the catalog is raised rather than answered aga
 guess, because SQL written for the wrong database looks fine and is always wrong.
 """
 
+import importlib.util
 import json
+import os
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 CATALOG_PATH = PROJECT_ROOT / "catalog.json"
 
-MODELS = {
-    "gpt-4o-mini": "openai",
-    "gpt-4o": "openai",
-    "claude-3-5-haiku-latest": "anthropic",
-}
+MODELS = (
+    "gpt-4o-mini",
+    "gpt-4o",
+    "anthropic/claude-3-5-haiku-latest",
+)
+
+VENDOR = "the model's own vendor"
+# Nothing beyond the first-run stack: LiteLLM talks to both vendors over plain HTTP.
+REQUIRES = ()
+# What this roster needs in the environment before it can call anything.
+CREDENTIALS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
 
 SCHEMA_CONTEXTS = ("none", "tables", "full")
 
@@ -227,20 +237,41 @@ def strip_code_fence(text):
 
 
 def call_model(model, prompt, temperature):
-    """One completion from whichever provider serves this model."""
-    if MODELS[model] == "anthropic":
-        from anthropic import Anthropic
+    """One completion, from whichever vendor the model id names.
 
-        answer = Anthropic().messages.create(
-            model=model,
-            max_tokens=512,
-            temperature=temperature,
-            messages=[{"role": "user", "content": prompt}],
+    The call goes through LiteLLM rather than a vendor SDK, and that is not a preference.
+    The environment the Traigent first-run guide builds installs litellm and no provider
+    package at all, so `import anthropic` here would fail on the machine this is meant to
+    run on. It is also what lets the same agent reach OpenRouter or Bedrock by changing
+    nothing but the model id.
+
+    LiteLLM's OpenAI-shaped client is used rather than calling `litellm.completion`
+    directly. It is the same transport -- `LiteLLM().chat.completions.create` forwards
+    straight to `litellm.completion` and the request that leaves this process is identical
+    either way -- written so that the model id, the prompt and the temperature are visibly
+    the arguments of the call that sends them.
+    """
+    absent = [name for name in REQUIRES if importlib.util.find_spec(name) is None]
+    if absent:
+        raise RuntimeError(
+            f"{VENDOR} needs {', '.join(absent)}, which is not installed in this "
+            "environment. Install it here rather than switching vendors -- which model "
+            "answers is one of the things being measured, and changing it quietly changes "
+            "the measurement."
         )
-        return answer.content[0].text
-    from openai import OpenAI
 
-    answer = OpenAI().chat.completions.create(
+    missing = [name for name in CREDENTIALS if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(
+            f"{model} is served by {VENDOR}, which needs {', '.join(missing)} in the "
+            "environment. Add it to .env rather than pointing the agent at a vendor you "
+            "happen to have a key for -- which model answers is one of the things being "
+            "measured, and changing it quietly changes the measurement."
+        )
+
+    from litellm import LiteLLM
+
+    answer = LiteLLM().chat.completions.create(
         model=model,
         temperature=temperature,
         max_tokens=512,
