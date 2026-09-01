@@ -27,18 +27,23 @@ QUERY_TIMEOUT_SECONDS = 5.0
 def database_path(db_id):
     path = DATABASE_ROOT / db_id / f"{db_id}.sqlite"
     if not path.exists():
-        raise FileNotFoundError(f"no copy of the {db_id!r} database in this project: {path}")
+        raise FileNotFoundError(
+            f"no copy of the {db_id!r} database in this project: {path}"
+        )
     return path
 
 
 def execute(sql, db_id):
     """The rows a query returns, or the error that stopped it."""
     started = time.monotonic()
-    connection = sqlite3.connect(str(database_path(db_id)), timeout=QUERY_TIMEOUT_SECONDS)
+    connection = sqlite3.connect(
+        str(database_path(db_id)), timeout=QUERY_TIMEOUT_SECONDS
+    )
     connection.text_factory = lambda raw: raw.decode("utf-8", "replace")
     try:
         connection.set_progress_handler(
-            lambda: 1 if time.monotonic() - started > QUERY_TIMEOUT_SECONDS else 0, 10_000
+            lambda: 1 if time.monotonic() - started > QUERY_TIMEOUT_SECONDS else 0,
+            10_000,
         )
         return connection.execute(str(sql)).fetchall(), None
     except sqlite3.Error as error:
@@ -66,7 +71,9 @@ def score(output, expected, input_data=None, metadata=None):
     db_id = resolve_db_id(metadata, input_data)
     expected_sql = expected.get("sql") if isinstance(expected, dict) else expected
     if expected_sql is None or not str(expected_sql).strip():
-        raise ValueError("this row has no recorded query, so there is nothing to compare against")
+        raise ValueError(
+            "this row has no recorded query, so there is nothing to compare against"
+        )
 
     gold_rows, gold_error = execute(expected_sql, db_id)
     if gold_error is not None:
@@ -81,5 +88,9 @@ def score(output, expected, input_data=None, metadata=None):
         return 0.0
     ordered = "order by" in str(expected_sql).lower()
     if ordered:
-        return 1.0 if [repr(r) for r in predicted_rows] == [repr(r) for r in gold_rows] else 0.0
+        return (
+            1.0
+            if [repr(r) for r in predicted_rows] == [repr(r) for r in gold_rows]
+            else 0.0
+        )
     return 1.0 if as_multiset(predicted_rows) == as_multiset(gold_rows) else 0.0

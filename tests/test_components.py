@@ -231,41 +231,79 @@ class Agents(unittest.TestCase):
     def test_the_tunable_agent_declares_four_settings(self) -> None:
         module = load(AGENT_DIR / "agent_ready.py", "agent_probe")
         self.assertGreaterEqual(len(module.MODELS), 2)
-        self.assertEqual(len(module.SCHEMA_CONTEXTS), 3)
+        self.assertEqual(len(module.SCHEMA_VIEWS), 3)
         self.assertEqual(len(module.PROMPT_STYLES), 2)
         self.assertEqual(len(module.TEMPERATURES), 2)
 
     def test_each_setting_changes_the_request(self) -> None:
-        """A setting that does not change what is sent is not a setting."""
-        module = load(AGENT_DIR / "agent_ready.py", "agent_probe_prompt")
+        """A setting that does not change what is sent is not a setting.
+
+        This drives the real entry point with the provider call stubbed, so what is asserted
+        is the request that would actually go out, not the output of a helper.
+        """
+        module = load(AGENT_DIR / "agent_ready.py", "agent_probe_request")
         schema = "CREATE TABLE singer (\nid INTEGER,\nname TEXT,\ncountry TEXT\n);"
-        module._catalog = {
-            "How many singers are there?": {"db_id": "concert_singer", "schema": schema}
-        }
+        question = "How many singers are there?"
+        module._catalog = {question: {"db_id": "concert_singer", "schema": schema}}
+
+        sent: list[tuple] = []
+
+        def capture(model, blocks, temperature):
+            sent.append((model, tuple(block["text"] for block in blocks), temperature))
+            return "SELECT count(*) FROM singer"
+
+        module.call_model = capture
         base = {
             "model": "gpt-4o-mini",
             "schema_context": "none",
             "prompt_style": "direct",
             "temperature": 0.0,
         }
-        question = "How many singers are there?"
-        rendered = {
-            name: module.build_prompt(question, {**base, **change})
-            for name, change in {
-                "base": {},
-                "schema_tables": {"schema_context": "tables"},
-                "schema_full": {"schema_context": "full"},
-                "planning": {"prompt_style": "query_plan_cot"},
-            }.items()
+        changes = {
+            "base": {},
+            "model": {"model": "gpt-4o"},
+            "schema_tables": {"schema_context": "tables"},
+            "schema_full": {"schema_context": "full"},
+            "planning": {"prompt_style": "query_plan_cot"},
+            "temperature": {"temperature": 0.7},
         }
+        for change in changes.values():
+            module.run(question, {**base, **change})
+
         self.assertEqual(
-            len(set(rendered.values())),
-            len(rendered),
-            "two settings produce the same request",
+            len(set(sent)), len(changes), "two settings send the same request"
         )
-        self.assertNotIn("singer(", rendered["base"])
-        self.assertIn("singer(id, name, country)", rendered["schema_tables"])
-        self.assertIn("CREATE TABLE singer", rendered["schema_full"])
+        rendered = dict(zip(changes, sent))
+        self.assertNotIn("singer(", " ".join(rendered["base"][1]))
+        self.assertIn(
+            "singer(id, name, country)", " ".join(rendered["schema_tables"][1])
+        )
+        self.assertIn("CREATE TABLE singer", " ".join(rendered["schema_full"][1]))
+
+    def test_no_request_block_is_ever_empty(self) -> None:
+        """Providers reject an empty text block, so 'no schema' still sends something."""
+        module = load(AGENT_DIR / "agent_ready.py", "agent_probe_blocks")
+        question = "How many singers are there?"
+        module._catalog = {
+            question: {"db_id": "concert_singer", "schema": "CREATE TABLE s (a);"}
+        }
+        seen: list[str] = []
+        module.call_model = lambda model, blocks, temperature: (
+            seen.extend(block["text"] for block in blocks) or "SELECT 1"
+        )
+        for context in module.SCHEMA_VIEWS:
+            module.run(question, {"schema_context": context})
+        self.assertTrue(
+            all(text.strip() for text in seen), "an empty block would be rejected"
+        )
+
+    def test_an_unsupported_setting_value_raises(self) -> None:
+        module = load(AGENT_DIR / "agent_ready.py", "agent_probe_values")
+        module._catalog = {"q": {"db_id": "d", "schema": "CREATE TABLE t (a);"}}
+        with self.assertRaises(ValueError):
+            module.run("q", {"model": "some-model-we-never-configured"})
+        with self.assertRaises(ValueError):
+            module.run("q", {"temperature": 0.42})
 
     def test_the_fixed_agent_ignores_its_configuration(self) -> None:
         source = (AGENT_DIR / "agent_no_knobs.py").read_text(encoding="utf-8")
@@ -277,9 +315,7 @@ class Agents(unittest.TestCase):
         module = load(AGENT_DIR / "agent_ready.py", "agent_probe_missing")
         module._catalog = {}
         with self.assertRaises(KeyError):
-            module.build_prompt(
-                "a question nobody recorded", {"schema_context": "full"}
-            )
+            module.schema_text("a question nobody recorded", "full")
 
 
 if __name__ == "__main__":

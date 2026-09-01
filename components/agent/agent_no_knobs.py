@@ -43,9 +43,7 @@ def run(input_text, config):
         raise KeyError(
             f"no database recorded for this question, so there is nothing to write SQL against: {input_text!r}"
         )
-    prompt = (
-        f"Database schema:\n{entry['schema']}\n\n{INSTRUCTION}\nQuestion: {input_text}\nSQL:"
-    )
+    prompt = f"Database schema:\n{entry['schema']}\n\n{INSTRUCTION}\nQuestion: {input_text}\nSQL:"
     from openai import OpenAI
 
     answer = OpenAI().chat.completions.create(

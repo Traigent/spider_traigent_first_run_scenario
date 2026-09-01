@@ -106,6 +106,38 @@ questions. `ready` asks whether a first run works. `sql-exec-stop` asks whether 
 boundary holds. [docs/eval-methods.md](docs/eval-methods.md) has the detail, including a
 measured problem with how the two are scored.
 
+## What each preset scores
+
+Measured with the first-run guide's own `preflight.py` and `readiness.py`, at guide revision
+`6ec2b9c1` on 2026-09-01. The point of the table is that the presets are actually different:
+each one lands the run somewhere else.
+
+| preset | opening | band | what the guide is told to do next |
+|---|---|---|---|
+| `ready` | 45 | PARTIAL | proceed |
+| `no-eval` | 39 | PARTIAL | connect an evaluator |
+| `no-labels` | 19 | NOT READY | label the data |
+| `no-knobs` | 45 | PARTIAL | find something to vary |
+| `sql-exec-stop` | 45 | PARTIAL | proceed -- **no containment cap is raised** |
+
+The dataset pillar scores **98** on the full slice, with every dataset check passing.
+
+The `ready` agent scores **70** on the agent pillar with all four settings credited, and
+`no-knobs` scores **0** with the `agent-no-varying-knobs` cap raised -- which is the
+difference between the two being real rather than declared.
+
+70 is the ceiling at this stage, and not a comment on the agent: the search-space score is
+held one step below full whenever no trial budget has been declared, and a trial budget can
+only be declared in a document that does not exist until a run produces one. The published
+reference scenario scores the same 70 for the same reason.
+
+`agent.py` is written so that reading `run()` top to bottom is the whole story -- it reads
+all four settings itself and hands the finished request to the provider call as a list of
+text blocks, one per thing a setting decides. Two consequences are worth knowing, and the
+file says so too: the request is a multi-block content array rather than one string, and
+`schema_context="none"` sends a block saying the schema was not shown rather than omitting
+it, because a provider rejects an empty block.
+
 ## The data is Spider
 
 The questions and queries are from **Spider 1.0**, the standard cross-domain text-to-SQL
