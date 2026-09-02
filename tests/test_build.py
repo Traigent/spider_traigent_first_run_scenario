@@ -252,6 +252,50 @@ class ComponentStates(unittest.TestCase):
             self.assertEqual(evaluator["executes_candidate_output"], executes, state)
 
 
+class TheManifestRecordsTheVendor(unittest.TestCase):
+    """Which vendor answers is a build choice, so the record of the build has to hold it.
+
+    It is also the roster the guide's opening read scores the `model` setting from, and a
+    manifest that restated it from somewhere else could disagree with the file that ships.
+    """
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.workspace, ignore_errors=True)
+
+    def test_each_provider_is_recorded_with_the_roster_that_shipped(self) -> None:
+        for provider in build.PROVIDERS:
+            with self.subTest(provider=provider):
+                out = Path(self.workspace) / provider
+                result = run_build(
+                    "demo",
+                    "--dataset",
+                    "mini",
+                    "--provider",
+                    provider,
+                    "--out",
+                    str(out),
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                manifest = json.loads((out / "demo.json").read_text())
+                agent = manifest["components"]["agent"]
+                self.assertEqual(agent["provider"], provider)
+                self.assertEqual(manifest["components"]["agent"]["provider"], provider)
+
+                shipped = (out / "project" / "agent.py").read_text()
+                self.assertTrue(agent["models"], "no roster recorded")
+                for model in agent["models"]:
+                    self.assertIn(
+                        f'"{model}"',
+                        shipped,
+                        f"{provider}: the manifest names a model the shipped agent does not",
+                    )
+
+    def test_the_default_is_the_one_the_readme_documents(self) -> None:
+        self.assertEqual(build.DEFAULT_PROVIDER, "openrouter")
+        self.assertIn(build.DEFAULT_PROVIDER, build.PROVIDERS)
+
+
 class Calibration(unittest.TestCase):
     """The probe answers a project keeps for checking its own scorer."""
 

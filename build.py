@@ -14,6 +14,7 @@ Standard library only. No install step; a bare clone can build immediately.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import random
@@ -69,7 +70,7 @@ GUIDE_REQUIRED = ("GUIDE.md", "skills")
 # to be a literal in the agent's own source, because the guide's opening read credits a
 # setting only from values it can see there. Hence one agent per vendor rather than one
 # agent reading a roster from somewhere else.
-PROVIDERS = ("openrouter", "bedrock", "direct")
+PROVIDERS = ("openrouter", "direct")
 AGENT_STATES = ("ready", "no-knobs", "missing")
 
 
@@ -77,6 +78,29 @@ def agent_file(state: str, provider: str) -> Path | None:
     if state == "missing":
         return None
     return COMPONENTS / "agent" / provider / f"agent_{state.replace('-', '_')}.py"
+
+
+def agent_models(agent_source: Path | None) -> list[str]:
+    """The model ids the shipped agent chooses between, read from the file itself.
+
+    Recorded rather than restated: the roster lives in the agent's source because that is
+    the only place the guide's opening read can see it, so the manifest reads it from there
+    too instead of keeping a second copy that can disagree.
+    """
+    if agent_source is None:
+        return []
+    tree = ast.parse(agent_source.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        if "MODELS" in targets and isinstance(node.value, (ast.Tuple, ast.List)):
+            return [
+                element.value
+                for element in node.value.elts
+                if isinstance(element, ast.Constant) and isinstance(element.value, str)
+            ]
+    raise BuildError(f"{agent_source} declares no MODELS roster")
 
 
 def env_file(provider: str) -> Path:
@@ -806,6 +830,8 @@ def _write_demo(
             "agent": {
                 "state": settings["agent"],
                 "path": "agent.py" if agent_source else None,
+                "provider": settings["provider"],
+                "models": agent_models(agent_source),
             },
             "dataset": {
                 "state": settings["dataset"],
@@ -840,7 +866,8 @@ def _write_demo(
         "out": str(out),
         "project": str(project),
         "components": {
-            k: settings[k] for k in ("agent", "dataset", "eval", "calibration")
+            k: settings[k]
+            for k in ("agent", "dataset", "eval", "calibration", "provider")
         },
         "rows": len(selected),
         "databases": len(databases),

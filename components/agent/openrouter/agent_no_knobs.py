@@ -11,7 +11,6 @@ Databases come from catalog.json beside the dataset, and a reply is read exactly
 tunable version reads it, so the only difference between the two is what can vary.
 """
 
-import importlib.util
 import json
 import os
 from pathlib import Path
@@ -26,8 +25,6 @@ MODELS = (
 )
 
 VENDOR = "OpenRouter"
-# Nothing beyond the first-run stack: LiteLLM talks to OpenRouter over plain HTTP.
-REQUIRES = ()
 # What this roster needs in the environment before it can call anything.
 CREDENTIALS = ("OPENROUTER_API_KEY",)
 
@@ -88,15 +85,6 @@ def call_model(model, prompt, temperature):
     either way -- written so that the model id, the prompt and the temperature are visibly
     the arguments of the call that sends them.
     """
-    absent = [name for name in REQUIRES if importlib.util.find_spec(name) is None]
-    if absent:
-        raise RuntimeError(
-            f"{VENDOR} needs {', '.join(absent)}, which is not installed in this "
-            "environment. Install it here rather than switching vendors -- which model "
-            "answers is one of the things being measured, and changing it quietly changes "
-            "the measurement."
-        )
-
     missing = [name for name in CREDENTIALS if not os.environ.get(name)]
     if missing:
         raise RuntimeError(

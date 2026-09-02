@@ -259,35 +259,6 @@ class TheVendorVariantsDoNotDrift(unittest.TestCase):
                         f"{state} for {provider} has drifted from {build.DEFAULT_PROVIDER}",
                     )
 
-    def test_a_vendor_says_what_it_needs_before_it_calls_anything(self) -> None:
-        """A missing package must name itself, not surface as a connection error.
-
-        Bedrock signs through boto3, which the first-run guide's pinned stack does not
-        install -- without this check that arrives as `APIConnectionError: No module named
-        'boto3'` from inside the transport, which reads like a network problem.
-        """
-        for provider, state, path in every_agent():
-            with self.subTest(provider=provider, agent=state):
-                module = load(path, f"requires_probe_{provider}_{state}")
-                self.assertIsInstance(module.REQUIRES, tuple)
-                if not module.REQUIRES:
-                    continue
-                absent = object()
-                real = importlib.util.find_spec
-
-                def missing(name: str, *args: object, **kwargs: object) -> object:
-                    return None if name in module.REQUIRES else real(name)
-
-                importlib.util.find_spec = missing
-                try:
-                    with self.assertRaises(RuntimeError) as raised:
-                        module.call_model(module.MODELS[0], "SELECT 1", 0.0)
-                finally:
-                    importlib.util.find_spec = real
-                for name in module.REQUIRES:
-                    self.assertIn(name, str(raised.exception))
-                self.assertIsNot(absent, None)
-
     def test_every_variant_names_its_own_vendor_and_credentials(self) -> None:
         """The header is the part that is allowed to differ, so it has to be right."""
         for provider, state, path in every_agent():
