@@ -181,7 +181,7 @@ def score(output, expected, input_data=None, metadata=None):
         # A query that did not run is a wrong answer, and scoring it 0.0 is right. Saying
         # why is still worth a line: a run where every answer arrived wrapped in markdown
         # and a run where the model was simply wrong otherwise look identical.
-        print(f"exec-match: {db_id}: {predicted_error}", file=sys.stderr)
+        print(f"evaluator: {db_id}: {predicted_error}", file=sys.stderr)
         return 0.0
     ordered = _orders_its_own_rows(str(expected_sql))
     if ordered:

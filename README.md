@@ -29,11 +29,19 @@ python build.py check                                   # confirm this clone is 
 python build.py demo --preset ready --out ~/demos/first-try
 ```
 
-Or build the whole bank at once, each project in its own directory:
+Or build the whole bank at once, each project in its own directory, and check it:
 
 ```bash
-python build.py suite --out ~/demos/bank
+python build.py suite  --out ~/demos/bank
+python build.py verify --demo ~/demos/bank
 ```
+
+`verify` is the gate that says a demo is fit to hand to an agent. It checks three things:
+that the project is **self-contained**, so the agent reads a project and not the repository
+that made it; that it is **blind**, so no file names the state it was built in; and that it
+**works** -- every file matching the record, every question in the catalog, every database
+the rows name actually present. It reports problems rather than raising on them, including
+when the thing it is reading is itself malformed.
 
 No installation and no dependencies. `build.py` is standard library only, and the data is
 committed, so a fresh clone can build immediately and offline.
@@ -80,7 +88,8 @@ put in, and an agent that can read that is not being tested on anything.
 | `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `missing` |
 | `--provider` | `openrouter` (default) · `direct` |
 | `--calibration` | `none` · `present` (probe answers for the scorer) |
-| `--guide` | `clone` · `local` (with `--guide-src`) |
+| `--guide` | `clone` (default) · `local` (with `--guide-src`) |
+| `--venv` | `none` (default) · `ready` (a working environment on the newest supported Python) |
 
 Presets are shorthand for the combinations worth having a name:
 
@@ -106,6 +115,30 @@ Presets are shorthand for the combinations worth having a name:
 
 Individual flags override a preset, so `--preset ready --eval missing` is the ready project
 with the evaluator taken out.
+
+## A project that has been worked in
+
+By default a demo ships no environment. The guide builds its own `.venv-traigent` and never
+reuses a project's, so nothing is lost -- and a demo must never carry one already, because
+the guide stops if that path exists.
+
+`--venv ready` gives the project **a working environment of its own** instead: `.venv`, on
+the newest supported Python, with the agent's dependency installed. It is the difference
+between a directory of files and a project somebody has been working in -- the agent imports
+and runs from it before the guide builds anything.
+
+```bash
+python build.py demo --preset ready --venv ready --out ~/demos/first-try
+~/demos/first-try/project/.venv/bin/python -c "import litellm; print('ready')"
+```
+
+It costs about a minute and a hundred megabytes per project, which is why it is off by
+default and why `suite` takes the same flag rather than assuming it.
+
+An earlier version of this created an *empty* environment as scenery. Measured, all of its
+settings produced byte-identical preflight and readiness output, because the guide never
+reads a project's environment -- so it was removed. This one earns its place by making the
+project runnable, not by being present.
 
 ## Data that is wrong on purpose
 

@@ -126,6 +126,16 @@ DATASET_STATES = (
 )
 CALIBRATION_STATES = ("none", "present")
 GUIDE_MODES = ("clone", "local")
+VENV_STATES = ("none", "ready")
+# The name a project gives its own environment. Never `.venv-traigent`: that one belongs to
+# the guide, which creates it and stops if it is already there.
+PROJECT_VENV = ".venv"
+# The interpreter a project environment is built with, newest first. The guide supports
+# 3.11 to 3.13 and this repository targets the top of that range.
+SUPPORTED_PYTHONS = ("python3.13", "python3.12", "python3.11")
+# What the agent needs to import and run. The same pin the guide installs, so a project that
+# already has it is not carrying a different version of the same thing.
+AGENT_REQUIREMENT = "litellm==1.93.0"
 
 # The share of each difficulty band the full slice holds back, kept by every smaller draw.
 HOLDOUT_SHARE = 0.2
@@ -448,6 +458,55 @@ def copy_databases(
     return needed
 
 
+def resolve_python() -> str:
+    """The newest supported interpreter on this machine."""
+    for name in SUPPORTED_PYTHONS:
+        found = shutil.which(name)
+        if found is not None:
+            return found
+    raise BuildError(
+        f"--venv ready needs one of {', '.join(SUPPORTED_PYTHONS)} on PATH, and none is "
+        "there. Install one, or build without --venv."
+    )
+
+
+def make_project_venv(project: Path, interpreter: str) -> dict[str, Any]:
+    """A working environment for the project, the way a project that runs has one.
+
+    Not scenery. The agent's dependency is installed, so the agent imports and the project
+    can actually be run before the guide builds an environment of its own. The guide never
+    reuses this one -- it preserves what it finds and creates `.venv-traigent` regardless --
+    so what this buys is a project that looks and behaves like one somebody has been working
+    in.
+    """
+    venv_dir = project / PROJECT_VENV
+    for command in (
+        [interpreter, "-m", "venv", str(venv_dir)],
+        [str(venv_dir / "bin" / "pip"), "install", "--quiet", AGENT_REQUIREMENT],
+    ):
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        if result.returncode != 0:
+            raise BuildError(
+                f"could not prepare {venv_dir}: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+    version = subprocess.run(
+        [
+            str(venv_dir / "bin" / "python"),
+            "-c",
+            "import sys; print('.'.join(map(str, sys.version_info[:3])))",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    return {
+        "path": PROJECT_VENV,
+        "python_version": version,
+        "installed": [AGENT_REQUIREMENT],
+    }
+
+
 def check_guide_source(guide_src: Path | None) -> None:
     """Refuse a guide checkout that is not one, before the demo directory is created."""
     if guide_src is None:
@@ -559,6 +618,8 @@ def inventory(out: Path) -> list[dict[str, Any]]:
     files = []
     for path in sorted(out.rglob("*")):
         if path.is_dir() or path.is_symlink():
+            continue
+        if PROJECT_VENV in path.relative_to(out).parts:
             continue
         files.append(
             {
@@ -729,6 +790,7 @@ class Plan:
     provider: str
     rows: list[dict[str, Any]]
     guide_source: Path | None
+    interpreter: str | None
 
     @property
     def project(self) -> Path:
@@ -780,6 +842,7 @@ def plan_demo(args: argparse.Namespace) -> Plan:
 
     out = args.out.expanduser()
     check_output_path(out)
+    interpreter = resolve_python() if args.venv == "ready" else None
     guide_source: Path | None = None
     if args.guide == "local":
         check_guide_source(args.guide_src)
@@ -803,6 +866,7 @@ def plan_demo(args: argparse.Namespace) -> Plan:
         provider=provider,
         rows=rows,
         guide_source=guide_source,
+        interpreter=interpreter,
     )
 
 
@@ -899,6 +963,12 @@ def write_demo(plan: Plan) -> dict[str, Any]:
     )
     (project / "README.md").write_text(readme, encoding="utf-8")
 
+    venv_record = (
+        make_project_venv(project, plan.interpreter)
+        if plan.interpreter is not None
+        else None
+    )
+
     check_no_dedicated_environment(project)
 
     manifest: dict[str, Any] = {
@@ -934,6 +1004,7 @@ def write_demo(plan: Plan) -> dict[str, Any]:
                 "calibration": calibration_record,
             },
             "guide": guide_record,
+            "project_venv": venv_record,
         },
         "data_licence": "CC-BY-SA-4.0",
         "handoff": plan.handoff,
@@ -985,6 +1056,7 @@ def cmd_suite(args: argparse.Namespace) -> dict[str, Any]:
             provider=args.provider,
             guide=args.guide,
             guide_src=args.guide_src,
+            venv=args.venv,
         )
         try:
             result = cmd_demo(one)
@@ -1009,6 +1081,129 @@ def cmd_suite(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+# Words that could only mean "this was assembled for a test". Ordinary English is not a tell:
+# a preset called `empty` shares a word with an env file that says to leave a key empty, and a
+# checker that cannot tell those apart teaches people to ignore it. So the list is the
+# machinery of this repository plus the hyphenated names, which nothing writes by accident.
+# `calibration-cases.json` is deliberately absent -- it is the name a real project gives that
+# file, and flagging it would be the same false alarm.
+FIXTURE_TELLS = (
+    "preset",
+    "fixture",
+    "planted",
+    "spider_traigent",
+    "first_run_scenario",
+    "build.py",
+    "demo.json",
+)
+
+READABLE_SUFFIXES = frozenset({".py", ".json", ".jsonl", ".md", ".example"})
+
+
+def revealing_names() -> tuple[str, ...]:
+    """The hyphenated state and preset names, which read as labels rather than as prose."""
+    named = (
+        set(PRESETS) | set(DATASET_STATES) | set(EVALUATOR_FILES) | set(AGENT_STATES)
+    )
+    return FIXTURE_TELLS + tuple(sorted(n for n in named if "-" in n and len(n) > 6))
+
+
+def verify_demo(root: Path) -> list[str]:
+    """Everything that has to be true of a built demo before an agent is pointed at it.
+
+    Three properties, and they are what make a run mean anything. It has to be
+    self-contained, so the agent reads a project and not the repository that made it. It has
+    to be blind, so the agent is not handed the answer. And it has to work -- the agent
+    importable, the data readable, the databases present -- because a project that cannot run
+    tests the guide's patience rather than its judgement.
+    """
+    problems: list[str] = []
+    record = root / "demo.json"
+    project = root / PROJECT_SUBDIR
+    if not record.is_file():
+        return [f"no build record at {record}"]
+    if not project.is_dir():
+        return [f"no project at {project}"]
+    manifest = json.loads(record.read_text(encoding="utf-8"))
+
+    if (project / record.name).exists():
+        problems.append("the build record is inside the project the agent reads")
+    if (project / FORBIDDEN_VENV_NAME).exists():
+        problems.append(f"the project already contains {FORBIDDEN_VENV_NAME}")
+
+    tells = revealing_names()
+    for path in sorted(project.rglob("*")):
+        if PROJECT_VENV in path.relative_to(project).parts:
+            continue
+        if path.is_symlink():
+            problems.append(f"{path.relative_to(project)} is a symbolic link")
+            continue
+        if not path.is_file() or path.suffix not in READABLE_SUFFIXES:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if str(REPO_ROOT) in text:
+            problems.append(
+                f"{path.relative_to(project)} names the path of the repository that built it"
+            )
+        lowered = text.lower()
+        for tell in tells:
+            if tell.lower() in lowered:
+                problems.append(
+                    f"{path.relative_to(project)} contains {tell!r}, which says this is a test"
+                )
+
+    for entry in manifest["files"]:
+        path = project / entry["path"]
+        if not path.is_file():
+            problems.append(f"{entry['path']} is in the record and not on disk")
+        elif sha256_of(path) != entry["sha256"]:
+            problems.append(f"{entry['path']} does not match the record")
+
+    # Everything below reads files that may be malformed -- which is one of the things worth
+    # reporting. A checker that raises on bad input fails exactly when it is needed, and a
+    # traceback is the one result a reader cannot act on.
+    dataset = project / "dataset.jsonl"
+    if dataset.is_file():
+        try:
+            rows = [
+                json.loads(line) for line in dataset.read_text().splitlines() if line
+            ]
+            catalog = json.loads((project / "catalog.json").read_text())
+            questions = [row["input"] for row in rows]
+            databases = sorted({row["metadata"]["db_id"] for row in rows})
+        except (ValueError, KeyError, TypeError, OSError) as error:
+            problems.append(f"the rows or the catalog cannot be read: {error}")
+        else:
+            if any(question not in catalog for question in questions):
+                problems.append("a question is not in the catalog the agent reads")
+            for db_id in databases:
+                if not (project / "databases" / db_id / f"{db_id}.sqlite").is_file():
+                    problems.append(
+                        f"the rows name database {db_id}, which is not here"
+                    )
+    return problems
+
+
+def cmd_verify(args: argparse.Namespace) -> dict[str, Any]:
+    """Check one built demo, or every demo under one root."""
+    root = args.demo.expanduser()
+    if not root.is_dir():
+        raise BuildError(f"no directory at {root}")
+    roots = (
+        [root]
+        if (root / "demo.json").is_file()
+        else sorted(p for p in root.iterdir() if (p / "demo.json").is_file())
+    )
+    if not roots:
+        raise BuildError(f"{root} holds no built demo")
+    checked = [{"demo": r.name, "problems": verify_demo(r)} for r in roots]
+    return {
+        "ok": all(not entry["problems"] for entry in checked),
+        "root": str(root),
+        "checked": checked,
+    }
+
+
 def cmd_list(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "ok": True,
@@ -1028,6 +1223,7 @@ def cmd_list(args: argparse.Namespace) -> dict[str, Any]:
             "eval": sorted(EVALUATOR_FILES),
             "calibration": list(CALIBRATION_STATES),
             "guide": list(GUIDE_MODES),
+            "venv": list(VENV_STATES),
         },
         "evaluators": EVALUATOR_FACTS,
     }
@@ -1183,6 +1379,18 @@ def render_suite(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def render_verify(result: dict[str, Any]) -> str:
+    lines = []
+    for entry in result["checked"]:
+        if entry["problems"]:
+            lines.append(f"  {entry['demo']}")
+            lines += [f"      {problem}" for problem in entry["problems"]]
+        else:
+            lines.append(f"  ok  {entry['demo']}")
+    lines += ["", "OK" if result["ok"] else "PROBLEMS ABOVE"]
+    return "\n".join(lines)
+
+
 def render_check(result: dict[str, Any]) -> str:
     dataset = result["dataset"]
     lines = [
@@ -1204,6 +1412,7 @@ RENDERERS: dict[str, Callable[[dict[str, Any]], str]] = {
     "list": render_list,
     "check": render_check,
     "suite": render_suite,
+    "verify": render_verify,
 }
 
 
@@ -1237,6 +1446,14 @@ def build_parser() -> argparse.ArgumentParser:
     suite.add_argument("--guide", choices=GUIDE_MODES, default="clone")
     suite.add_argument("--guide-src", type=Path, metavar="DIR")
     suite.set_defaults(func=cmd_suite, name="suite")
+
+    suite.add_argument("--venv", choices=VENV_STATES, default="none")
+
+    verify = commands.add_parser(
+        "verify", help="check a built demo is self-contained, blind, and able to run"
+    )
+    verify.add_argument("--demo", type=Path, required=True, metavar="DIR")
+    verify.set_defaults(func=cmd_verify, name="verify")
 
     demo = commands.add_parser("demo", help="build one demo project")
     demo.add_argument(
@@ -1276,6 +1493,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--calibration",
         choices=CALIBRATION_STATES,
         help="ship the probe answers a project would use to check its own scorer",
+    )
+    demo.add_argument(
+        "--venv",
+        choices=VENV_STATES,
+        default="none",
+        help="give the project a working environment of its own, on the newest supported Python",
     )
     demo.add_argument(
         "--guide",

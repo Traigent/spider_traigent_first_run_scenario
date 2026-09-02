@@ -276,6 +276,7 @@ class ADemoCanBeBuiltWithoutACommandLine(unittest.TestCase):
             "provider": build.DEFAULT_PROVIDER,
             "rows": rows,
             "guide_source": None,
+            "interpreter": None,
         }
         defaults.update(overrides)
         return build.Plan(**defaults)  # type: ignore[arg-type]
@@ -432,6 +433,129 @@ class Calibration(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 2)
                 self.assertIn(expected, result.stderr)
+
+
+class EveryBuiltDemoPassesItsOwnCheck(unittest.TestCase):
+    """`verify` is the gate that says a demo is fit to hand to an agent.
+
+    A gate nobody has watched fail is not a gate, so this drives it in both directions: every
+    preset as built must pass, and each thing it is supposed to catch must make it fail.
+    """
+
+    def test_every_preset_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as workspace:
+            root = Path(workspace) / "bank"
+            self.assertEqual(run_build("suite", "--out", str(root)).returncode, 0)
+            result = run_build("--format", "json", "verify", "--demo", str(root))
+            self.assertEqual(result.returncode, 0, result.stdout)
+            report = json.loads(result.stdout)
+            self.assertTrue(report["ok"])
+            self.assertEqual(len(report["checked"]), len(build.PRESETS))
+            for entry in report["checked"]:
+                self.assertEqual(entry["problems"], [], entry["demo"])
+
+    def damaged(self, break_it) -> list[str]:
+        with tempfile.TemporaryDirectory() as workspace:
+            out = Path(workspace) / "demo"
+            self.assertEqual(
+                run_build("demo", "--dataset", "mini", "--out", str(out)).returncode, 0
+            )
+            break_it(out / "project")
+            return build.verify_demo(out)
+
+    def test_it_catches_a_label_that_says_this_is_a_test(self) -> None:
+        problems = self.damaged(
+            lambda project: (project / "agent.py").write_text(
+                (project / "agent.py").read_text()
+                + "\n# built from the sql-exec-stop preset\n"
+            )
+        )
+        self.assertTrue(any("says this is a test" in p for p in problems), problems)
+
+    def test_it_catches_the_building_repository_leaking_in(self) -> None:
+        problems = self.damaged(
+            lambda project: (project / "agent.py").write_text(
+                (project / "agent.py").read_text() + f"\n# see {REPO_ROOT}/components\n"
+            )
+        )
+        self.assertTrue(any("names the path" in p for p in problems), problems)
+
+    def test_it_catches_the_guides_own_environment(self) -> None:
+        problems = self.damaged(
+            lambda project: (project / build.FORBIDDEN_VENV_NAME).mkdir()
+        )
+        self.assertTrue(any(build.FORBIDDEN_VENV_NAME in p for p in problems), problems)
+
+    def test_it_catches_a_file_that_no_longer_matches_the_record(self) -> None:
+        problems = self.damaged(
+            lambda project: (project / "dataset.jsonl").write_text("{}\n")
+        )
+        self.assertTrue(
+            any("does not match the record" in p for p in problems), problems
+        )
+
+    def test_it_catches_a_missing_database(self) -> None:
+        def remove_one(project: Path) -> None:
+            shutil.rmtree(sorted((project / "databases").iterdir())[0])
+
+        problems = self.damaged(remove_one)
+        self.assertTrue(any("is not here" in p for p in problems), problems)
+
+
+class AProjectCanShipAWorkingEnvironment(unittest.TestCase):
+    """`--venv ready` is a project that has been worked in, not an empty directory.
+
+    An earlier version of this created an empty environment as scenery, and measurement
+    showed it changed nothing anyone could observe. This one installs what the agent needs,
+    so the project can actually run before the guide builds an environment of its own.
+    """
+
+    def test_the_environment_is_supported_and_the_agent_runs_from_it(self) -> None:
+        with tempfile.TemporaryDirectory() as workspace:
+            out = Path(workspace) / "demo"
+            result = run_build(
+                "demo", "--dataset", "mini", "--venv", "ready", "--out", str(out)
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            project = out / "project"
+            record = json.loads((out / "demo.json").read_text())["components"][
+                "project_venv"
+            ]
+            self.assertEqual(record["path"], build.PROJECT_VENV)
+
+            major, minor = (int(p) for p in record["python_version"].split(".")[:2])
+            self.assertEqual(major, 3)
+            self.assertGreaterEqual(minor, 11)
+            self.assertLessEqual(minor, 13)
+
+            python = project / build.PROJECT_VENV / "bin" / "python"
+            self.assertTrue(python.is_file())
+            proof = subprocess.run(
+                [
+                    str(python),
+                    "-c",
+                    "from importlib.metadata import version; print(version('litellm'))",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(proof.returncode, 0, proof.stderr)
+            self.assertTrue(proof.stdout.strip(), "litellm is not installed in it")
+
+    def test_it_is_never_the_environment_the_guide_makes(self) -> None:
+        with tempfile.TemporaryDirectory() as workspace:
+            out = Path(workspace) / "demo"
+            self.assertEqual(
+                run_build(
+                    "demo", "--dataset", "mini", "--venv", "ready", "--out", str(out)
+                ).returncode,
+                0,
+            )
+            self.assertFalse(
+                (out / "project" / build.FORBIDDEN_VENV_NAME).exists(),
+                "a demo must never carry the environment the guide creates",
+            )
 
 
 class Guards(unittest.TestCase):
