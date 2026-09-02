@@ -1,31 +1,35 @@
 [
   {
-    "name": "aggregate over one table - the same average written through a table alias",
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
+    "name": "one aggregate over one table - the same count reached through a table alias",
     "score_mode": "binary",
     "outcome_classes": [
       "identical query returns the recorded rows",
-      "an aliased rewrite returning the same rows is accepted",
-      "the same aggregate over a filtered subset returns different rows and is rejected",
-      "a different aggregate over the same table is rejected"
+      "an aliased rewrite returning the same row is accepted",
+      "the same count over a filtered subset returns a different row and is rejected",
+      "a count that does not remove duplicates is rejected"
     ],
-    "expected": "SELECT avg(age) FROM Dogs",
+    "expected": "SELECT count(DISTINCT professional_id) FROM Treatments",
     "input_data": {
-      "question": "Compute the average age of all the dogs."
+      "question": "Find the number of professionals who have ever treated dogs."
     },
     "metadata": {
-      "row_id": "spider-dev-0377",
+      "row_id": "spider-dev-0402",
       "db_id": "dog_kennels",
       "split": "tuning",
       "scoring_path": "row-comparison"
     },
     "probes": {
-      "good": "SELECT avg(age) FROM Dogs",
-      "equivalent_good": "SELECT AVG(T1.age) FROM Dogs AS T1",
-      "partial": "SELECT avg(age) FROM Dogs WHERE abandoned_yn = '1'",
-      "bad": "SELECT count(*) FROM Dogs"
+      "good": "SELECT count(DISTINCT professional_id) FROM Treatments",
+      "equivalent_good": "SELECT count(DISTINCT T1.professional_id) FROM Treatments AS T1",
+      "partial": "SELECT count(DISTINCT professional_id) FROM Treatments WHERE cost_of_treatment  >  300",
+      "bad": "SELECT count(*) FROM Treatments"
     }
   },
   {
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
     "name": "two columns with a filter - the same rows reached through an alias and IN instead of equality",
     "score_mode": "binary",
     "outcome_classes": [
@@ -36,10 +40,10 @@
     ],
     "expected": "SELECT Population ,  LifeExpectancy FROM country WHERE Name  =  \"Brazil\"",
     "input_data": {
-      "question": "What are the population and life expectancies in Brazil?"
+      "question": "Give me Brazil’s population and life expectancies."
     },
     "metadata": {
-      "row_id": "spider-dev-0742",
+      "row_id": "spider-dev-0471",
       "db_id": "world_1",
       "split": "tuning",
       "scoring_path": "row-comparison"
@@ -52,6 +56,8 @@
     }
   },
   {
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
     "name": "an ordered listing - the recorded order asked for explicitly, so the reversed order is a wrong answer",
     "score_mode": "binary",
     "outcome_classes": [
@@ -68,7 +74,7 @@
       "row_id": "spider-dev-0480",
       "db_id": "singer",
       "split": "tuning",
-      "scoring_path": "row-comparison-ordered"
+      "scoring_path": "row-comparison"
     },
     "probes": {
       "good": "SELECT Name FROM singer ORDER BY Net_Worth_Millions ASC",

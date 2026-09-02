@@ -1,28 +1,35 @@
-"""Scores an answer by comparing the wrong two things.
+"""Scores an answer by comparing the question with the recorded query.
 
-The signature a scorer is given carries four values -- what the model produced, what was
-recorded as correct, the question it was asked, and the row's other fields. This one compares
-the question with the recorded answer and never looks at what the model produced at all.
+The four values a scorer is given are what the model produced, what was recorded as correct,
+the question that was asked, and the row's other fields. This one reads the question and the
+recorded query, and never looks at what the model produced at all.
 
-It is a wiring mistake, not a design: the arguments arrive in an order that is easy to get
-wrong, and a scorer that reads two of them and ignores a third still runs, still returns a
-number, and still fills a results table. What it cannot do is tell two answers apart, because
-nothing it compares depends on the answer. A question is never the SQL that answers it, so
-every row scores zero, every configuration ties at zero, and a sweep reports that nothing
-helped.
-
-Zero everywhere is easier to notice than full marks everywhere, which is the other way this
-goes wrong. It is still worth catching before a paid run rather than after one.
+Nothing it compares depends on the answer, so two answers cannot be told apart. A question is
+never the SQL that answers it, so every row scores zero, every configuration ties at zero, and
+a sweep over them reports that nothing helped.
 """
+
+# A row names its question `input`, and a case written out on its own names it `question`.
+# Either is the text that was asked; anything else that arrives is read as the text itself.
+QUESTION_KEYS = ("question", "input")
+
+
+def question_asked(input_data):
+    """The question a row carries, whichever shape the row arrived in."""
+    if isinstance(input_data, dict):
+        for key in QUESTION_KEYS:
+            asked = input_data.get(key)
+            if asked is not None:
+                return str(asked)
+    return "" if input_data is None else str(input_data)
 
 
 def score(output, expected, input_data=None, metadata=None):
-    """Compares the question with the recorded answer, which are never the same thing."""
+    """1.0 when the question is written the same way as the recorded query."""
     recorded = expected
     if recorded is None or not str(recorded).strip():
         raise ValueError(
             "this row has no recorded query to compare against, and a row with no answer "
             "cannot be scored -- grading against it would mark every attempt wrong"
         )
-    asked = "" if input_data is None else str(input_data)
-    return 1.0 if asked.strip() == str(recorded).strip() else 0.0
+    return 1.0 if question_asked(input_data).strip() == str(recorded).strip() else 0.0

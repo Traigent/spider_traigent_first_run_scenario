@@ -1,31 +1,35 @@
 [
   {
-    "name": "aggregate over one table - the recorded query rewritten with different spacing, keyword case, and a trailing semicolon",
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
+    "name": "one aggregate over one table - the recorded query rewritten with different spacing, keyword case, and a trailing semicolon",
     "score_mode": "binary",
     "outcome_classes": [
       "identical text scores 1.0",
       "whitespace/keyword-case/trailing-semicolon variant of the recorded query is accepted",
-      "a different aggregate over the same column is rejected",
-      "a different query over the same table is rejected"
+      "the same count without DISTINCT is different text and is rejected",
+      "the same count over a different column is rejected"
     ],
-    "expected": "SELECT avg(age) FROM Dogs",
+    "expected": "SELECT count(DISTINCT professional_id) FROM Treatments",
     "input_data": {
-      "question": "Compute the average age of all the dogs."
+      "question": "Find the number of professionals who have ever treated dogs."
     },
     "metadata": {
-      "row_id": "spider-dev-0377",
+      "row_id": "spider-dev-0402",
       "db_id": "dog_kennels",
       "split": "tuning",
       "scoring_path": "text-comparison"
     },
     "probes": {
-      "good": "SELECT avg(age) FROM Dogs",
-      "equivalent_good": "select   avg( age )   from   dogs ;",
-      "partial": "SELECT age FROM Dogs",
-      "bad": "SELECT count(*) FROM Dogs"
+      "good": "SELECT count(DISTINCT professional_id) FROM Treatments",
+      "equivalent_good": "select   count( distinct professional_id )   from   treatments ;",
+      "partial": "SELECT count(professional_id) FROM Treatments",
+      "bad": "SELECT count(DISTINCT dog_id) FROM Treatments"
     }
   },
   {
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
     "name": "two columns with a quoted value - double quotes rewritten as single, and the case inside the value left alone",
     "score_mode": "binary",
     "outcome_classes": [
@@ -36,10 +40,10 @@
     ],
     "expected": "SELECT Population ,  LifeExpectancy FROM country WHERE Name  =  \"Brazil\"",
     "input_data": {
-      "question": "What are the population and life expectancies in Brazil?"
+      "question": "Give me Brazil’s population and life expectancies."
     },
     "metadata": {
-      "row_id": "spider-dev-0742",
+      "row_id": "spider-dev-0471",
       "db_id": "world_1",
       "split": "tuning",
       "scoring_path": "text-comparison"
@@ -52,29 +56,59 @@
     }
   },
   {
-    "name": "three aggregates in a list - comma spacing folded while the quoted country name keeps its case",
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
+    "name": "two aggregates in a list - comma spacing folded while the quoted continent name keeps its case",
     "score_mode": "binary",
     "outcome_classes": [
       "a multi-item select list is compared after comma padding is folded",
-      "keyword case is folded",
+      "keyword case is folded and a double-quoted literal matches its single-quoted spelling",
       "case inside the quoted filter value is preserved and rejected when it differs",
-      "dropping two of the three aggregates is rejected"
+      "dropping one of the two aggregates is rejected"
     ],
-    "expected": "SELECT avg(age) ,  min(age) ,  max(age) FROM singer WHERE country  =  'France'",
+    "expected": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
     "input_data": {
-      "question": "What is the average, minimum, and maximum age of all singers from France?"
+      "question": "What is the total population and maximum GNP in Asia?"
     },
     "metadata": {
-      "row_id": "spider-dev-0405",
-      "db_id": "concert_singer",
+      "row_id": "spider-dev-0362",
+      "db_id": "world_1",
       "split": "tuning",
       "scoring_path": "text-comparison"
     },
     "probes": {
-      "good": "SELECT avg(age) ,  min(age) ,  max(age) FROM singer WHERE country  =  'France'",
-      "equivalent_good": "SELECT AVG(age), MIN(age), MAX(age) FROM singer WHERE country = 'France'",
-      "partial": "SELECT avg(age), min(age), max(age) FROM singer WHERE country = 'france'",
-      "bad": "SELECT avg(age) FROM singer"
+      "good": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
+      "equivalent_good": "SELECT SUM(Population), MAX(GNP) FROM country WHERE Continent = 'Asia'",
+      "partial": "SELECT sum(Population), max(GNP) FROM country WHERE Continent = 'asia'",
+      "bad": "SELECT sum(Population) FROM country WHERE Continent = 'Asia'"
+    }
+  },
+  {
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
+    "name": "a not-equal filter - a rewrite returning exactly the recorded rows is different text and is rejected",
+    "score_mode": "binary",
+    "outcome_classes": [
+      "identical text scores 1.0",
+      "a keyword-case and quote-style respelling of the recorded query is accepted",
+      "a rewrite that returns exactly the recorded rows through an alias and <> is still different text and is rejected",
+      "the opposite filter is rejected"
+    ],
+    "expected": "SELECT Name FROM singer WHERE Citizenship != \"France\"",
+    "input_data": {
+      "question": "What are the names of the singers who are not French citizens?"
+    },
+    "metadata": {
+      "row_id": "spider-dev-0086",
+      "db_id": "singer",
+      "split": "tuning",
+      "scoring_path": "text-comparison"
+    },
+    "probes": {
+      "good": "SELECT Name FROM singer WHERE Citizenship != \"France\"",
+      "equivalent_good": "select name from singer where citizenship != 'France' ;",
+      "partial": "SELECT s.Name FROM singer AS s WHERE s.Citizenship <> 'France'",
+      "bad": "SELECT Name FROM singer WHERE Citizenship = 'France'"
     }
   }
 ]

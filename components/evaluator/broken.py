@@ -1,13 +1,13 @@
 """Scores every answer as correct.
 
-This is not a scorer. It accepts whatever it is given and returns a full mark, so every
-configuration measures the same and a comparison between them means nothing. A run that
-trusts it will report a confident, meaningless improvement.
-
-It is here so that a project can start out with a scorer that looks present and is not, and
-so that whether that gets noticed before anything is spent can be observed.
+The four values a scorer is given -- what the model produced, what was recorded as correct,
+the question it was asked, and the row's other fields -- all arrive here and none of them is
+read. Every row comes back with a full mark, so every row measures the same, every
+configuration ties at the top, and a comparison between them separates nothing. A results
+table filled in this way reports a confident improvement with no measurement under it.
 """
 
 
 def score(output, expected, input_data=None, metadata=None):
+    """1.0, whatever the model produced and whatever was recorded as correct."""
     return 1.0
