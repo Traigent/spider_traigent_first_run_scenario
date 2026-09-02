@@ -11,26 +11,49 @@ permissions:
 jobs:
   checks:
     runs-on: ubuntu-latest
+
+    # The suite itself runs in 1-3 minutes; the rest is installs, and the litellm
+    # tree the Tests step pulls is ~100 MB on a cold cache. 20 minutes leaves room
+    # for a slow mirror while still killing a hung job in minutes rather than in
+    # the six hours GitHub allows by default.
+    timeout-minutes: 20
+
+    # build.py's SUPPORTED_PYTHONS claims python3.13, python3.12 and python3.11,
+    # and the suite asserts 11 <= minor <= 13. A single 3.13 job proved one third
+    # of that claim, so CI now runs every version the repository says it supports.
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
+          # The Tests step has build.py --venv ready pip-install litellm==1.93.0 into
+          # a throwaway project venv: ~100 MB of wheels fetched from PyPI on every
+          # run. That venv is not cached, but pip's HTTP cache under ~/.cache/pip is,
+          # so a PyPI blip stops deciding whether this repository's code is green.
+          # The pin lives in build.py (AGENT_REQUIREMENT), not in a requirements
+          # file, so build.py is part of the cache key: changing the pin busts the
+          # cache instead of quietly serving the wheels for the old one.
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            build.py
 
       - name: The interpreter is the one the steps below assume
         run: |
-          python -c "import sys; assert sys.version_info[:2] == (3, 13), sys.version"
+          python -c "import sys; want='${{ matrix.python-version }}'; got='.'.join(map(str, sys.version_info[:2])); assert got == want, (got, want, sys.version)"
 
       - name: Install the checkers
         run: python -m pip install -r requirements-dev.txt
 
-      - name: Validate the components and the committed data
-        run: python build.py check
-
-      - name: Tests
-        run: python -m unittest discover -s tests -v
-
+      # The static checks run before the tests: they take seconds, they read the
+      # same files, and a formatting, lint or typing error used to sit invisible
+      # behind a test failure.
       - name: Format
         run: black --check build.py spider tests components
 
@@ -38,4 +61,33 @@ jobs:
         run: ruff check build.py spider tests components
 
       - name: Types
-        run: mypy --strict build.py spider/build_slice.py
+        run: |
+          mypy --strict build.py spider/build_slice.py
+          # components/ ships to customers as files they open and edit, deliberately
+          # untyped. --strict there reports 138 errors that could only be answered by
+          # annotating the very files a customer is meant to read, so components gets
+          # the widest stance that passes today instead: the bodies of untyped
+          # functions are checked (--check-untyped-defs), the litellm import is
+          # tolerated (litellm is installed into the generated project's venv, never
+          # into this job), and var-annotated is off because its only six hits are
+          # "annotate this empty list" inside those same untyped functions.
+          # --explicit-package-bases is required because agent/direct/ and
+          # agent/openrouter/ ship same-named modules on purpose (agent_ready.py,
+          # agent_no_knobs.py) and mypy otherwise refuses the duplicate module name.
+          mypy --check-untyped-defs --ignore-missing-imports --explicit-package-bases --disable-error-code=var-annotated components
+          # tests/ is deliberately NOT type-checked here. mypy reports errors in the
+          # hundreds on the suite as it stands -- with default settings, not only
+          # under --strict -- and nearly all of them are attributes assigned in
+          # setUpClass, which mypy cannot see without class-level annotations.
+          # Covering tests/ means rewriting the suite, which is a change to tests/
+          # and not to CI, so the gap is written down here rather than silently left
+          # out. Revisit when tests/ settles: it was mid-rewrite when this was added.
+
+      # Cheap data/component validation, and it is what the tests build on, so it
+      # runs after the static checks and before the slow test step: a broken
+      # component or a bad data file then fails in seconds.
+      - name: Validate the components and the committed data
+        run: python build.py check
+
+      - name: Tests
+        run: python -m unittest discover -s tests -v

@@ -42,6 +42,83 @@ def every_agent():
 SCORER_ARGUMENTS = ("output", "expected", "input_data", "metadata")
 EXECUTION_MODULES = {"sqlite3", "subprocess", "socket", "requests", "httpx"}
 
+# The rosters README.md publishes in its `--provider` table, written out here rather than
+# read back from the agents. Read back, the assertion is the roster compared with itself and
+# it passes whatever the roster is changed to -- which is how `len(MODELS) >= 2` let a model
+# be dropped from a three-model roster with the suite still green. The manifest records this
+# list and the guide's opening read scores the `model` setting from it, so both ends of the
+# count matter: a shorter roster is a smaller search space and a longer one is a claim the
+# README does not make.
+DOCUMENTED_ROSTERS = {
+    ("openrouter", "ready"): (
+        "openrouter/qwen/qwen3-coder",
+        "openrouter/openai/gpt-oss-120b",
+        "openrouter/meta-llama/llama-3.3-70b-instruct",
+    ),
+    # One model, because one model is what it calls. It used to carry the full three-model
+    # roster it never read, which made its demo.json indistinguishable from a tunable
+    # agent's -- the arm with nothing to search recorded a search space of three.
+    ("openrouter", "no_knobs"): ("openrouter/qwen/qwen3-coder",),
+    ("direct", "ready"): (
+        "gpt-4o-mini",
+        "gpt-4o",
+        "anthropic/claude-3-5-haiku-latest",
+    ),
+    ("direct", "no_knobs"): ("gpt-4o-mini",),
+}
+
+# Which credential names each vendor's env template has to declare, written out here for the
+# same reason. `--provider direct` shipping OpenRouter's template is a project whose agent
+# refuses every model in its own roster, and the two files are copied by separate code paths.
+DOCUMENTED_CREDENTIALS = {
+    "openrouter": ("OPENROUTER_API_KEY",),
+    "direct": ("OPENAI_API_KEY", "ANTHROPIC_API_KEY"),
+}
+
+
+def split_rendered_names(text: str) -> list[str]:
+    """A rendered column list split on the commas that are not inside a quoted name.
+
+    `compact_schema` quotes any name that is not a bare identifier, and a quoted name may
+    hold a comma. Splitting on every comma is the same mistake the renderer itself was
+    fixed for, one level up.
+    """
+    parts: list[str] = []
+    current: list[str] = []
+    inside = False
+    index = 0
+    while index < len(text):
+        character = text[index]
+        if character == '"':
+            if inside and index + 1 < len(text) and text[index + 1] == '"':
+                current.append('""')
+                index += 2
+                continue
+            inside = not inside
+        if character == "," and not inside:
+            parts.append("".join(current))
+            current = []
+        else:
+            current.append(character)
+        index += 1
+    parts.append("".join(current))
+    return [part.strip() for part in parts if part.strip()]
+
+
+def unquoted(name: str) -> str:
+    """The name a rendered identifier refers to, with its quoting removed.
+
+    The quoting is the fix, not the value: `official_ratings_(millions)` unquoted is read as
+    a call to a function called `official_ratings_` and fails on the column it names, and
+    `18_49_Rating_Share` in `tvshow.TV_series` is not even a token. So the comparison with
+    the database's own column list is made on the names, and the quoting is checked by
+    executing the line instead.
+    """
+    name = name.strip()
+    if len(name) >= 2 and name.startswith('"') and name.endswith('"'):
+        return name[1:-1].replace('""', '"')
+    return name.strip("`[]'")
+
 
 def load(path: Path, name: str):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -82,6 +159,106 @@ class EveryComponentParses(unittest.TestCase):
             self.assertTrue(
                 build.env_file(provider).exists(), f"{provider} has no env template"
             )
+
+    def test_every_file_in_components_is_a_state_the_cli_offers(self) -> None:
+        """The other direction, which nothing checked.
+
+        Walking CLI state -> file can only find a state whose file went missing. A component
+        left behind after a state was renamed is invisible to it: the directory sits there,
+        `check` compiles nothing of it, no preset reaches it, and one such directory did
+        exist. A file in `components/` that no flag can select is either dead or a state
+        somebody forgot to wire up, and both are worth being told about.
+        """
+        components = REPO_ROOT / "components"
+
+        def entries(directory: Path, pattern: str = "*") -> set[str]:
+            """What is really in a component directory.
+
+            `__pycache__` is written by this file's own module loader and by any earlier
+            run, so it is not evidence of a component -- but every other name is.
+            """
+            return {
+                path.name
+                for path in directory.glob(pattern)
+                if not path.name.startswith("__")
+            }
+
+        self.assertEqual(
+            sorted(
+                name for name in entries(components) if (components / name).is_dir()
+            ),
+            ["agent", "calibration", "env", "evaluator", "legal", "readme"],
+            "components/ holds a directory nothing in build.py reads",
+        )
+        named_evaluators = {
+            path.name for path in build.EVALUATOR_FILES.values() if path is not None
+        }
+        self.assertEqual(
+            entries(components / "evaluator", "*.py"),
+            named_evaluators,
+            "an evaluator file is not reachable through --eval",
+        )
+        self.assertEqual(
+            sorted(
+                name
+                for name in entries(components / "agent")
+                if (components / "agent" / name).is_dir()
+            ),
+            sorted(build.PROVIDERS),
+            "an agent directory is not reachable through --provider",
+        )
+        for provider in build.PROVIDERS:
+            expected = {
+                build.agent_file(state, provider).name  # type: ignore[union-attr]
+                for state in build.AGENT_STATES
+                if build.agent_file(state, provider) is not None
+            }
+            self.assertEqual(
+                entries(components / "agent" / provider, "*.py"),
+                expected,
+                f"{provider} holds an agent file no --agent state names",
+            )
+        self.assertEqual(
+            entries(components / "env"),
+            {build.env_file(provider).name for provider in build.PROVIDERS},
+            "an env template is not reachable through --provider",
+        )
+        self.assertEqual(
+            entries(components / "calibration"),
+            {path.name for path in build.CALIBRATION_SOURCES.values()},
+            "a calibration file no --eval state ships",
+        )
+
+    def test_each_env_template_declares_exactly_its_vendor_keys(self) -> None:
+        """The template a `--provider` demo ships has to be that provider's.
+
+        `direct` shipping OpenRouter's template is a project whose own `agent.py` refuses
+        every model in its own roster with a message naming a key the project never
+        mentions. The two files are chosen by separate code paths, and the credential names
+        are written out here rather than read back off the agent so that changing both at
+        once still has to be a decision.
+        """
+        for provider in build.PROVIDERS:
+            with self.subTest(provider=provider):
+                declared = {
+                    line.split("=", 1)[0]
+                    for line in build.env_file(provider).read_text().splitlines()
+                    if "=" in line and not line.lstrip().startswith("#")
+                }
+                for name in DOCUMENTED_CREDENTIALS[provider]:
+                    self.assertIn(name, declared, f"{provider}'s template omits {name}")
+                for other, names in DOCUMENTED_CREDENTIALS.items():
+                    if other == provider:
+                        continue
+                    for name in names:
+                        if name in DOCUMENTED_CREDENTIALS[provider]:
+                            continue
+                        self.assertNotIn(
+                            name,
+                            declared,
+                            f"{provider}'s template asks for {name}, which belongs to "
+                            f"{other}",
+                        )
 
     def test_scorers_take_the_arguments_the_guide_passes(self) -> None:
         for path in sorted(EVALUATOR_DIR.glob("*.py")):
@@ -186,7 +363,11 @@ class ExecutionComparison(unittest.TestCase):
             text=True,
             check=False,
         )
-        assert result.returncode == 0, result.stderr
+        # Raised rather than asserted: `python -O` drops a bare assert, and the build
+        # failure then surfaces three lines down as a FileNotFoundError about a path
+        # nobody can explain.
+        if result.returncode != 0:
+            raise RuntimeError(f"the fixture build failed: {result.stderr}")
         cls.project = out / "project"
         cls.scorer = load(cls.project / "evaluator.py", "exec_probe")
         rows = [
@@ -316,6 +497,14 @@ class TheScorerAndTheAgentAgreeAboutWhatTheModelSends(unittest.TestCase):
         column called `4)` and a composite key leaked its column list out as columns. Eleven
         tables across nine databases described something that was not there, and
         `schema_context` is the setting most likely to move a score.
+
+        Naming the right columns is only half of it. A name the model cannot select is as
+        useless as one that does not exist, so every rendered line is also prepared against
+        the real database: `official_ratings_(millions)` unquoted parses as a call to a
+        function called `official_ratings_` and fails with `no such column: millions`, and
+        `tvshow.TV_series` holds `18_49_Rating_Share`, which unquoted is not a token at all.
+        Executability is the property this test was reaching for; the column comparison
+        alone passed on both of those.
         """
         agent = load(DEFAULT_PROVIDER_DIR / "agent_ready.py", "schema_probe")
         schemas: dict[str, str] = {}
@@ -330,40 +519,61 @@ class TheScorerAndTheAgentAgreeAboutWhatTheModelSends(unittest.TestCase):
             connection = sqlite3.connect(
                 str(REPO_ROOT / "spider" / "databases" / db_id / f"{db_id}.sqlite")
             )
-            real = {
-                name.lower(): [
-                    column[1]
-                    for column in connection.execute(f'PRAGMA table_info("{name}")')
-                ]
-                for (name,) in connection.execute(
-                    "select name from sqlite_master where type='table' "
-                    "and name not like 'sqlite_%'"
-                )
-            }
-            connection.close()
-            for rendered in agent.compact_schema(schema).splitlines():
-                table, _, columns = rendered.partition("(")
-                named = [c.strip() for c in columns.rstrip(")").split(",") if c.strip()]
-                truth = real.get(table.strip().lower())
-                checked += 1
-                self.assertIsNotNone(truth, f"{db_id}: no table called {table}")
+            try:
+                real = {
+                    name.lower(): [
+                        column[1]
+                        for column in connection.execute(f'PRAGMA table_info("{name}")')
+                    ]
+                    for (name,) in connection.execute(
+                        "select name from sqlite_master where type='table' "
+                        "and name not like 'sqlite_%'"
+                    )
+                }
+                for rendered in agent.compact_schema(schema).splitlines():
+                    written_table, _, columns = rendered.partition("(")
+                    written_columns = split_rendered_names(columns.rstrip(")"))
+                    table = unquoted(written_table)
+                    named = [unquoted(c) for c in written_columns]
+                    truth = real.get(table.lower())
+                    checked += 1
+                    self.assertIsNotNone(truth, f"{db_id}: no table called {table}")
+                    self.assertEqual(
+                        [c.lower() for c in named],
+                        [c.lower() for c in truth or []],
+                        f"{db_id}.{table} is described with columns it does not have",
+                    )
+                    # The line as written, handed to the database that has to accept it.
+                    # LIMIT 0 because what is being tested is that SQLite parses and binds
+                    # every name in it, not what the table holds.
+                    statement = (
+                        f"SELECT {', '.join(written_columns)} "
+                        f"FROM {written_table.strip()} LIMIT 0"
+                    )
+                    try:
+                        connection.execute(statement)
+                    except sqlite3.Error as error:
+                        self.fail(
+                            f"{db_id}: the compact view renders a line the database "
+                            f"refuses: {statement!r} -- {error}"
+                        )
+                # Counting only what the parser emitted cannot see a table it dropped, so
+                # the rendered set is compared with the database's own list of tables.
                 self.assertEqual(
-                    [c.lower() for c in named],
-                    [c.lower() for c in truth or []],
-                    f"{db_id}.{table} is described with columns it does not have",
+                    {
+                        unquoted(line.partition("(")[0]).lower()
+                        for line in agent.compact_schema(schema).splitlines()
+                    },
+                    set(real),
+                    f"{db_id}: the compact view and the database disagree on which tables "
+                    "exist",
                 )
-            # Counting only what the parser emitted cannot see a table it dropped, so the
-            # rendered set is compared with the database's own list of tables.
-            self.assertEqual(
-                {
-                    line.partition("(")[0].strip().lower()
-                    for line in agent.compact_schema(schema).splitlines()
-                },
-                set(real),
-                f"{db_id}: the compact view and the database disagree on which tables exist",
-            )
-        self.assertGreater(
-            checked, 70, "every committed database should have been checked"
+            finally:
+                connection.close()
+        self.assertEqual(
+            checked,
+            74,
+            "every table of every committed database should have been checked",
         )
 
     def test_the_execution_scorer_cannot_change_the_database(self) -> None:
@@ -532,7 +742,8 @@ class ProbesBelongToTheScorerTheyShipWith(unittest.TestCase):
                 text=True,
                 check=False,
             )
-            assert result.returncode == 0, result.stderr
+            if result.returncode != 0:
+                raise RuntimeError(f"the {state} fixture build failed: {result.stderr}")
             project = out / "project"
             cls.scorers[state] = load(
                 project / "evaluator.py", f"calibrated_{state.replace('-', '_')}"
@@ -636,10 +847,37 @@ class Agents(unittest.TestCase):
 
     def test_the_tunable_agent_declares_four_settings(self) -> None:
         module = load(DEFAULT_PROVIDER_DIR / "agent_ready.py", "agent_probe")
-        self.assertGreaterEqual(len(module.MODELS), 2)
+        self.assertEqual(
+            tuple(module.MODELS), DOCUMENTED_ROSTERS[(build.DEFAULT_PROVIDER, "ready")]
+        )
         self.assertEqual(len(module.SCHEMA_CONTEXTS), 3)
         self.assertEqual(len(module.PROMPT_STYLES), 2)
         self.assertEqual(len(module.TEMPERATURES), 2)
+
+    def test_every_roster_is_the_one_the_readme_publishes(self) -> None:
+        """Bounded at both ends, against a list written here and read from nowhere.
+
+        `len(MODELS) >= 2` is satisfied by dropping a model from a three-model roster, and
+        the manifest would then record a smaller search space than the README advertises
+        with nothing to notice it. The roster is also what the guide's opening read scores
+        the `model` setting from, so it is a published fact and not an implementation
+        detail.
+        """
+        for provider, state, path in every_agent():
+            with self.subTest(provider=provider, agent=state):
+                module = load(path, f"roster_probe_{provider}_{state}")
+                documented = DOCUMENTED_ROSTERS[(provider, state)]
+                self.assertEqual(
+                    tuple(module.MODELS),
+                    documented,
+                    f"{provider}/{state} ships a roster the README does not publish",
+                )
+                self.assertEqual(
+                    sorted(module.MODEL_CREDENTIALS),
+                    sorted(documented),
+                    f"{provider}/{state}: a model in the roster has no credential name, "
+                    "or a credential name names a model that is not in the roster",
+                )
 
     def prepared(self, name: str):
         """The agent, with a known database and the provider call captured."""
@@ -734,12 +972,26 @@ class Agents(unittest.TestCase):
         how the file is spelled. Reading the source for a phrase would pass an agent that
         reaches into its configuration by some other route, so this drives run() with the
         provider call recorded and compares the requests themselves.
+
+        The configurations name settings this agent does not have, and one model id it does
+        not carry -- which is the point: an agent that quietly honoured any of them would
+        send more than one distinct request. It used to be driven with `MODELS[1]`, which
+        only worked because the file carried a three-model roster it never read; the roster
+        is now the one model it calls, so the invariance is asserted against values chosen
+        for being outside it.
         """
         module, question, sent = self.prepared_fixed("agent_probe_fixed")
+        self.assertEqual(
+            len(module.MODELS),
+            1,
+            "the agent with nothing to search declares a roster it could search",
+        )
+        only_model = module.MODELS[0]
         configurations = (
             {},
-            {"model": list(module.MODELS)[1]},
-            {"model": next(iter(module.MODELS)), "temperature": 0.7},
+            {"model": only_model},
+            {"model": "a-model-this-agent-does-not-carry"},
+            {"model": only_model, "temperature": 0.7},
             {"schema_context": "none", "prompt_style": "query_plan_cot"},
             {"schema_context": "full", "prompt_style": "direct", "temperature": 1.0},
         )
@@ -756,6 +1008,13 @@ class Agents(unittest.TestCase):
             1,
             "a setting changed what the agent with no settings sends",
         )
+        # And the one request it sends is the one its own roster names, at the one
+        # temperature it runs at -- an invariant request built out of a model id from
+        # nowhere would satisfy the count above and answer from a model nobody chose.
+        model, prompt, temperature = sent[0]
+        self.assertEqual(model, only_model)
+        self.assertIn(question, prompt)
+        self.assertIsInstance(temperature, float)
 
     def test_an_unsupported_setting_value_raises(self) -> None:
         """Answering under a setting the agent does not have would be a quiet wrong result."""
