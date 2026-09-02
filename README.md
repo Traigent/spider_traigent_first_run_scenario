@@ -117,8 +117,8 @@ left out until that is settled rather than shipped as a vendor that does not wor
 Every roster is called through **LiteLLM**, and that is not a style choice. The environment
 the first-run guide builds installs `traigent`, `litellm` and `python-dotenv` and no vendor
 package at all -- so an agent that did `import anthropic` would fail on the machine it is
-meant to run on. Going through LiteLLM is also what lets one agent reach Bedrock, which
-signs with AWS credentials rather than an API key.
+meant to run on. It also means the vendor is a property of the model id rather than of the
+agent, so adding one is a roster and a credential name, not a rewrite.
 
 There is one agent file per vendor rather than one agent reading a roster from somewhere
 else, and that is forced: the guide credits a setting only from values it can read in the

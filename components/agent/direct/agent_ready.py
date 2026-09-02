@@ -239,8 +239,9 @@ def call_model(model, prompt, temperature):
     The call goes through LiteLLM rather than a vendor SDK, and that is not a preference.
     The environment the Traigent first-run guide builds installs litellm and no provider
     package at all, so `import anthropic` here would fail on the machine this is meant to
-    run on. It is also what lets the same agent reach OpenRouter or Bedrock by changing
-    nothing but the model id.
+    It also means the vendor is a property of the model id rather than of this file: any
+    vendor LiteLLM carries is reachable by changing the roster, with no vendor package to
+    install and nothing else here to change.
 
     LiteLLM's OpenAI-shaped client is used rather than calling `litellm.completion`
     directly. It is the same transport -- `LiteLLM().chat.completions.create` forwards
