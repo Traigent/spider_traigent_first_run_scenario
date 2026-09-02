@@ -320,15 +320,23 @@ enough to tell configurations apart, not enough to settle a question about produ
 
 ## Working on this repository
 
-```bash
-python -m pip install -r requirements-dev.txt
+Building a demo needs nothing installed. The five checks below need three tools, and a
+recent Linux will refuse to install them into the system Python (PEP 668), so put them in an
+environment of their own:
 
-python build.py check
-python -m unittest discover -s tests -v
-black --check build.py spider tests components
-ruff check build.py spider tests components
-mypy --strict build.py spider/build_slice.py
+```bash
+python3 -m venv .venv-dev
+.venv-dev/bin/python -m pip install -r requirements-dev.txt
+
+python3 build.py check
+python3 -m unittest discover -s tests -v
+.venv-dev/bin/black --check build.py spider tests components
+.venv-dev/bin/ruff check build.py spider tests components
+.venv-dev/bin/mypy --strict build.py spider/build_slice.py
 ```
+
+The first two need only the standard library, so they run on any Python 3.11 to 3.13. The
+last three are what `requirements-dev.txt` pins.
 
 `check` validates the components and the committed data. The tests re-run all 300 recorded
 queries, so they take a moment; that is the point of them. `requirements-dev.txt` exists only
