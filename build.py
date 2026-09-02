@@ -135,10 +135,14 @@ PROJECT_VENV_NAME = ".venv-project"
 # instead of being held at the unvalidated ceiling.
 RUNS_DIRECTORY = "traigent-runs"
 CALIBRATION_FILE = "calibration-cases.json"
+_TEXT_PROBES = COMPONENTS / "calibration" / "exact_match.json"
 CALIBRATION_SOURCES = {
-    "exact-match": COMPONENTS / "calibration" / "exact_match.json",
+    "exact-match": _TEXT_PROBES,
     "exec-match": COMPONENTS / "calibration" / "exec_match.json",
-    "broken": COMPONENTS / "calibration" / "broken.json",
+    # The always-correct scorer is deliberately given the text comparator's probes: the
+    # point is that it fails the same questions the honest one passes. One file rather than
+    # a byte-identical copy, because a copy can only drift away from what it is comparing to.
+    "broken": _TEXT_PROBES,
 }
 # The guide creates this itself and stops if it already exists, so a demo must never have one.
 FORBIDDEN_VENV_NAME = ".venv-traigent"
@@ -247,7 +251,13 @@ def select_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
         band = by_band.setdefault(
             row["metadata"]["difficulty"], {"tuning": [], "holdout": []}
         )
-        band[row["metadata"]["split"]].append(row)
+        split = row["metadata"].get("split")
+        if split not in band:
+            raise BuildError(
+                f"row {row['metadata'].get('id', '?')} has split "
+                f"{split!r}; every row in the slice needs tuning or holdout"
+            )
+        band[split].append(row)
 
     rng = random.Random(SAMPLE_SEED)
     per_band, remainder = divmod(wanted, len(by_band))
@@ -545,6 +555,7 @@ FILE_DESCRIPTIONS = {
         "probe answers kept for checking the scorer: a right one, an equivalent one, a "
         "partly-right one and a wrong one."
     ),
+    "README.md": "this file.",
     ".env.example": "the keys this project would need, with no values in it.",
     "LICENSE": "the terms the code here is under.",
     "NOTICE": "who wrote what, and which parts are under which licence.",
@@ -719,12 +730,12 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
     out.mkdir(parents=True)
     try:
         return _write_demo(
-            args,
-            settings,
-            calibration_state,
-            interpreter,
-            out,
-            selected,
+            args=args,
+            settings=settings,
+            calibration_state=calibration_state,
+            interpreter=interpreter,
+            out=out,
+            selected=selected,
         )
     except BaseException:
         # A half-built demo is worse than none: it looks like a project, and the path it
@@ -741,6 +752,7 @@ def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _write_demo(
+    *,
     args: argparse.Namespace,
     settings: dict[str, str],
     calibration_state: str,
@@ -809,6 +821,7 @@ def _write_demo(
     )
     venv_record = make_project_venv(project, interpreter)
 
+    created.append("README.md")
     readme = render_readme(
         COMPONENTS / "readme" / "DEMO_README.md.tmpl",
         handoff=handoff,
@@ -818,7 +831,6 @@ def _write_demo(
         agent_state=settings["agent"],
     )
     (project / "README.md").write_text(readme, encoding="utf-8")
-    created.append("README.md")
 
     check_no_dedicated_environment(project)
 

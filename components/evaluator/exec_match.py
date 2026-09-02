@@ -100,14 +100,28 @@ def _orders_its_own_rows(sql):
     Row order counts only when the recorded query asked for one. Searching the whole text
     for "order by" also finds it inside a subquery -- three of the recorded answers order
     only within parentheses -- and then a correct answer whose rows come back in a different
-    order is marked wrong. Only an ORDER BY at the top level, outside any literal, counts.
+    order is marked wrong. Only an ORDER BY at the top level counts, and the scan steps over
+    everything that is not syntax on the way: comments, quoted strings, quoted identifiers
+    and bracketed ones.
     """
     depth = 0
     index = 0
     lowered = sql.lower()
     while index < len(sql):
         character = sql[index]
-        if character in "'\"":
+        if sql.startswith("--", index):
+            newline = sql.find("\n", index)
+            index = len(sql) if newline == -1 else newline + 1
+            continue
+        if sql.startswith("/*", index):
+            closing = sql.find("*/", index + 2)
+            index = len(sql) if closing == -1 else closing + 2
+            continue
+        if character == "[":
+            closing = sql.find("]", index)
+            index = len(sql) if closing == -1 else closing + 1
+            continue
+        if character in "'\"`":
             quote = character
             index += 1
             while index < len(sql):
