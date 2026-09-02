@@ -28,6 +28,7 @@ source:
   hf_repo: xlangai/spider
   revision: 0c350918f3f29ec754f1181c65cdce76cd6c133c
   split: dev
+  pool_sha256: eeb84b12e9307d862e3f84de684653d3afff4addc7a71941adde35fc82073b47
   pool: >-
     Derived from the frozen 754-row ext pool in the Traigent benchmarks Spider harness, whose
     rows were each verified to appear verbatim (db_id + question + normalised SQL) in the

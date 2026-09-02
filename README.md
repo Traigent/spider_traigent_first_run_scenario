@@ -155,11 +155,20 @@ with how the two scorers are graded.
 Measured with the first-run guide's own `preflight.py`, `calibrate_evaluator.py` and
 `readiness.py`, at guide revision `6ec2b9c1` on 2026-09-01.
 
-These are not the numbers a bare clone reads. The **86** and the **91** need the guide's
-assistant to have read the agent's source itself and handed that read to `readiness.py` as
-`--agent-knobs`. No such document is in this repository, and none can be: it is the
-assistant's own reading, produced during a run. Without it the `agent-no-varying-knobs`
-ceiling holds every preset at 45 or below.
+One number per project, not two. Reading the agent's source is part of the opening gate, not
+an optional extra: the guide is explicit that "every guided run that found an agent does this
+read -- not conditionally", and it hands that read to `readiness.py` as `--agent-knobs`. So a
+run of one of these projects produces one opening score, and it is the one in the table.
+
+Invoking `readiness.py` by hand without that flag reports a lower number, but that is not a
+second reading of the project -- it is the tool saying it was not given the agent read it
+requires, which the card itself states as a limit rather than a finding. Reproducing the table
+means doing the read, because the read is part of the measurement.
+
+What is fair to hold against these figures is narrower, and it is this: the agent read used
+here was written by hand to stand in for the one an assistant writes. It cites real values on
+the real call path, which is what the guide asks for, so the numbers are a faithful reading --
+but a different honest read of the same agent could land a few points either way.
 
 The point of the table is that the presets are genuinely different: each lands the run
 somewhere else.

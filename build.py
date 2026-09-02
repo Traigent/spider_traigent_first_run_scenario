@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -683,116 +684,156 @@ def render_readme(
 # --------------------------------------------------------------------------- commands
 
 
-def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
-    settings = dict(PRESETS[args.preset]) if args.preset else {}
+@dataclass(frozen=True)
+class Plan:
+    """One demo, fully decided and checked, and not yet written.
+
+    Everything a build needs is resolved here and nowhere else. The point of the type is the
+    boundary it draws: `plan_demo` is the only place that reads the command line or refuses
+    anything, and `write_demo` takes a Plan and writes it. "Already validated" is then a
+    property of what the writer was handed rather than a promise in its docstring, and the
+    writer can be driven from a test without a command line at all.
+    """
+
+    out: Path
+    agent: str
+    dataset: str
+    evaluator: str
+    calibration: str
+    provider: str
+    rows: list[dict[str, Any]]
+    interpreter: str | None
+    guide_source: Path | None
+
+    @property
+    def project(self) -> Path:
+        return self.out / PROJECT_SUBDIR
+
+    @property
+    def handoff(self) -> str:
+        """What a fresh agent is given. A copied guide is pointed at; otherwise it clones."""
+        return HANDOFF_LOCAL if self.guide_source is not None else HANDOFF_CLONE
+
+    @property
+    def agent_source(self) -> Path | None:
+        return agent_file(self.agent, self.provider)
+
+    @property
+    def evaluator_source(self) -> Path | None:
+        return EVALUATOR_FILES[self.evaluator]
+
+    @property
+    def ships_calibration(self) -> bool:
+        return self.calibration == "present"
+
+
+def plan_demo(args: argparse.Namespace) -> Plan:
+    """Decide and check everything, without writing anything.
+
+    Every refusal lives here, before the output directory exists. A build that failed half
+    way used to leave a directory holding an agent, a dataset and databases with no sign that
+    it was incomplete -- and the path it occupied then refused the retry.
+    """
+    chosen = dict(PRESETS[args.preset]) if args.preset else {}
     for name in ("agent", "dataset", "eval", "calibration", "provider"):
-        chosen = getattr(args, name.replace("-", "_"))
-        if chosen is not None:
-            settings[name] = chosen
-    settings.setdefault("agent", "ready")
-    settings.setdefault("dataset", "ready")
-    settings.setdefault("eval", "exact-match")
-    settings.setdefault("calibration", "none")
-    settings.setdefault("provider", DEFAULT_PROVIDER)
-    calibration_state = settings["calibration"]
-    if calibration_state == "present" and settings["eval"] == "missing":
+        supplied = getattr(args, name)
+        if supplied is not None:
+            chosen[name] = supplied
+
+    agent = chosen.get("agent", "ready")
+    dataset = chosen.get("dataset", "ready")
+    evaluator = chosen.get("eval", "exact-match")
+    calibration = chosen.get("calibration", "none")
+    provider = chosen.get("provider", DEFAULT_PROVIDER)
+
+    if calibration == "present" and evaluator == "missing":
         raise BuildError(
             "--calibration present needs an evaluator; --eval missing ships none"
         )
-
     if args.guide == "clone" and args.guide_src is not None:
         raise BuildError("--guide-src only applies to --guide local")
 
-    # Everything that can be checked without writing is checked here, before the output
-    # directory exists. A build that fails half way leaves a directory holding an agent, a
-    # dataset and databases and no sign that it is incomplete -- and the retry is then refused
-    # because the path exists. Cheaper to refuse up front.
     out = args.out.expanduser()
     check_output_path(out)
+    guide_source: Path | None = None
     if args.guide == "local":
         check_guide_source(args.guide_src)
+        guide_source = args.guide_src
     interpreter = resolve_interpreter(args.existing_venv)
-    if calibration_state == "present":
-        check_calibration_source(settings["eval"])
+    if calibration == "present":
+        check_calibration_source(evaluator)
 
-    rows = read_dataset()
-    selected = (
-        select_rows(rows, settings["dataset"])
-        if settings["dataset"] != "missing"
-        else []
-    )
-    if calibration_state == "present" and not selected:
+    rows = select_rows(read_dataset(), dataset) if dataset != "missing" else []
+    if calibration == "present" and not rows:
         raise BuildError(
             "--calibration present needs the databases its probes run against, and "
             "--dataset missing ships none"
         )
 
-    out.mkdir(parents=True)
+    return Plan(
+        out=out,
+        agent=agent,
+        dataset=dataset,
+        evaluator=evaluator,
+        calibration=calibration,
+        provider=provider,
+        rows=rows,
+        interpreter=interpreter,
+        guide_source=guide_source,
+    )
+
+
+def cmd_demo(args: argparse.Namespace) -> dict[str, Any]:
+    plan = plan_demo(args)
+    plan.out.mkdir(parents=True)
     try:
-        return _write_demo(
-            args=args,
-            settings=settings,
-            calibration_state=calibration_state,
-            interpreter=interpreter,
-            out=out,
-            selected=selected,
-        )
+        return write_demo(plan)
     except BaseException:
-        # A half-built demo is worse than none: it looks like a project, and the path it
-        # occupies blocks the retry. Said out loud, because this also catches an interrupt,
-        # and a directory disappearing without a word is its own surprise.
-        print(f"build failed; removing the partial demo at {out}", file=sys.stderr)
-        shutil.rmtree(out, ignore_errors=True)
-        if out.exists():
+        # A half-built demo is worse than none. Said out loud, because this also catches an
+        # interrupt, and a directory disappearing without a word is its own surprise.
+        print(f"build failed; removing the partial demo at {plan.out}", file=sys.stderr)
+        shutil.rmtree(plan.out, ignore_errors=True)
+        if plan.out.exists():
             print(
-                f"could not remove it: {out} is still there and will refuse the next build",
+                f"could not remove it: {plan.out} is still there and will refuse the "
+                "next build",
                 file=sys.stderr,
             )
         raise
 
 
-def _write_demo(
-    *,
-    args: argparse.Namespace,
-    settings: dict[str, str],
-    calibration_state: str,
-    interpreter: str | None,
-    out: Path,
-    selected: list[dict[str, Any]],
-) -> dict[str, Any]:
-    """Write the demo. Everything here has already been validated."""
-    project = out / PROJECT_SUBDIR
+def write_demo(plan: Plan) -> dict[str, Any]:
+    """Write the demo a Plan describes. Nothing here decides anything or refuses anything."""
+    project = plan.project
     project.mkdir()
     created: list[str] = []
-    projected = [project_row(row, settings["dataset"]) for row in selected]
+    projected = [project_row(row, plan.dataset) for row in plan.rows]
 
-    agent_source = agent_file(settings["agent"], settings["provider"])
-    if agent_source is not None:
-        shutil.copy2(agent_source, project / "agent.py")
+    if plan.agent_source is not None:
+        shutil.copy2(plan.agent_source, project / "agent.py")
         created.append("agent.py")
 
-    evaluator_source = EVALUATOR_FILES[settings["eval"]]
-    if evaluator_source is not None:
-        shutil.copy2(evaluator_source, project / "evaluator.py")
+    if plan.evaluator_source is not None:
+        shutil.copy2(plan.evaluator_source, project / "evaluator.py")
         created.append("evaluator.py")
 
     databases: list[str] = []
-    if selected:
+    if plan.rows:
         write_jsonl(project / "dataset.jsonl", projected)
         created.append("dataset.jsonl")
-        write_catalog(project / "catalog.json", selected)
+        write_catalog(project / "catalog.json", plan.rows)
         created.append("catalog.json")
         databases = copy_databases(
-            selected,
+            plan.rows,
             project / "databases",
-            calibration_databases(settings["eval"], calibration_state),
+            calibration_databases(plan.evaluator, plan.calibration),
         )
         created.append("databases/")
         # The rows are CC BY-SA; their licence travels with them, always.
         shutil.copy2(DATA_LICENCE_PATH, project / "LICENSE-DATA")
         created.append("LICENSE-DATA")
 
-    shutil.copy2(env_file(settings["provider"]), project / ".env.example")
+    shutil.copy2(env_file(plan.provider), project / ".env.example")
     created.append(".env.example")
 
     for licence in CODE_LICENCE_PATHS:
@@ -800,17 +841,16 @@ def _write_demo(
         created.append(licence.name)
 
     calibration_record = (
-        copy_calibration(settings["eval"], project)
-        if calibration_state == "present"
-        else None
+        copy_calibration(plan.evaluator, project) if plan.ships_calibration else None
     )
     if calibration_record is not None:
         created.append(f"{RUNS_DIRECTORY}/{CALIBRATION_FILE}")
 
     guide_record = (
-        copy_guide(args.guide_src, project) if args.guide == "local" else None
+        copy_guide(plan.guide_source, project)
+        if plan.guide_source is not None
+        else None
     )
-    handoff = HANDOFF_LOCAL if args.guide == "local" else HANDOFF_CLONE
 
     # Counted over the rows the project ships, not the rows they were drawn from: an
     # unlabelled dataset carries no split, and reporting one would describe a file that is
@@ -819,16 +859,16 @@ def _write_demo(
     splits = Counter(
         row["metadata"]["split"] for row in projected if "split" in row["metadata"]
     )
-    venv_record = make_project_venv(project, interpreter)
+    venv_record = make_project_venv(project, plan.interpreter)
 
     created.append("README.md")
     readme = render_readme(
         COMPONENTS / "readme" / "DEMO_README.md.tmpl",
-        handoff=handoff,
+        handoff=plan.handoff,
         shipped=created,
         rows=projected,
         databases=databases,
-        agent_state=settings["agent"],
+        agent_state=plan.agent,
     )
     (project / "README.md").write_text(readme, encoding="utf-8")
 
@@ -840,52 +880,55 @@ def _write_demo(
         "project_directory": PROJECT_SUBDIR,
         "components": {
             "agent": {
-                "state": settings["agent"],
-                "path": "agent.py" if agent_source else None,
-                "provider": settings["provider"],
-                "models": agent_models(agent_source),
+                "state": plan.agent,
+                "path": "agent.py" if plan.agent_source else None,
+                "provider": plan.provider,
+                "models": agent_models(plan.agent_source),
             },
             "dataset": {
-                "state": settings["dataset"],
-                "path": "dataset.jsonl" if selected else None,
-                "rows": len(selected),
-                "labelled": settings["dataset"] not in ("unlabeled", "missing"),
+                "state": plan.dataset,
+                "path": "dataset.jsonl" if plan.rows else None,
+                "rows": len(plan.rows),
+                "labelled": plan.dataset not in ("unlabeled", "missing"),
                 "difficulty_counts": dict(sorted(bands.items())),
                 "split_counts": dict(sorted(splits.items())),
                 "databases": databases,
             },
             "evaluator": {
-                "state": settings["eval"],
-                "path": "evaluator.py" if evaluator_source else None,
+                "state": plan.evaluator,
+                "path": "evaluator.py" if plan.evaluator_source else None,
                 "method": None,
                 "executes_candidate_output": None,
-                **(EVALUATOR_FACTS.get(settings["eval"], {})),
+                **(EVALUATOR_FACTS.get(plan.evaluator, {})),
                 "calibration": calibration_record,
             },
             "project_venv": venv_record,
             "guide": guide_record,
         },
         "data_licence": "CC-BY-SA-4.0",
-        "handoff": handoff,
+        "handoff": plan.handoff,
         "files": inventory(project),
     }
-    (out / "demo.json").write_text(
+    (plan.out / "demo.json").write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
     return {
         "ok": True,
-        "out": str(out),
+        "out": str(plan.out),
         "project": str(project),
         "components": {
-            k: settings[k]
-            for k in ("agent", "dataset", "eval", "calibration", "provider")
+            "agent": plan.agent,
+            "dataset": plan.dataset,
+            "eval": plan.evaluator,
+            "calibration": plan.calibration,
+            "provider": plan.provider,
         },
-        "rows": len(selected),
+        "rows": len(plan.rows),
         "databases": len(databases),
         "project_venv": venv_record,
         "created": created,
-        "handoff": handoff,
+        "handoff": plan.handoff,
     }
 
 

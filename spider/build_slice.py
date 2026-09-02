@@ -136,9 +136,15 @@ def drop_near_duplicates(
     return kept, dropped
 
 
-def load_difficulties(hardness_path: Path) -> dict[int, str]:
-    """Official Spider hardness per source-pool row index, mapped to our vocabulary."""
-    difficulties: dict[int, str] = {}
+def load_difficulties(hardness_path: Path) -> dict[int, tuple[str, str]]:
+    """Official Spider hardness per source-pool row, mapped to our vocabulary.
+
+    Keyed by the row's position in the pool, because position is the only key the classifier
+    recorded. Position is a weak key -- a pool regenerated in a different order would relabel
+    every row and nothing would say so -- so the database each record names is carried back
+    with it, and `build` checks that it agrees with the row it is about to label.
+    """
+    difficulties: dict[int, tuple[str, str]] = {}
     for record in read_jsonl(hardness_path):
         if record.get("slice") != SOURCE_SLICE_NAME:
             continue
@@ -150,7 +156,10 @@ def load_difficulties(hardness_path: Path) -> dict[int, str]:
         hardness = record["hardness"]
         if hardness not in HARDNESS_TO_DIFFICULTY:
             raise SystemExit(f"unknown Spider hardness {hardness!r}")
-        difficulties[int(record["example"])] = HARDNESS_TO_DIFFICULTY[hardness]
+        difficulties[int(record["example"])] = (
+            HARDNESS_TO_DIFFICULTY[hardness],
+            record["db_id"],
+        )
     return difficulties
 
 
@@ -164,6 +173,7 @@ def build(
             raise SystemExit(f"source input missing: {required}")
 
     pool = read_jsonl(source_slice)
+    pool_digest = hashlib.sha256(source_slice.read_bytes()).hexdigest()
     difficulties = load_difficulties(hardness_path)
     if len(difficulties) != len(pool):
         raise SystemExit(
@@ -191,7 +201,14 @@ def build(
     deduped, near_duplicates = drop_near_duplicates(usable)
     by_band: dict[str, list[tuple[int, dict[str, Any]]]] = {band: [] for band in BANDS}
     for index, row in deduped:
-        by_band[difficulties[index]].append((index, row))
+        difficulty, labelled_db = difficulties[index]
+        if labelled_db != row["input"]["db_id"]:
+            raise SystemExit(
+                f"row {index} is about {row['input']['db_id']} and its difficulty label is "
+                f"about {labelled_db}. The labels are keyed by position, so this means the "
+                "pool is not the one they were computed from -- relabel it before building."
+            )
+        by_band[difficulty].append((index, row))
 
     print(
         f"pool={len(pool)} dropped-empty-gold={empty_gold} "
@@ -264,6 +281,7 @@ def build(
     splits = Counter(row["metadata"]["split"] for row in selected)
     bands = Counter(row["metadata"]["difficulty"] for row in selected)
     print(f"\nwrote {out_path} rows={len(selected)} sha256={digest}")
+    print(f"  from pool  {source_slice.name} sha256={pool_digest}")
     print(f"  splits={dict(splits)}")
     print(f"  bands={dict(bands)}")
     print(f"  databases={len(needed)} -> {db_dest}")

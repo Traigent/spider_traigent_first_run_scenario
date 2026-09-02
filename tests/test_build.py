@@ -252,6 +252,66 @@ class ComponentStates(unittest.TestCase):
             self.assertEqual(evaluator["executes_candidate_output"], executes, state)
 
 
+class ADemoCanBeBuiltWithoutACommandLine(unittest.TestCase):
+    """Deciding a demo and writing one are two jobs, and only one of them refuses anything.
+
+    `plan_demo` reads the command line and does every check; `write_demo` takes what it
+    produced and writes it. That split is what makes these tests possible at all -- every
+    other test here shells out to build.py, because until now the writer could not be
+    reached without argparse.
+    """
+
+    def setUp(self) -> None:
+        self.workspace = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.workspace, ignore_errors=True)
+
+    def plan(self, **overrides: object) -> build.Plan:
+        rows = build.select_rows(build.read_dataset(), "mini")
+        defaults: dict[str, object] = {
+            "out": Path(self.workspace) / "demo",
+            "agent": "ready",
+            "dataset": "mini",
+            "evaluator": "exact-match",
+            "calibration": "none",
+            "provider": build.DEFAULT_PROVIDER,
+            "rows": rows,
+            "interpreter": None,
+            "guide_source": None,
+        }
+        defaults.update(overrides)
+        return build.Plan(**defaults)  # type: ignore[arg-type]
+
+    def test_the_writer_needs_only_a_plan(self) -> None:
+        plan = self.plan()
+        plan.out.mkdir(parents=True)
+        result = build.write_demo(plan)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["rows"], build.MINI_ROWS)
+        self.assertTrue((plan.project / "agent.py").exists())
+        self.assertTrue((plan.out / "demo.json").exists())
+
+    def test_a_plan_answers_what_the_writer_would_have_had_to_work_out(self) -> None:
+        """The things the writer used to derive from argparse are properties of the plan."""
+        cloning = self.plan()
+        self.assertEqual(cloning.handoff, EXPECTED_HANDOFF)
+        self.assertEqual(cloning.project, cloning.out / "project")
+        self.assertFalse(cloning.ships_calibration)
+
+        copied = self.plan(guide_source=Path("/somewhere/traigent-first-run"))
+        self.assertIn("./traigent-first-run/GUIDE.md", copied.handoff)
+
+        without = self.plan(agent="missing", evaluator="missing")
+        self.assertIsNone(without.agent_source)
+        self.assertIsNone(without.evaluator_source)
+
+    def test_a_plan_cannot_be_edited_after_it_is_checked(self) -> None:
+        """Every refusal happens while the plan is made, so it must not change afterwards."""
+        plan = self.plan()
+        with self.assertRaises(Exception):
+            plan.dataset = "ready"  # type: ignore[misc]
+
+
 class TheManifestRecordsTheVendor(unittest.TestCase):
     """Which vendor answers is a build choice, so the record of the build has to hold it.
 
