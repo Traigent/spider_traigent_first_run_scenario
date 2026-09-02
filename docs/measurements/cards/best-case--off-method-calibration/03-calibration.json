@@ -1,0 +1,247 @@
+{
+  "cases": [
+    {
+      "checks": {
+        "bad_fails": true,
+        "equivalent_is_accepted": true,
+        "equivalent_matches_good": true,
+        "good_passes": true,
+        "non_constant": true,
+        "partial_fails": true
+      },
+      "exception_probes": [
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "ValueError: the evaluator consumed the value-error output probe",
+          "kind": "value-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "TypeError: the evaluator consumed the type-error output probe",
+          "kind": "type-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "SyntaxError: the evaluator consumed the syntax-error output probe",
+          "kind": "syntax-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "JSONDecodeError: the evaluator consumed the json-decode-error output probe: line 1 column 1 (char 0)",
+          "kind": "json-decode-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "AdversarialProbeAccess: the evaluator consumed the runtime-error output probe",
+          "kind": "runtime-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        }
+      ],
+      "name": "one aggregate over one table - the same count reached through a table alias",
+      "passed": true,
+      "permutation_probe": {
+        "available": true,
+        "distinguished": true,
+        "error": null,
+        "probe": "Treatments FROM professional_id) count(DISTINCT SELECT",
+        "score": 0.0,
+        "unavailable": null
+      },
+      "score_mode": "binary",
+      "scores": {
+        "bad": 0.0,
+        "equivalent_good": 1.0,
+        "good": 1.0,
+        "partial": 0.0
+      }
+    },
+    {
+      "checks": {
+        "bad_fails": true,
+        "equivalent_is_accepted": true,
+        "equivalent_matches_good": true,
+        "good_passes": true,
+        "non_constant": true,
+        "partial_fails": true
+      },
+      "exception_probes": [
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "ValueError: the evaluator consumed the value-error output probe",
+          "kind": "value-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "TypeError: the evaluator consumed the type-error output probe",
+          "kind": "type-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "SyntaxError: the evaluator consumed the syntax-error output probe",
+          "kind": "syntax-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "JSONDecodeError: the evaluator consumed the json-decode-error output probe: line 1 column 1 (char 0)",
+          "kind": "json-decode-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "AdversarialProbeAccess: the evaluator consumed the runtime-error output probe",
+          "kind": "runtime-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        }
+      ],
+      "name": "two columns with a filter - the same rows reached through an alias and IN instead of equality",
+      "passed": true,
+      "permutation_probe": {
+        "available": true,
+        "distinguished": true,
+        "error": null,
+        "probe": "\"Brazil\" = Name  WHERE country FROM LifeExpectancy ,  Population  SELECT",
+        "score": 0.0,
+        "unavailable": null
+      },
+      "score_mode": "binary",
+      "scores": {
+        "bad": 0.0,
+        "equivalent_good": 1.0,
+        "good": 1.0,
+        "partial": 0.0
+      }
+    },
+    {
+      "checks": {
+        "bad_fails": true,
+        "equivalent_is_accepted": true,
+        "equivalent_matches_good": true,
+        "good_passes": true,
+        "non_constant": true,
+        "partial_fails": true
+      },
+      "exception_probes": [
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "ValueError: the evaluator consumed the value-error output probe",
+          "kind": "value-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "TypeError: the evaluator consumed the type-error output probe",
+          "kind": "type-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "SyntaxError: the evaluator consumed the syntax-error output probe",
+          "kind": "syntax-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "JSONDecodeError: the evaluator consumed the json-decode-error output probe: line 1 column 1 (char 0)",
+          "kind": "json-decode-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "AdversarialProbeAccess: the evaluator consumed the runtime-error output probe",
+          "kind": "runtime-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        }
+      ],
+      "name": "an ordered listing - the recorded order asked for explicitly, so the reversed order is a wrong answer",
+      "passed": true,
+      "permutation_probe": {
+        "available": true,
+        "distinguished": true,
+        "error": null,
+        "probe": "ASC Net_Worth_Millions BY ORDER singer FROM Name SELECT",
+        "score": 0.0,
+        "unavailable": null
+      },
+      "score_mode": "binary",
+      "scores": {
+        "bad": 0.0,
+        "equivalent_good": 1.0,
+        "good": 1.0,
+        "partial": 0.0
+      }
+    }
+  ],
+  "coverage_note": "Distinct names and payloads are structural checks only; calibration relies on the coding assistant's recorded evidence-backed semantic-coverage review of materially distinct inputs, outcome classes, and rubric/schema branches, including mode/threshold rationale, gaps, and verdict.",
+  "outcome_classes_covered": [
+    "a count that does not remove duplicates is rejected",
+    "a filtered subset is rejected",
+    "an aliased IN-predicate rewrite returning the same row is accepted",
+    "an aliased rewrite returning the same row is accepted",
+    "an aliased rewrite that leaves ASC implicit is accepted",
+    "identical query returns the recorded rows",
+    "identical query returns the recorded rows in the recorded order",
+    "the same count over a filtered subset returns a different row and is rejected",
+    "the same rows in the opposite order are rejected because the recorded query asked for an order",
+    "the same shape with a different filter value is rejected",
+    "the same two columns in the other order is a different row and is rejected"
+  ],
+  "passed": true,
+  "thresholds": {
+    "bad_maximum": 0.2,
+    "equivalence_tolerance": 0.15,
+    "good_minimum": 0.8,
+    "separation_margin": 0.05
+  }
+}

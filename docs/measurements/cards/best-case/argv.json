@@ -1,0 +1,50 @@
+{
+  "build": [
+    "python3",
+    "build.py",
+    "--preset",
+    "best-case",
+    "--out",
+    "$DEMO"
+  ],
+  "preflight": [
+    "python3",
+    "$GUIDE/preflight.py",
+    "--defer-missing-sdk",
+    "--json",
+    "--models",
+    "openrouter/qwen/qwen3-coder,openrouter/openai/gpt-oss-120b,openrouter/meta-llama/llama-3.3-70b-instruct",
+    "--dataset",
+    "dataset.jsonl",
+    "--evaluator",
+    "evaluator.py",
+    "--evaluator-method",
+    "execution"
+  ],
+  "calibration_ran": false,
+  "readiness": [
+    "python3",
+    "$GUIDE/readiness.py",
+    "--preflight",
+    "$EVIDENCE/02-preflight.json",
+    "--agent-knobs",
+    "$KNOBS/ready.json",
+    "--agent-source-root",
+    "$PROJECT",
+    "--selected-agent",
+    "$PROJECT/agent.py",
+    "--selected-agent-callable",
+    "run",
+    "--agent-origin",
+    "brought",
+    "--evaluator-origin",
+    "brought",
+    "--evaluator-method",
+    "execution",
+    "--task-kind",
+    "code-sql",
+    "--color",
+    "never",
+    "--ascii"
+  ]
+}

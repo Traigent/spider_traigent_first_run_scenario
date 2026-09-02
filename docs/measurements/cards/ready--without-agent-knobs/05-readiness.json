@@ -1,0 +1,195 @@
+{
+  "band": "PARTIAL",
+  "band_limited_by_confidence": false,
+  "caps": [
+    {
+      "action_kind": "proceed",
+      "asks": false,
+      "blocks": false,
+      "ceiling": 45,
+      "condition": "evaluator-unvalidated",
+      "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+    },
+    {
+      "action_kind": "vary-knobs",
+      "asks": false,
+      "blocks": false,
+      "ceiling": 45,
+      "condition": "agent-no-varying-knobs",
+      "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
+    }
+  ],
+  "confidence": 0.48,
+  "gaps": [
+    "evaluator-unvalidated: An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.",
+    "agent-no-varying-knobs: No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them.",
+    "agent/search-space could not be measured - no settings document was provided to this score",
+    "evaluation/calibration could not be measured - no calibration result was provided to this score",
+    "evaluation/task-fit: normalized-exact is a poor ruler for code-sql output",
+    "dataset/diversity could not be measured - not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean",
+    "evaluation/probe-spread could not be measured - not yet measured how far apart it scores a right and a wrong answer",
+    "agent/control-flow, output-contract, prompt, tools could not be measured - no reading of how the agent is built reached this score; reading the agent is what answers this",
+    "dataset/power: 240 to tune on / 60 held back; 240 examples - substantial comparison set"
+  ],
+  "knobs": [],
+  "overall": 45,
+  "pillars": [
+    {
+      "confidence": 0.0,
+      "name": "agent",
+      "score": 0,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "no reading of how the agent is built reached this score; reading the agent is what answers this",
+          "maximum": 7.0,
+          "measured": false,
+          "name": "control-flow",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "no reading of how the agent is built reached this score; reading the agent is what answers this",
+          "maximum": 8.0,
+          "measured": false,
+          "name": "output-contract",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "no reading of how the agent is built reached this score; reading the agent is what answers this",
+          "maximum": 8.0,
+          "measured": false,
+          "name": "prompt",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "no settings document was provided to this score",
+          "maximum": 100.0,
+          "measured": false,
+          "name": "search-space",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "no reading of how the agent is built reached this score; reading the agent is what answers this",
+          "maximum": 7.0,
+          "measured": false,
+          "name": "tools",
+          "value": 0.0,
+          "withheld": true
+        }
+      ]
+    },
+    {
+      "confidence": 0.8,
+      "name": "dataset",
+      "score": 98,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "bands present: easy, hard, medium, very-hard",
+          "maximum": 15.0,
+          "measured": true,
+          "name": "difficulty",
+          "value": 15.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean",
+          "maximum": 20.0,
+          "measured": false,
+          "name": "diversity",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "300/300 rows carry an expected output",
+          "maximum": 30.0,
+          "measured": true,
+          "name": "labels",
+          "value": 30.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "240 to tune on / 60 held back; 240 examples - substantial comparison set",
+          "maximum": 25.0,
+          "measured": true,
+          "name": "power",
+          "value": 23.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "300 collected of 300 rows; declared sources: real",
+          "maximum": 10.0,
+          "measured": true,
+          "name": "provenance",
+          "value": 10.0,
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "confidence": 0.45,
+      "name": "evaluation",
+      "score": 33,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "no calibration result was provided to this score",
+          "maximum": 40.0,
+          "measured": false,
+          "name": "calibration",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "not yet measured how far apart it scores a right and a wrong answer",
+          "maximum": 15.0,
+          "measured": false,
+          "name": "probe-spread",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "deterministic scoring rule",
+          "maximum": 20.0,
+          "measured": true,
+          "name": "reproducibility",
+          "value": 20.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "normalized-exact is a poor ruler for code-sql output",
+          "maximum": 25.0,
+          "measured": true,
+          "name": "task-fit",
+          "value": 8.0,
+          "withheld": false
+        }
+      ]
+    }
+  ],
+  "provenance_assumption": null,
+  "recommended_action": "proceed",
+  "schema_version": 2,
+  "status": "OK",
+  "weighted_average": 51,
+  "weights": {
+    "agent": 25.0,
+    "dataset": 40.0,
+    "evaluation": 35.0
+  }
+}

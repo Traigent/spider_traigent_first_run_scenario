@@ -1,0 +1,30 @@
+{
+  "build": [
+    "python3",
+    "build.py",
+    "--preset",
+    "logs-only",
+    "--out",
+    "$DEMO"
+  ],
+  "preflight": [
+    "python3",
+    "$GUIDE/preflight.py",
+    "--defer-missing-sdk",
+    "--json",
+    "--dataset",
+    "dataset.jsonl"
+  ],
+  "calibration_ran": false,
+  "readiness": [
+    "python3",
+    "$GUIDE/readiness.py",
+    "--preflight",
+    "$EVIDENCE/02-preflight.json",
+    "--task-kind",
+    "code-sql",
+    "--color",
+    "never",
+    "--ascii"
+  ]
+}

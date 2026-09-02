@@ -1,0 +1,2 @@
+$ python3 $GUIDE/preflight.py --defer-missing-sdk --json --models openrouter/qwen/qwen3-coder,openrouter/openai/gpt-oss-120b,openrouter/meta-llama/llama-3.3-70b-instruct --dataset dataset.jsonl --evaluator evaluator.py --evaluator-method exact
+exit=0

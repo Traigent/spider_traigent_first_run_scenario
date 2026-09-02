@@ -1,0 +1,50 @@
+{
+  "build": [
+    "python3",
+    "build.py",
+    "--preset",
+    "no-knobs",
+    "--out",
+    "$DEMO"
+  ],
+  "preflight": [
+    "python3",
+    "$GUIDE/preflight.py",
+    "--defer-missing-sdk",
+    "--json",
+    "--models",
+    "openrouter/qwen/qwen3-coder",
+    "--dataset",
+    "dataset.jsonl",
+    "--evaluator",
+    "evaluator.py",
+    "--evaluator-method",
+    "normalized-exact"
+  ],
+  "calibration_ran": false,
+  "readiness": [
+    "python3",
+    "$GUIDE/readiness.py",
+    "--preflight",
+    "$EVIDENCE/02-preflight.json",
+    "--agent-knobs",
+    "$KNOBS/no-knobs.json",
+    "--agent-source-root",
+    "$PROJECT",
+    "--selected-agent",
+    "$PROJECT/agent.py",
+    "--selected-agent-callable",
+    "run",
+    "--agent-origin",
+    "brought",
+    "--evaluator-origin",
+    "brought",
+    "--evaluator-method",
+    "normalized-exact",
+    "--task-kind",
+    "code-sql",
+    "--color",
+    "never",
+    "--ascii"
+  ]
+}

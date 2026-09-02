@@ -1,0 +1,326 @@
+{
+  "cases": [
+    {
+      "checks": {
+        "bad_fails": true,
+        "equivalent_is_accepted": true,
+        "equivalent_matches_good": true,
+        "good_passes": true,
+        "non_constant": true,
+        "partial_fails": true
+      },
+      "exception_probes": [
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "value-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "type-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "SyntaxError: the evaluator consumed the syntax-error output probe",
+          "kind": "syntax-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "JSONDecodeError: the evaluator consumed the json-decode-error output probe: line 1 column 1 (char 0)",
+          "kind": "json-decode-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "runtime-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        }
+      ],
+      "name": "one aggregate over one table - the recorded query rewritten with different spacing, keyword case, and a trailing semicolon",
+      "passed": true,
+      "permutation_probe": {
+        "available": true,
+        "distinguished": true,
+        "error": null,
+        "probe": "Treatments FROM professional_id) count(DISTINCT SELECT",
+        "score": 0.0,
+        "unavailable": null
+      },
+      "score_mode": "binary",
+      "scores": {
+        "bad": 0.0,
+        "equivalent_good": 1.0,
+        "good": 1.0,
+        "partial": 0.0
+      }
+    },
+    {
+      "checks": {
+        "bad_fails": true,
+        "equivalent_is_accepted": true,
+        "equivalent_matches_good": true,
+        "good_passes": true,
+        "non_constant": true,
+        "partial_fails": true
+      },
+      "exception_probes": [
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "value-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "type-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "SyntaxError: the evaluator consumed the syntax-error output probe",
+          "kind": "syntax-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "JSONDecodeError: the evaluator consumed the json-decode-error output probe: line 1 column 1 (char 0)",
+          "kind": "json-decode-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "runtime-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        }
+      ],
+      "name": "two columns with a quoted value - double quotes rewritten as single, and the case inside the value left alone",
+      "passed": true,
+      "permutation_probe": {
+        "available": true,
+        "distinguished": true,
+        "error": null,
+        "probe": "\"Brazil\" = Name  WHERE country FROM LifeExpectancy ,  Population  SELECT",
+        "score": 0.0,
+        "unavailable": null
+      },
+      "score_mode": "binary",
+      "scores": {
+        "bad": 0.0,
+        "equivalent_good": 1.0,
+        "good": 1.0,
+        "partial": 0.0
+      }
+    },
+    {
+      "checks": {
+        "bad_fails": true,
+        "equivalent_is_accepted": true,
+        "equivalent_matches_good": true,
+        "good_passes": true,
+        "non_constant": true,
+        "partial_fails": true
+      },
+      "exception_probes": [
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "value-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "type-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "SyntaxError: the evaluator consumed the syntax-error output probe",
+          "kind": "syntax-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "JSONDecodeError: the evaluator consumed the json-decode-error output probe: line 1 column 1 (char 0)",
+          "kind": "json-decode-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "runtime-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        }
+      ],
+      "name": "two aggregates in a list - comma spacing folded while the quoted continent name keeps its case",
+      "passed": true,
+      "permutation_probe": {
+        "available": true,
+        "distinguished": true,
+        "error": null,
+        "probe": "\"Asia\" = Continent  WHERE country FROM max(GNP) ,  sum(Population)  SELECT",
+        "score": 0.0,
+        "unavailable": null
+      },
+      "score_mode": "binary",
+      "scores": {
+        "bad": 0.0,
+        "equivalent_good": 1.0,
+        "good": 1.0,
+        "partial": 0.0
+      }
+    },
+    {
+      "checks": {
+        "bad_fails": true,
+        "equivalent_is_accepted": true,
+        "equivalent_matches_good": true,
+        "good_passes": true,
+        "non_constant": true,
+        "partial_fails": true
+      },
+      "exception_probes": [
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "value-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "type-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "SyntaxError: the evaluator consumed the syntax-error output probe",
+          "kind": "syntax-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": true,
+          "error": "JSONDecodeError: the evaluator consumed the json-decode-error output probe: line 1 column 1 (char 0)",
+          "kind": "json-decode-error",
+          "outcome": "propagated-error",
+          "score": null,
+          "unavailable": null
+        },
+        {
+          "available": true,
+          "distinguished_from_zero": false,
+          "error": null,
+          "kind": "runtime-error",
+          "outcome": "returned-zero",
+          "score": 0.0,
+          "unavailable": null
+        }
+      ],
+      "name": "a not-equal filter - a rewrite returning exactly the recorded rows is different text and is rejected",
+      "passed": true,
+      "permutation_probe": {
+        "available": true,
+        "distinguished": true,
+        "error": null,
+        "probe": "\"France\" != Citizenship WHERE singer FROM Name SELECT",
+        "score": 0.0,
+        "unavailable": null
+      },
+      "score_mode": "binary",
+      "scores": {
+        "bad": 0.0,
+        "equivalent_good": 1.0,
+        "good": 1.0,
+        "partial": 0.0
+      }
+    }
+  ],
+  "coverage_note": "Distinct names and payloads are structural checks only; calibration relies on the coding assistant's recorded evidence-backed semantic-coverage review of materially distinct inputs, outcome classes, and rubric/schema branches, including mode/threshold rationale, gaps, and verdict.",
+  "exception_probe_advisory": "This evaluator returned an ordinary 0.0 for one or more exception or malformed-output probes in: one aggregate over one table - the recorded query rewritten with different spacing, keyword case, and a trailing semicolon (value-error, type-error, runtime-error); two columns with a quoted value - double quotes rewritten as single, and the case inside the value left alone (value-error, type-error, runtime-error); two aggregates in a list - comma spacing folded while the quoted continent name keeps its case (value-error, type-error, runtime-error); a not-equal filter - a rewrite returning exactly the recorded rows is different text and is rejected (value-error, type-error, runtime-error). That is consistent with a swallowed parser or evaluator exception, but it can also be a deliberate rejection of an unsupported or malformed output with zero. This advisory does not prove the cause or change calibration PASS. Inspect the exception path and ensure genuine parser/runtime failures propagate distinctly before optimizing.",
+  "outcome_classes_covered": [
+    "a different filter value is rejected",
+    "a keyword-case and quote-style respelling of the recorded query is accepted",
+    "a multi-item select list is compared after comma padding is folded",
+    "a rewrite that returns exactly the recorded rows through an alias and <> is still different text and is rejected",
+    "case INSIDE a quoted value is a different value and is rejected",
+    "case inside the quoted filter value is preserved and rejected when it differs",
+    "comma padding and identifier case are folded",
+    "double-quoted and single-quoted spellings of the same literal are the same text",
+    "dropping one of the two aggregates is rejected",
+    "identical text scores 1.0",
+    "keyword case is folded and a double-quoted literal matches its single-quoted spelling",
+    "the opposite filter is rejected",
+    "the same count over a different column is rejected",
+    "the same count without DISTINCT is different text and is rejected",
+    "whitespace/keyword-case/trailing-semicolon variant of the recorded query is accepted"
+  ],
+  "passed": true,
+  "thresholds": {
+    "bad_maximum": 0.2,
+    "equivalence_tolerance": 0.15,
+    "good_minimum": 0.8,
+    "separation_margin": 0.05
+  }
+}

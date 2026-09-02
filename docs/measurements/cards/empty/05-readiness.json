@@ -1,0 +1,205 @@
+{
+  "band": "NOT READY",
+  "band_limited_by_confidence": false,
+  "caps": [
+    {
+      "action_kind": "get-data",
+      "asks": false,
+      "blocks": true,
+      "ceiling": 20,
+      "condition": "dataset-absent",
+      "reason": "No dataset was provided to this score, so nothing can be measured."
+    },
+    {
+      "action_kind": "connect-evaluator",
+      "asks": false,
+      "blocks": true,
+      "ceiling": 40,
+      "condition": "evaluator-absent",
+      "reason": "No evaluation method is connected, so no result can be trusted."
+    },
+    {
+      "action_kind": "vary-knobs",
+      "asks": false,
+      "blocks": false,
+      "ceiling": 45,
+      "condition": "agent-no-varying-knobs",
+      "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
+    }
+  ],
+  "confidence": 0.4,
+  "gaps": [
+    "dataset-absent: No dataset was provided to this score, so nothing can be measured.",
+    "evaluator-absent: No evaluation method is connected, so no result can be trusted.",
+    "agent-no-varying-knobs: No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them.",
+    "agent/search-space could not be measured - no settings document was provided to this score",
+    "evaluation/calibration: no evaluator",
+    "dataset/labels: no dataset provided to this score",
+    "dataset/power: no dataset provided to this score",
+    "dataset/provenance: no dataset provided to this score",
+    "dataset/difficulty, diversity could not be measured - no dataset provided to this score",
+    "evaluation/probe-spread, reproducibility, task-fit could not be measured - no evaluator",
+    "agent/control-flow, output-contract, prompt, tools could not be measured - no reading of how the agent is built reached this score; reading the agent is what answers this"
+  ],
+  "knobs": [],
+  "overall": 0,
+  "pillars": [
+    {
+      "confidence": 0.0,
+      "name": "agent",
+      "score": 0,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "no reading of how the agent is built reached this score; reading the agent is what answers this",
+          "maximum": 7.0,
+          "measured": false,
+          "name": "control-flow",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "no reading of how the agent is built reached this score; reading the agent is what answers this",
+          "maximum": 8.0,
+          "measured": false,
+          "name": "output-contract",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "no reading of how the agent is built reached this score; reading the agent is what answers this",
+          "maximum": 8.0,
+          "measured": false,
+          "name": "prompt",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "no settings document was provided to this score",
+          "maximum": 100.0,
+          "measured": false,
+          "name": "search-space",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "no reading of how the agent is built reached this score; reading the agent is what answers this",
+          "maximum": 7.0,
+          "measured": false,
+          "name": "tools",
+          "value": 0.0,
+          "withheld": true
+        }
+      ]
+    },
+    {
+      "confidence": 0.65,
+      "name": "dataset",
+      "score": 0,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "no dataset provided to this score",
+          "maximum": 15.0,
+          "measured": false,
+          "name": "difficulty",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "no dataset provided to this score",
+          "maximum": 20.0,
+          "measured": false,
+          "name": "diversity",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "no dataset provided to this score",
+          "maximum": 30.0,
+          "measured": true,
+          "name": "labels",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "no dataset provided to this score",
+          "maximum": 25.0,
+          "measured": true,
+          "name": "power",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "no dataset provided to this score",
+          "maximum": 10.0,
+          "measured": true,
+          "name": "provenance",
+          "value": 0.0,
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "confidence": 0.4,
+      "name": "evaluation",
+      "score": 0,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "no evaluator",
+          "maximum": 40.0,
+          "measured": true,
+          "name": "calibration",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "no evaluator",
+          "maximum": 15.0,
+          "measured": false,
+          "name": "probe-spread",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "no evaluator",
+          "maximum": 20.0,
+          "measured": false,
+          "name": "reproducibility",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "no evaluator",
+          "maximum": 25.0,
+          "measured": false,
+          "name": "task-fit",
+          "value": 0.0,
+          "withheld": false
+        }
+      ]
+    }
+  ],
+  "provenance_assumption": null,
+  "recommended_action": "get-data",
+  "schema_version": 2,
+  "status": "BLOCKED",
+  "weighted_average": 0,
+  "weights": {
+    "agent": 25.0,
+    "dataset": 40.0,
+    "evaluation": 35.0
+  }
+}

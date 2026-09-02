@@ -1,0 +1,702 @@
+{
+  "guide_revision": "6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9",
+  "runs": [
+    {
+      "tag": "empty",
+      "overall": 0,
+      "band": "NOT READY",
+      "recommended_action": "get-data",
+      "status": "BLOCKED",
+      "confidence": 0.4,
+      "pillars": {
+        "agent": 0,
+        "dataset": 0,
+        "evaluation": 0
+      },
+      "caps": [
+        {
+          "condition": "dataset-absent",
+          "ceiling": 20,
+          "blocks": true,
+          "action_kind": "get-data",
+          "reason": "No dataset was provided to this score, so nothing can be measured."
+        },
+        {
+          "condition": "evaluator-absent",
+          "ceiling": 40,
+          "blocks": true,
+          "action_kind": "connect-evaluator",
+          "reason": "No evaluation method is connected, so no result can be trusted."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
+        }
+      ],
+      "declared_evaluator_method": null,
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "logs-only",
+      "overall": 7,
+      "band": "NOT READY",
+      "recommended_action": "label-data",
+      "status": "BLOCKED",
+      "confidence": 0.4,
+      "pillars": {
+        "agent": 0,
+        "dataset": 18,
+        "evaluation": 0
+      },
+      "caps": [
+        {
+          "condition": "dataset-no-expected-outputs",
+          "ceiling": 30,
+          "blocks": true,
+          "action_kind": "label-data",
+          "reason": "Rows have inputs but no expected outputs, so there is nothing to score a configuration against."
+        },
+        {
+          "condition": "evaluator-absent",
+          "ceiling": 40,
+          "blocks": true,
+          "action_kind": "connect-evaluator",
+          "reason": "No evaluation method is connected, so no result can be trusted."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
+        }
+      ],
+      "declared_evaluator_method": null,
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "no-data",
+      "overall": 20,
+      "band": "NOT READY",
+      "recommended_action": "get-data",
+      "status": "BLOCKED",
+      "confidence": 0.62,
+      "pillars": {
+        "agent": 70,
+        "dataset": 0,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "dataset-absent",
+          "ceiling": 20,
+          "blocks": true,
+          "action_kind": "get-data",
+          "reason": "No dataset was provided to this score, so nothing can be measured."
+        },
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "agent-and-logs",
+      "overall": 25,
+      "band": "NOT READY",
+      "recommended_action": "label-data",
+      "status": "BLOCKED",
+      "confidence": 0.6,
+      "pillars": {
+        "agent": 70,
+        "dataset": 18,
+        "evaluation": 0
+      },
+      "caps": [
+        {
+          "condition": "dataset-no-expected-outputs",
+          "ceiling": 30,
+          "blocks": true,
+          "action_kind": "label-data",
+          "reason": "Rows have inputs but no expected outputs, so there is nothing to score a configuration against."
+        },
+        {
+          "condition": "evaluator-absent",
+          "ceiling": 40,
+          "blocks": true,
+          "action_kind": "connect-evaluator",
+          "reason": "No evaluation method is connected, so no result can be trusted."
+        }
+      ],
+      "declared_evaluator_method": null,
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "fake-ruler",
+      "overall": 25,
+      "band": "NOT READY",
+      "recommended_action": "repair-evaluator",
+      "status": "BLOCKED",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 28
+      },
+      "caps": [
+        {
+          "condition": "evaluator-invalid",
+          "ceiling": 25,
+          "blocks": true,
+          "action_kind": "repair-evaluator",
+          "reason": "The completed calibration failed at least one authored behavioral check, so this evaluator has not demonstrated that it ranks the task correctly. Every number below it is unreliable."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": false
+    },
+    {
+      "tag": "no-labels",
+      "overall": 30,
+      "band": "PARTIAL",
+      "recommended_action": "label-data",
+      "status": "BLOCKED",
+      "confidence": 0.62,
+      "pillars": {
+        "agent": 70,
+        "dataset": 18,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "dataset-no-expected-outputs",
+          "ceiling": 30,
+          "blocks": true,
+          "action_kind": "label-data",
+          "reason": "Rows have inputs but no expected outputs, so there is nothing to score a configuration against."
+        },
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "duplicated-data",
+      "overall": 35,
+      "band": "PARTIAL",
+      "recommended_action": "repair-dataset",
+      "status": "BLOCKED",
+      "confidence": 0.76,
+      "pillars": {
+        "agent": 70,
+        "dataset": 86,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "dataset-integrity-fail",
+          "ceiling": 35,
+          "blocks": true,
+          "action_kind": "repair-dataset",
+          "reason": "Some rows could not be read as data - malformed lines, or missing the input or expected-answer field."
+        },
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "no-eval",
+      "overall": 40,
+      "band": "PARTIAL",
+      "recommended_action": "connect-evaluator",
+      "status": "BLOCKED",
+      "confidence": 0.66,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 0
+      },
+      "caps": [
+        {
+          "condition": "evaluator-absent",
+          "ceiling": 40,
+          "blocks": true,
+          "action_kind": "connect-evaluator",
+          "reason": "No evaluation method is connected, so no result can be trusted."
+        }
+      ],
+      "declared_evaluator_method": null,
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "no-knobs",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "vary-knobs",
+      "status": "BLOCKED",
+      "confidence": 0.68,
+      "pillars": {
+        "agent": 0,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": true,
+          "action_kind": "vary-knobs",
+          "reason": "The agent was read and no setting it can vary was found, so every configuration a search compared would be identical."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "ready",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.68,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "sql-exec-stop",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.68,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 51
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (execution) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "execution",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "no-agent",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.48,
+      "pillars": {
+        "agent": 0,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "wrong-answers",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.68,
+      "pillars": {
+        "agent": 70,
+        "dataset": 91,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "wrong-wiring",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.68,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "hand-written",
+      "overall": 74,
+      "band": "WORKABLE",
+      "recommended_action": "add-examples",
+      "status": "OK",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 75,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-below-measurable-size",
+          "ceiling": 74,
+          "blocks": false,
+          "action_kind": "add-examples",
+          "reason": "only 8 comparable example(s) - one example moves the score by about 12 points, so a configuration can look better by winning a single row. Treat any difference as a hint, not a result. This run can write generated examples up to 28 rows in total while preserving your project's existing tuning/held-out split, and stops there. It asks first, and rows it writes are scored as generated."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "checked",
+      "overall": 86,
+      "band": "STRONG",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 83
+      },
+      "caps": [],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "best-case",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.68,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 51
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (execution) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "execution",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "best-case--off-method-calibration",
+      "overall": 91,
+      "band": "EXCELLENT",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 99
+      },
+      "caps": [],
+      "declared_evaluator_method": "execution",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "wrong-answers--calibrated",
+      "overall": 83,
+      "band": "STRONG",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 91,
+        "evaluation": 83
+      },
+      "caps": [],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "wrong-wiring--calibrated",
+      "overall": 25,
+      "band": "NOT READY",
+      "recommended_action": "repair-evaluator",
+      "status": "BLOCKED",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 28
+      },
+      "caps": [
+        {
+          "condition": "evaluator-invalid",
+          "ceiling": 25,
+          "blocks": true,
+          "action_kind": "repair-evaluator",
+          "reason": "The completed calibration failed at least one authored behavioral check, so this evaluator has not demonstrated that it ranks the task correctly. Every number below it is unreliable."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": false
+    },
+    {
+      "tag": "fake-ruler--uncalibrated",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.68,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "ready--without-agent-knobs",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.48,
+      "pillars": {
+        "agent": 0,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "proceed",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "grid-exact--code-sql",
+      "overall": 86,
+      "band": "STRONG",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 83
+      },
+      "caps": [],
+      "declared_evaluator_method": "exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "grid-normalized-exact--structured",
+      "overall": 86,
+      "band": "STRONG",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 83
+      },
+      "caps": [],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "structured",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "grid-normalized-exact--code-sql",
+      "overall": 86,
+      "band": "STRONG",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 83
+      },
+      "caps": [],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "grid-exact--structured",
+      "overall": 92,
+      "band": "EXCELLENT",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.87,
+      "pillars": {
+        "agent": 70,
+        "dataset": 98,
+        "evaluation": 100
+      },
+      "caps": [],
+      "declared_evaluator_method": "exact",
+      "declared_task_kind": "structured",
+      "calibration_ran": true,
+      "calibration_passed": true
+    }
+  ]
+}

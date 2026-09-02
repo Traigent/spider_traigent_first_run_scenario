@@ -1,0 +1,26 @@
+{
+  "source": "agent.py",
+  "knobs": {},
+  "build": {
+    "prompt": {
+      "present": true,
+      "few_shot": 0,
+      "evidence": "agent.py:115 assembles the prompt from the schema and the fixed instruction at agent.py:30, and agent.py:100-105 sends it as the single user message; no worked examples ride with it."
+    },
+    "output-contract": {
+      "present": true,
+      "evidence": "agent.py:30 INSTRUCTION asks for the SQLite query only, and agent.py:43-69 strip_code_fence pins the returned answer to bare query text."
+    },
+    "control-flow": {
+      "loop": false,
+      "bounded": true,
+      "evidence": "agent.py:109-116 run() is straight-line: one call_model call per input, no loop and no retry."
+    },
+    "tools": {
+      "used": false,
+      "declared": [],
+      "unreachable": [],
+      "evidence": "agent.py declares no tools; the agent's only outbound call is the completion at agent.py:100."
+    }
+  }
+}

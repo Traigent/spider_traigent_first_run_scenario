@@ -1,0 +1,32 @@
+$ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --task-kind code-sql --color never --ascii
+TRAIGENT OPTIMIZATION READINESS        7/100  NOT READY
+
+  BLOCKER  7/100 NOT READY is what your evidence supports, and that stands. Whether the
+           paid run may start is a separate question: 2 things have to be cleared
+           first, each marked FIX BEFORE PAID RUN below. Fix them, run this score
+           again, and the paid comparison can start.
+
+  AGENT       --------------------  0/100  (0 of 5 checks measured)
+    ? whether it ends, and on what                     no reading of how the agent is built reached this score; reading the agent is what answers this
+    ? whether the answer's shape is pinned down        no reading of how the agent is built reached this score; reading the agent is what answers this
+    ? what the model is told, and shown                no reading of how the agent is built reached this score; reading the agent is what answers this
+    ? how many settings-combinations there are to try  no settings document was provided to this score
+    ? tools it declares, and can reach                 no reading of how the agent is built reached this score; reading the agent is what answers this
+    not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
+
+  DATASET     ####----------------  18/100  (3 of 5 checks measured)
+    ? range of difficulty           no rows carry a difficulty tag - spread is unverified, not absent
+    ? repeated or dominant answers  duplication was not checked
+    !! answers to score against      40 rows, none with an expectation
+    !! examples to compare on        no tuning set and held-out set, so the result would be measured on the same rows the search used; 40 rows, 0 scoreable; 0 comparable examples - a wiring check, not a score
+    OK where the rows came from      40 collected of 40 rows; declared sources: real
+
+  EVALUATION  --------------------  0/100  (1 of 4 checks measured)
+    ? no evaluator
+
+  FIX BEFORE PAID RUN Rows have inputs but no expected outputs, so there is nothing to score a configuration against.
+  FIX BEFORE PAID RUN No evaluation method is connected, so no result can be trusted.
+  WOULD LIMIT TO 45 No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them.
+
+  Local pre-run planning estimate, not a probability or measured optimization result.
+exit=0
