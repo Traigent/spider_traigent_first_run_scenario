@@ -112,25 +112,38 @@ EVALUATOR_FILES = {
     "exact-match": COMPONENTS / "evaluator" / "exact_match.py",
     "exec-match": COMPONENTS / "evaluator" / "exec_match.py",
     "broken": COMPONENTS / "evaluator" / "broken.py",
+    "swapped": COMPONENTS / "evaluator" / "swapped.py",
     "missing": None,
 }
-DATASET_STATES = ("ready", "mini", "unlabeled", "missing")
+DATASET_STATES = (
+    "ready",
+    "mini",
+    "tiny",
+    "unlabeled",
+    "duplicated",
+    "wrong-answers",
+    "missing",
+)
 CALIBRATION_STATES = ("none", "present")
-VENV_STATES = ("none", "one-compatible", "old-python")
 GUIDE_MODES = ("clone", "local")
 
 # The share of each difficulty band the full slice holds back, kept by every smaller draw.
 HOLDOUT_SHARE = 0.2
 DEFAULT_PROVIDER = "openrouter"
 MINI_ROWS = 30
+# Small enough that the guide's own floor for a measurable comparison bites: it caps a
+# project whose tuning side holds fewer than ten rows. Ten total leaves eight to tune on,
+# which is the state of someone who has written a handful of examples by hand.
+TINY_ROWS = 10
+# How many of the rows a damaged dataset ships are damaged, and how. Recorded in the manifest
+# so a run can be described honestly: the questions and answers are Spider's, the damage is
+# this repository's.
+DAMAGED_ROWS = 60
+DUPLICATED_SHARE = 0.5
+DAMAGED_STATES = ("duplicated", "wrong-answers")
 UNLABELED_ROWS = 40
 SAMPLE_SEED = 42
 
-# The interpreter a "one-compatible" venv is built with must sit inside the guide's
-# supported 3.11-3.13 range; "old-python" must sit below it.
-COMPATIBLE_PYTHONS = ("python3.13", "python3.12", "python3.11")
-OLD_PYTHON = "python3.10"
-PROJECT_VENV_NAME = ".venv-project"
 # Where a project keeps the probe answers it uses to check its own scorer. The guide reads
 # this path, and a project that has one can have its evaluator validated at the opening gate
 # instead of being held at the unvalidated ceiling.
@@ -144,6 +157,9 @@ CALIBRATION_SOURCES = {
     # point is that it fails the same questions the honest one passes. One file rather than
     # a byte-identical copy, because a copy can only drift away from what it is comparing to.
     "broken": _TEXT_PROBES,
+    # The mis-wired scorer never looks at the answer, so it fails the same probes for the
+    # opposite reason: it marks the right answer wrong instead of the wrong answer right.
+    "swapped": _TEXT_PROBES,
 }
 # The guide creates this itself and stops if it already exists, so a demo must never have one.
 FORBIDDEN_VENV_NAME = ".venv-traigent"
@@ -154,6 +170,7 @@ EVALUATOR_FACTS = {
     "exact-match": {"method": "normalized-exact", "executes_candidate_output": False},
     "exec-match": {"method": "execution", "executes_candidate_output": True},
     "broken": {"method": "normalized-exact", "executes_candidate_output": False},
+    "swapped": {"method": "normalized-exact", "executes_candidate_output": False},
 }
 
 PRESETS = {
@@ -168,6 +185,34 @@ PRESETS = {
     "no-labels": {"agent": "ready", "dataset": "unlabeled", "eval": "exact-match"},
     "no-knobs": {"agent": "no-knobs", "dataset": "ready", "eval": "exact-match"},
     "sql-exec-stop": {"agent": "ready", "dataset": "ready", "eval": "exec-match"},
+    "fake-ruler": {
+        "agent": "ready",
+        "dataset": "ready",
+        "eval": "broken",
+        "calibration": "present",
+    },
+    "agent-and-logs": {"agent": "ready", "dataset": "unlabeled", "eval": "missing"},
+    "logs-only": {"agent": "missing", "dataset": "unlabeled", "eval": "missing"},
+    "no-agent": {"agent": "missing", "dataset": "ready", "eval": "exact-match"},
+    "no-data": {"agent": "ready", "dataset": "missing", "eval": "exact-match"},
+    "empty": {"agent": "missing", "dataset": "missing", "eval": "missing"},
+    "wrong-wiring": {"agent": "ready", "dataset": "ready", "eval": "swapped"},
+    "duplicated-data": {
+        "agent": "ready",
+        "dataset": "duplicated",
+        "eval": "exact-match",
+    },
+    "wrong-answers": {
+        "agent": "ready",
+        "dataset": "wrong-answers",
+        "eval": "exact-match",
+    },
+    "hand-written": {
+        "agent": "ready",
+        "dataset": "tiny",
+        "eval": "exact-match",
+        "calibration": "present",
+    },
     "best-case": {
         "agent": "ready",
         "dataset": "ready",
@@ -183,6 +228,16 @@ PRESET_NOTES = {
     "no-labels": "questions with no expected answers",
     "no-knobs": "an agent with nothing to search",
     "sql-exec-stop": "an evaluator that executes the candidate SQL",
+    "fake-ruler": "a scorer that marks everything correct, and probes that catch it",
+    "agent-and-logs": "an agent, and logged questions with no answers and no scorer",
+    "logs-only": "nothing but logged questions -- all three pieces have to be built",
+    "no-agent": "data and a scorer, and nothing to run them against",
+    "no-data": "an agent and a scorer, and nothing to measure them on",
+    "empty": "an empty directory",
+    "wrong-wiring": "a scorer comparing the question with the answer, never the output",
+    "duplicated-data": "half the rows appear twice, question and answer both",
+    "wrong-answers": "every answer runs, and answers a different question",
+    "hand-written": "ten examples written by hand, and probes kept for the scorer",
     "best-case": "tunable, complete, probes kept, and scored by running the SQL",
 }
 
@@ -246,7 +301,12 @@ def select_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
     """
     if state == "ready":
         return list(rows)
-    wanted = MINI_ROWS if state == "mini" else UNLABELED_ROWS
+    wanted = {
+        "mini": MINI_ROWS,
+        "tiny": TINY_ROWS,
+        "duplicated": DAMAGED_ROWS,
+        "wrong-answers": DAMAGED_ROWS,
+    }.get(state, UNLABELED_ROWS)
     by_band: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for row in rows:
         band = by_band.setdefault(
@@ -280,6 +340,40 @@ def select_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
             picked.extend(pool[:split_take])
     picked.sort(key=lambda r: (r["metadata"]["difficulty"], r["input"]))
     return picked
+
+
+def damage_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
+    """The rows a deliberately damaged dataset ships.
+
+    `duplicated` repeats half of them, which is the shape of a set assembled by appending an
+    export to itself: the same question and the same answer, twice, so a score computed over
+    it counts the same evidence more than once.
+
+    `wrong-answers` keeps every question and every answer and pairs them with each other,
+    which is what a column read one row out of step looks like. The rotation happens inside
+    each database, so every answer still runs and still returns rows -- it simply answers a
+    different question. Nothing is invented and nothing is deleted; the pairing is wrong, and
+    a pairing that runs is far harder to notice than one that does not.
+    """
+    if state == "duplicated":
+        repeated = rows[: max(1, int(len(rows) * DUPLICATED_SHARE))]
+        return sorted(
+            rows + repeated, key=lambda r: (r["metadata"]["difficulty"], r["input"])
+        )
+    # Rotated within each database, not across all of them. An answer borrowed from another
+    # database does not even run, which makes the damage obvious for the wrong reason -- the
+    # interesting version is an answer that runs perfectly and answers a different question.
+    by_database: dict[str, list[int]] = {}
+    for position, row in enumerate(rows):
+        by_database.setdefault(row["metadata"]["db_id"], []).append(position)
+    answers = [row["output"] for row in rows]
+    for positions in by_database.values():
+        if len(positions) < 2:
+            continue
+        borrowed = [answers[p] for p in positions[1:]] + [answers[positions[0]]]
+        for position, answer in zip(positions, borrowed):
+            answers[position] = answer
+    return [{**row, "output": answer} for row, answer in zip(rows, answers)]
 
 
 def project_row(row: dict[str, Any], state: str) -> dict[str, Any]:
@@ -354,34 +448,6 @@ def copy_databases(
     return needed
 
 
-def resolve_interpreter(state: str) -> str | None:
-    """The interpreter a pre-existing project environment would be built with.
-
-    None when none was asked for. Resolved before anything is written, so a missing
-    interpreter refuses the build instead of abandoning a half-made one.
-    """
-    if state == "none":
-        return None
-    if state == "old-python":
-        found = shutil.which(OLD_PYTHON)
-        if found is None:
-            raise BuildError(
-                f"--existing-venv old-python needs {OLD_PYTHON} on PATH, and it is not there. "
-                "Install it or choose another --existing-venv value; this build will not "
-                "quietly substitute a different interpreter, because the version is the "
-                "entire point of that option."
-            )
-        return found
-    for name in COMPATIBLE_PYTHONS:
-        found = shutil.which(name)
-        if found is not None:
-            return found
-    raise BuildError(
-        "--existing-venv one-compatible needs one of "
-        f"{', '.join(COMPATIBLE_PYTHONS)} on PATH, and none is there."
-    )
-
-
 def check_guide_source(guide_src: Path | None) -> None:
     """Refuse a guide checkout that is not one, before the demo directory is created."""
     if guide_src is None:
@@ -407,44 +473,6 @@ def check_calibration_source(evaluator_state: str) -> None:
         )
     if not source.exists():
         raise BuildError(f"calibration cases missing from the repository: {source}")
-
-
-def make_project_venv(out: Path, interpreter: str | None) -> dict[str, Any] | None:
-    """A pre-existing environment for the demo project, when one is asked for.
-
-    This is scenery, not plumbing: nothing in the demo runs from it. It exists so a run can
-    start from a project that already has an environment, and so the version of that
-    environment can be chosen.
-    """
-    if interpreter is None:
-        return None
-    venv_dir = out / PROJECT_VENV_NAME
-    result = subprocess.run(
-        [interpreter, "-m", "venv", str(venv_dir)],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise BuildError(
-            f"could not create {venv_dir} with {interpreter}: "
-            f"{result.stderr.strip() or result.stdout.strip()}"
-        )
-    version = subprocess.run(
-        [
-            str(venv_dir / "bin" / "python"),
-            "-c",
-            "import sys; print('.'.join(map(str, sys.version_info[:3])))",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
-    return {
-        "path": PROJECT_VENV_NAME,
-        "interpreter": interpreter,
-        "python_version": version,
-    }
 
 
 def copy_calibration(evaluator_state: str, project: Path) -> dict[str, Any] | None:
@@ -531,8 +559,6 @@ def inventory(out: Path) -> list[dict[str, Any]]:
     files = []
     for path in sorted(out.rglob("*")):
         if path.is_dir() or path.is_symlink():
-            continue
-        if PROJECT_VENV_NAME in path.relative_to(out).parts:
             continue
         files.append(
             {
@@ -702,7 +728,6 @@ class Plan:
     calibration: str
     provider: str
     rows: list[dict[str, Any]]
-    interpreter: str | None
     guide_source: Path | None
 
     @property
@@ -759,7 +784,6 @@ def plan_demo(args: argparse.Namespace) -> Plan:
     if args.guide == "local":
         check_guide_source(args.guide_src)
         guide_source = args.guide_src
-    interpreter = resolve_interpreter(args.existing_venv)
     if calibration == "present":
         check_calibration_source(evaluator)
 
@@ -778,7 +802,6 @@ def plan_demo(args: argparse.Namespace) -> Plan:
         calibration=calibration,
         provider=provider,
         rows=rows,
-        interpreter=interpreter,
         guide_source=guide_source,
     )
 
@@ -807,7 +830,12 @@ def write_demo(plan: Plan) -> dict[str, Any]:
     project = plan.project
     project.mkdir()
     created: list[str] = []
-    projected = [project_row(row, plan.dataset) for row in plan.rows]
+    shipped_rows = (
+        damage_rows(plan.rows, plan.dataset)
+        if plan.dataset in DAMAGED_STATES
+        else plan.rows
+    )
+    projected = [project_row(row, plan.dataset) for row in shipped_rows]
 
     if plan.agent_source is not None:
         shutil.copy2(plan.agent_source, project / "agent.py")
@@ -821,10 +849,10 @@ def write_demo(plan: Plan) -> dict[str, Any]:
     if plan.rows:
         write_jsonl(project / "dataset.jsonl", projected)
         created.append("dataset.jsonl")
-        write_catalog(project / "catalog.json", plan.rows)
+        write_catalog(project / "catalog.json", shipped_rows)
         created.append("catalog.json")
         databases = copy_databases(
-            plan.rows,
+            shipped_rows,
             project / "databases",
             calibration_databases(plan.evaluator, plan.calibration),
         )
@@ -859,7 +887,6 @@ def write_demo(plan: Plan) -> dict[str, Any]:
     splits = Counter(
         row["metadata"]["split"] for row in projected if "split" in row["metadata"]
     )
-    venv_record = make_project_venv(project, plan.interpreter)
 
     created.append("README.md")
     readme = render_readme(
@@ -888,8 +915,12 @@ def write_demo(plan: Plan) -> dict[str, Any]:
             "dataset": {
                 "state": plan.dataset,
                 "path": "dataset.jsonl" if plan.rows else None,
-                "rows": len(plan.rows),
+                "rows": len(projected),
                 "labelled": plan.dataset not in ("unlabeled", "missing"),
+                # The questions and answers are Spider's. Damage is this repository's, and
+                # saying which is which is the difference between a fixture and a false
+                # claim about the benchmark.
+                "damage": plan.dataset if plan.dataset in DAMAGED_STATES else None,
                 "difficulty_counts": dict(sorted(bands.items())),
                 "split_counts": dict(sorted(splits.items())),
                 "databases": databases,
@@ -902,7 +933,6 @@ def write_demo(plan: Plan) -> dict[str, Any]:
                 **(EVALUATOR_FACTS.get(plan.evaluator, {})),
                 "calibration": calibration_record,
             },
-            "project_venv": venv_record,
             "guide": guide_record,
         },
         "data_licence": "CC-BY-SA-4.0",
@@ -924,11 +954,58 @@ def write_demo(plan: Plan) -> dict[str, Any]:
             "calibration": plan.calibration,
             "provider": plan.provider,
         },
-        "rows": len(plan.rows),
+        "rows": len(projected),
         "databases": len(databases),
-        "project_venv": venv_record,
         "created": created,
         "handoff": plan.handoff,
+    }
+
+
+def cmd_suite(args: argparse.Namespace) -> dict[str, Any]:
+    """Build every preset at once, each in its own directory under one root.
+
+    A bank of starting states is only useful if making the whole bank is one command. Each
+    demo is built exactly as `demo` builds it, and one failing preset does not take the
+    others with it -- the failure is reported against the preset that caused it.
+    """
+    root = args.out.expanduser()
+    check_output_path(root)
+    root.mkdir(parents=True)
+
+    built: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for name in sorted(PRESETS):
+        one = argparse.Namespace(
+            out=root / name,
+            preset=name,
+            agent=None,
+            dataset=None,
+            eval=None,
+            calibration=None,
+            provider=args.provider,
+            guide=args.guide,
+            guide_src=args.guide_src,
+        )
+        try:
+            result = cmd_demo(one)
+        except BuildError as error:
+            failed.append({"preset": name, "error": str(error)})
+            continue
+        built.append(
+            {
+                "preset": name,
+                "project": result["project"],
+                "rows": result["rows"],
+                "components": result["components"],
+            }
+        )
+
+    return {
+        "ok": not failed,
+        "root": str(root),
+        "built": built,
+        "failed": failed,
+        "handoff": HANDOFF_LOCAL if args.guide == "local" else HANDOFF_CLONE,
     }
 
 
@@ -950,7 +1027,6 @@ def cmd_list(args: argparse.Namespace) -> dict[str, Any]:
             "dataset": list(DATASET_STATES),
             "eval": sorted(EVALUATOR_FILES),
             "calibration": list(CALIBRATION_STATES),
-            "existing-venv": list(VENV_STATES),
             "guide": list(GUIDE_MODES),
         },
         "evaluators": EVALUATOR_FACTS,
@@ -1063,9 +1139,6 @@ def render_demo(result: dict[str, Any]) -> str:
             else ""
         ),
     ]
-    if result["project_venv"]:
-        venv = result["project_venv"]
-        lines.append(f"  venv       {venv['path']} (Python {venv['python_version']})")
     lines += [
         "",
         "Start a fresh agent with that project as its working directory, and give it",
@@ -1082,12 +1155,31 @@ def render_list(result: dict[str, Any]) -> str:
     ]
     for preset in result["presets"]:
         lines.append(
-            f"{preset['name']:<16} {preset['agent']:<10} {preset['dataset']:<10} "
-            f"{preset['eval']:<14} {preset['calibration']:<8} {preset['note']}"
+            f"{preset['name']:<17} {preset['agent']:<10} {preset['dataset']:<14} "
+            f"{preset['eval']:<13} {preset['calibration']:<8} {preset['note']}"
         )
     lines.append("")
     for name, values in result["states"].items():
         lines.append(f"--{name}: {', '.join(values)}")
+    return "\n".join(lines)
+
+
+def render_suite(result: dict[str, Any]) -> str:
+    lines = [f"Built {len(result['built'])} projects under {result['root']}", ""]
+    for entry in result["built"]:
+        parts = entry["components"]
+        lines.append(
+            f"  {entry['preset']:<17} {parts['agent']:<8} {parts['dataset']:<14} "
+            f"{parts['eval']:<12} {entry['rows']:>4} rows"
+        )
+    for entry in result["failed"]:
+        lines.append(f"  {entry['preset']:<17} FAILED: {entry['error']}")
+    lines += [
+        "",
+        "Point one fresh agent at one project's directory, and give it exactly this:",
+        "",
+    ]
+    lines += ["    " + line for line in result["handoff"].splitlines()]
     return "\n".join(lines)
 
 
@@ -1111,6 +1203,7 @@ RENDERERS: dict[str, Callable[[dict[str, Any]], str]] = {
     "demo": render_demo,
     "list": render_list,
     "check": render_check,
+    "suite": render_suite,
 }
 
 
@@ -1135,6 +1228,15 @@ def build_parser() -> argparse.ArgumentParser:
         "check", help="validate this repository's own components and data"
     )
     check.set_defaults(func=cmd_check, name="check")
+
+    suite = commands.add_parser(
+        "suite", help="build every preset at once, each in its own directory"
+    )
+    suite.add_argument("--out", type=Path, required=True, metavar="DIR")
+    suite.add_argument("--provider", choices=PROVIDERS)
+    suite.add_argument("--guide", choices=GUIDE_MODES, default="clone")
+    suite.add_argument("--guide-src", type=Path, metavar="DIR")
+    suite.set_defaults(func=cmd_suite, name="suite")
 
     demo = commands.add_parser("demo", help="build one demo project")
     demo.add_argument(
@@ -1174,12 +1276,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--calibration",
         choices=CALIBRATION_STATES,
         help="ship the probe answers a project would use to check its own scorer",
-    )
-    demo.add_argument(
-        "--existing-venv",
-        choices=VENV_STATES,
-        default="none",
-        help="ship the project with an environment already in it",
     )
     demo.add_argument(
         "--guide",

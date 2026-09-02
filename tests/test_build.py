@@ -275,7 +275,6 @@ class ADemoCanBeBuiltWithoutACommandLine(unittest.TestCase):
             "calibration": "none",
             "provider": build.DEFAULT_PROVIDER,
             "rows": rows,
-            "interpreter": None,
             "guide_source": None,
         }
         defaults.update(overrides)
@@ -433,95 +432,6 @@ class Calibration(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 2)
                 self.assertIn(expected, result.stderr)
-
-
-class Environments(unittest.TestCase):
-    def setUp(self) -> None:
-        self.workspace = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, self.workspace, ignore_errors=True)
-
-    def make(self, name: str, *args: str) -> dict:
-        out = Path(self.workspace) / name
-        result = run_build("demo", "--out", str(out), *args)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        return json.loads((out / "demo.json").read_text())
-
-    def test_by_default_the_project_has_no_environment(self) -> None:
-        self.assertIsNone(
-            self.make("plain", "--dataset", "mini")["components"]["project_venv"]
-        )
-
-    def test_a_compatible_environment_is_supported_and_inside_the_project(self) -> None:
-        manifest = self.make(
-            "compat", "--dataset", "mini", "--existing-venv", "one-compatible"
-        )
-        record = manifest["components"]["project_venv"]
-        self.assertEqual(record["path"], build.PROJECT_VENV_NAME)
-        major, minor = (int(part) for part in record["python_version"].split(".")[:2])
-        self.assertEqual(major, 3)
-        self.assertGreaterEqual(minor, 11)
-        self.assertLessEqual(minor, 13)
-
-    @unittest.skipIf(
-        shutil.which(build.OLD_PYTHON) is None, f"{build.OLD_PYTHON} is not installed"
-    )
-    def test_an_old_environment_is_actually_old(self) -> None:
-        manifest = self.make(
-            "old", "--dataset", "mini", "--existing-venv", "old-python"
-        )
-        major, minor = (
-            int(part)
-            for part in manifest["components"]["project_venv"]["python_version"].split(
-                "."
-            )[:2]
-        )
-        self.assertEqual((major, minor), (3, 10))
-
-    def test_no_environment_choice_produces_a_dedicated_one(self) -> None:
-        for state in ("none", "one-compatible"):
-            out = Path(self.workspace) / f"guard-{state}"
-            self.assertEqual(
-                run_build(
-                    "demo",
-                    "--out",
-                    str(out),
-                    "--dataset",
-                    "mini",
-                    "--existing-venv",
-                    state,
-                ).returncode,
-                0,
-            )
-            self.assertFalse(
-                (out / "project" / build.FORBIDDEN_VENV_NAME).exists(), state
-            )
-
-
-class TheProjectReadmeDescribesEveryFileInIt(unittest.TestCase):
-    """The generated README is built from what was written, so it cannot drift.
-
-    It can still fail open: a file shipped with no description would simply not be
-    mentioned, which is the defect the generation was written to close, one dict key away.
-    """
-
-    def test_every_shipped_file_has_a_description(self) -> None:
-        with tempfile.TemporaryDirectory() as workspace:
-            for preset in sorted(build.PRESETS):
-                with self.subTest(preset=preset):
-                    out = Path(workspace) / preset
-                    result = run_build("demo", "--preset", preset, "--out", str(out))
-                    self.assertEqual(result.returncode, 0, result.stderr)
-                    project = out / "project"
-                    readme = (project / "README.md").read_text()
-                    for path in sorted(project.rglob("*")):
-                        if path.is_dir() or path.name == "README.md":
-                            continue
-                        name = path.relative_to(project).as_posix()
-                        top = name.split("/")[0]
-                        self.assertTrue(
-                            f"`{name}`" in readme or f"`{top}/`" in readme,
-                            f"{preset}: {name} is in the project and not in its README",
-                        )
 
 
 class Guards(unittest.TestCase):

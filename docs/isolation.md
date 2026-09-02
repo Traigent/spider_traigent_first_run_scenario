@@ -53,19 +53,16 @@ it.
 which already cover what these projects need. Anything declared here would add nothing and
 could only disagree with what is about to be installed.
 
-`--existing-venv` is separate from both. It puts an environment into the project as
-*scenery* -- a project that already has one, which is how most projects arrive:
+A demo used to be able to ship a pre-existing environment of its own, on a supported
+interpreter or on one below the floor. That option is gone. Measured before removing it: all
+three of its settings produced byte-identical preflight and readiness output, because the
+guide builds its own environment regardless and never reads a project's. It was scenery that
+changed nothing, and it cost a machine prerequisite -- a second interpreter installed just so
+the option could be built -- plus a step in CI whose only job was to keep that interpreter on
+the path.
 
-| | |
-|---|---|
-| `none` | no environment. The default. |
-| `one-compatible` | one environment on a supported interpreter, inside the project root. |
-| `old-python` | one environment on Python 3.10, below the supported floor. |
-
-Nothing in the demo runs from it. It is there so a run can start from a project that has one
-and what happens next can be observed. This repository asserts nothing about what the guide
-does with it -- that behaviour belongs to the guide, and testing it from here would only pin
-someone else's decision in place.
+If the guide ever reports which interpreter it chose, the option becomes worth having again,
+because then there would be something to observe.
 
 ## Running one
 

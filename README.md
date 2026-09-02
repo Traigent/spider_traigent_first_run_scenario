@@ -29,6 +29,12 @@ python build.py check                                   # confirm this clone is 
 python build.py demo --preset ready --out ~/demos/first-try
 ```
 
+Or build the whole bank at once, each project in its own directory:
+
+```bash
+python build.py suite --out ~/demos/bank
+```
+
 No installation and no dependencies. `build.py` is standard library only, and the data is
 committed, so a fresh clone can build immediately and offline.
 
@@ -70,11 +76,10 @@ put in, and an agent that can read that is not being tested on anything.
 | Flag | Values |
 |---|---|
 | `--agent` | `ready` · `no-knobs` · `missing` |
-| `--dataset` | `ready` (300) · `mini` (30) · `unlabeled` (40) · `missing` |
-| `--eval` | `exact-match` · `exec-match` · `broken` · `missing` |
+| `--dataset` | `ready` (300) · `mini` (30) · `tiny` (10) · `unlabeled` (40) · `duplicated` · `wrong-answers` · `missing` |
+| `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `missing` |
 | `--provider` | `openrouter` (default) · `direct` |
 | `--calibration` | `none` · `present` (probe answers for the scorer) |
-| `--existing-venv` | `none` · `one-compatible` · `old-python` |
 | `--guide` | `clone` · `local` (with `--guide-src`) |
 
 Presets are shorthand for the combinations worth having a name:
@@ -83,14 +88,41 @@ Presets are shorthand for the combinations worth having a name:
 |---|---|
 | `ready` | everything present and tunable, scorer not yet checked |
 | `checked` | the same, and the team keeps probe answers for its scorer |
-| `no-eval` | no way to score an answer |
-| `no-labels` | questions with no expected answers |
-| `no-knobs` | an agent with nothing to search |
+| `best-case` | the same, scored by execution accuracy -- the metric Spider itself uses |
 | `sql-exec-stop` | an evaluator that runs the SQL the model wrote -- Spider's own metric |
-| `best-case` | the same, and the team keeps probe answers for its scorer |
+| `hand-written` | ten examples written by hand, and probes kept for the scorer |
+| `no-knobs` | an agent with nothing to search |
+| `no-eval` | an agent and data, and no way to score an answer |
+| `no-agent` | data and a scorer, and nothing to run them against |
+| `no-data` | an agent and a scorer, and nothing to measure them on |
+| `no-labels` | questions with no expected answers |
+| `agent-and-logs` | an agent, and logged questions with no answers and no scorer |
+| `logs-only` | nothing but logged questions -- all three pieces have to be built |
+| `empty` | an empty directory |
+| `fake-ruler` | a scorer that marks everything correct, and probes that catch it |
+| `wrong-wiring` | a scorer comparing the question with the answer, never the output |
+| `duplicated-data` | half the rows appear twice, question and answer both |
+| `wrong-answers` | every answer runs, and answers a different question |
 
 Individual flags override a preset, so `--preset ready --eval missing` is the ready project
 with the evaluator taken out.
+
+## Data that is wrong on purpose
+
+Three of the seventeen presets ship a project whose data or scorer is broken. Real projects
+arrive that way, and the run's job is not to notice and stop -- it is to notice, repair, and
+carry on to a result that means something. These are the states that make it show its work.
+
+| | what is wrong |
+|---|---|
+| `duplicated-data` | half the rows appear twice -- the same question and the same answer -- which is what appending an export to itself looks like. A score over it counts the same evidence more than once. |
+| `wrong-answers` | every question keeps a real answer, and it is a different question's answer. The rotation happens inside each database, so every answer still runs and still returns rows. That is the hard version: an answer borrowed from another database would not execute and would announce itself. |
+| `wrong-wiring` | the scorer compares the question with the recorded answer and never looks at what the model produced. It runs, it returns a number, and every row ties at zero. |
+
+**The questions and answers are Spider's. What is wrong with them is this repository's**, and
+`demo.json` records which by name. The committed slice is never touched -- damage happens on
+the way into a demo, and a test asserts the file on disk is unchanged afterwards. Every
+answer in a damaged dataset is still a real Spider answer; none is invented.
 
 ## Which vendor answers
 
@@ -146,94 +178,114 @@ The first-run guide's `references/run-safety.md` currently declines to execute a
 does so, ending the run before the evaluator executes. So the presets ask different
 questions: `checked` asks whether a first run works end to end on a non-executing proxy,
 `best-case` asks what the project scores when marked the benchmark's way, and
-`sql-exec-stop` asks whether that boundary holds.
+`sql-exec-stop` asks about the one thing in this bank that is a boundary rather than a gap:
+an executing scorer is not something the run repairs and moves past, it is where this guide
+hands over.
 [docs/eval-methods.md](docs/eval-methods.md) has the detail, including a measured problem
 with how the two scorers are graded.
 
-## What each preset scores
+## Where each preset starts, and what the run has to do about it
 
-Measured with the first-run guide's own `preflight.py`, `calibrate_evaluator.py` and
-`readiness.py`, at guide revision `6ec2b9c1` on 2026-09-01.
+The scores below are **opening** scores. They are not a verdict on the project and they are
+not the point of it.
 
-One number per project, not two. Reading the agent's source is part of the opening gate, not
-an optional extra: the guide is explicit that "every guided run that found an agent does this
-read -- not conditionally", and it hands that read to `readiness.py` as `--agent-knobs`. So a
-run of one of these projects produces one opening score, and it is the one in the table.
+The first-run guide exists to take a project from whatever state it is in to a working first
+optimization. Its own words: it "works whether the project already has all, some, or none of"
+an agent, a dataset and a way to score answers. When something is missing it creates it; when
+something is broken it repairs it; then it scores again, and the run carries on. A low opening
+number is not a failure -- it is the size of the gap the run has to close before it can
+measure anything, and closing it is the job.
 
-Invoking `readiness.py` by hand without that flag reports a lower number, but that is not a
-second reading of the project -- it is the tool saying it was not given the agent read it
-requires, which the card itself states as a limit rather than a finding. Reproducing the table
-means doing the read, because the read is part of the measurement.
+So read the table as seventeen starting points, and the question each one asks is the same:
+**can the run get from here to a real result, and does it say honestly what it had to build
+along the way?** A project that opens at 25 and reaches a genuine optimization is a better
+demonstration than one that opens at 86, because the first one shows the work.
 
-What is fair to hold against these figures is narrower, and it is this: the agent read used
-here was written by hand to stand in for the one an assistant writes. It cites real values on
-the real call path, which is what the guide asks for, so the numbers are a faithful reading --
-but a different honest read of the same agent could land a few points either way.
+One number per project at the opening, not two. Reading the agent's source is part of that
+gate, not an optional extra -- the guide is explicit that "every guided run that found an
+agent does this read, not conditionally" -- and it hands that read to `readiness.py` as
+`--agent-knobs`. Invoking the scorer by hand without that flag reports something lower, but
+that is the tool saying it was not given the read it requires, not a second opinion about the
+project.
 
-The point of the table is that the presets are genuinely different: each lands the run
-somewhere else.
+Two caveats worth stating rather than burying. The agent read used here was written by hand to
+stand in for the one an assistant writes; it cites real values on the real call path, so the
+figures are faithful, but another honest read could move them a few points. And a real run
+scores twice -- once at the opening and again after it has created or repaired anything -- so
+the number a finished run reports is not the one in this table, and should not be.
 
-| preset | overall | band | what the guide is told to do next | caps |
-|---|---|---|---|---|
-| `no-labels` | 30 | PARTIAL | label the data | 2 |
-| `no-eval` | 40 | PARTIAL | connect an evaluator | 1 |
-| `ready` | 45 | PARTIAL | proceed | 1 |
-| `no-knobs` | 45 | PARTIAL | find something to vary | 2 |
-| `sql-exec-stop` | 45 | PARTIAL | proceed -- **and no containment cap is raised** | 1 |
-| `checked` | **86** | **STRONG** | proceed | none |
-| `best-case` | **91** | **EXCELLENT** | proceed | none |
+Measured with the guide's own `preflight.py`, `calibrate_evaluator.py` and `readiness.py`, at
+guide revision `6ec2b9c1`.
 
-Dataset pillar is **98** in the six presets that ship the full 300-row labelled slice --
-every one above except `no-labels`, which ships 40 rows with no expected answer and no
-holdout split, and so has nothing for that pillar to read.
+| preset | opening | band | what the run has to build or fix |
+|---|---|---|---|
+| `empty` | 0 | NOT READY | all three: an agent, examples, and a way to score them |
+| `logs-only` | 7 | NOT READY | all three, from nothing but logged questions |
+| `no-data` | 20 | NOT READY | examples to measure on |
+| `agent-and-logs` | 25 | NOT READY | answers for the questions, then a scorer |
+| `fake-ruler` | 25 | NOT READY | a scorer that marks everything correct |
+| `no-labels` | 30 | PARTIAL | answers for the questions |
+| `duplicated-data` | 35 | PARTIAL | the data -- half of it is the same rows twice |
+| `no-eval` | 40 | PARTIAL | a way to score an answer |
+| `no-knobs` | 45 | PARTIAL | something for the agent to vary |
+| `ready` | 45 | PARTIAL | check the scorer, then proceed |
+| `sql-exec-stop` | 45 | PARTIAL | nothing -- but see the note on execution below |
+| `no-agent` | 45 | PARTIAL | an agent. **The card says proceed.** |
+| `wrong-answers` | 45 | PARTIAL | the pairing. **The card says proceed.** |
+| `wrong-wiring` | 45 | PARTIAL | the scorer. **The card says proceed.** |
+| `hand-written` | 74 | WORKABLE | more examples than ten |
+| `checked` | 86 | STRONG | nothing |
+| `best-case` | 91 | EXCELLENT | nothing |
 
-### What moves a project up
+All five bands, and the spread is measured rather than arranged: every combination the CLI
+accepts was built and scored, and these seventeen are the ones that describe a project
+somebody could actually arrive with.
 
-Two ceilings sit at 45, and each has exactly one remedy. `ready` carries only the first.
-The second is what `--agent no-knobs` adds, which is why `no-knobs` shows two caps.
+### Three starting points the opening gate does not separate
 
-**`evaluator-unvalidated`** -- a scorer nobody has checked cannot support a claim. It clears
-when the project keeps probe answers for its own scorer and a calibration run measures that
-it separates a right answer from a wrong one. `--calibration present` ships them, which is
-the whole difference between `ready` and `checked`, and it is worth 41 points.
+A bank of broken projects is worth having because of what it finds, and it found three. These
+are observations about the guide at revision `6ec2b9c1`, not defects in this repository, and
+they are the reason the three rows above are marked.
 
-**`agent-no-varying-knobs`** -- the opening read is a narrow static one, and when it cannot
-follow a setting from the configuration to the request it says so rather than assuming. It
-clears when the agent is written so that path is followable.
+**A dataset whose every answer answers a different question is not noticed.** `wrong-answers`
+keeps every question and every answer and pairs them wrongly, inside each database, so all of
+them still run and still return rows. Every dataset check passes, no cap is raised, and the
+card reads 45 and `proceed` -- byte-identical to `ready`. Add probe answers and it gets worse:
+**83, STRONG, proceed, no caps**, because the probes check the scorer and nothing checks
+whether an answer answers its question. The tool that would catch it exists -- `readiness.py
+--row-review` asks exactly that -- and is not part of the opening method.
 
-That second one has a trap in it, and this repository fell into it once. **Shape the agent so
-its settings are readable; never change what it sends to make them readable.** An earlier
-version was restructured for the score and, in the process, changed `schema_context="none"`
-from sending no schema to sending a sentence saying the schema was not shown -- which stops
-that arm being a control, because the setting is then partly measuring the sentence. The
-restructure here was a pure one: a 36-arm differential over every combination of the four
-settings showed the outgoing model, prompt and temperature byte-identical to the shape it
-replaced, and `tests/test_components.py` fails if the control arm ever gains content again.
+**A mis-wired scorer is invisible without probe answers.** `wrong-wiring` compares the
+question with the recorded answer and never reads the model's output. Built without
+calibration it is byte-identical to `ready`: 45, `proceed`. Built with it, the probes come
+back all-zero and the card drops to **25, `repair-evaluator`**. Calibration is the entire
+difference between shipping that project and repairing it, in either direction -- `fake-ruler`
+is the same cap reached from all-ones.
 
-The agent has changed three times since, each deliberately, and each is worth naming rather
-than leaving under a claim of byte-identity that no longer holds.
+**Duplication is caught by the wrong check.** `duplicated-data` stops at 35 with
+`repair-dataset`, which is the right verdict -- but it fires on duplicate row *ids*, not on
+the duplicated rows, and the reason printed on the card is "some rows could not be read as
+data -- malformed lines". No row is malformed. A duplicated export that renumbered its ids
+would pass that check and land at 45, `proceed`, with duplication reduced to two warnings.
 
-The compact `tables` view was built by splitting the schema on every comma, which turned a
-column type like `DECIMAL(19,4)` into a column named `4)` and leaked composite-key column
-lists out as columns of their own -- eleven tables across eight of the eighteen databases,
-describing tables that do not exist to the model being measured. Parsing by parenthesis
-depth fixed it, and it now matches `PRAGMA table_info` for all 74 tables. That changes the
-12 `tables` arms of the 36; `none` and `full` are untouched.
+One more, from the same table: `no-agent` -- a directory with 300 labelled rows, a scorer, and
+no agent file at all -- reads `proceed`, while `no-knobs`, which *has* an agent, reads
+`vary-knobs`. Following the guide's own instruction for a missing agent (leave the agent flags
+off entirely) means the score never learns the agent is absent.
 
-An unconfigured run used to start at `schema_context="none"` -- the deliberately empty
-control -- while the untunable agent always sent the full schema, so the project with
-nothing to tune looked better than the tunable one at its own default. The defaults now
-match its sibling, and the control arm is still there, reachable by asking for it.
+### The one that argues for checking your scorer
 
-Reading a reply was rewritten to handle the markdown a model actually returns, and the same
-code now sits in both agents, because the untunable one was scoring zero on replies the
-tunable one handled.
+`fake-ruler` is the same project as `ready` -- the same agent, the same 300 labelled rows --
+except its scorer returns full marks for everything. Built without probe answers it reads
+**45, proceed**: identical to `ready`, because nothing has looked at the scorer. Built with
+them it reads **25, repair the evaluator**.
 
-Two of the four settings are credited, which is all that is available: the agent pillar's
-search-space share is held one step below full until a trial budget is declared, and a
-budget only exists in a document a real run produces. Four configurations already reach that
-ceiling, so crediting the other two settings would add exactly zero. The published reference
-scenario scores the same 70 for the same reason.
+That pair is the argument for calibration in one line. A scorer nobody has checked lets a run
+go ahead and report a confident improvement that did not happen. Probe answers turn that into
+a named, repairable problem -- and repairing it is what the run then does, before it measures
+anything. It is also the only preset where shipping calibration *lowers* the opening score,
+which is the right direction when the thing being checked is broken: the number went down
+because the project got more honest, not because it got worse.
 
 ### Why `best-case` scores higher than `checked`
 

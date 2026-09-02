@@ -278,6 +278,11 @@ def run(input_text, config):
             f"{model!r} is not one of the models this agent is configured for"
         )
     temperature = float(config.get("temperature", DEFAULTS["temperature"]))
+    if temperature not in TEMPERATURES:
+        raise ValueError(
+            f"{temperature!r} is not one of the temperatures this agent runs at: "
+            f"{TEMPERATURES}"
+        )
     return strip_code_fence(
         call_model(model, build_prompt(input_text, config), temperature)
     )

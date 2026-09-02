@@ -438,6 +438,47 @@ class TheScorerAndTheAgentAgreeAboutWhatTheModelSends(unittest.TestCase):
             )
 
 
+class TheMisWiredScorer(unittest.TestCase):
+    """A scorer that reads the wrong two of its four arguments.
+
+    The failure it produces is the mirror of the always-correct one: every row scores the
+    same, so no configuration can be told from any other. Zero everywhere rather than one
+    everywhere, which is easier to notice and no less useless.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.scorer = load(EVALUATOR_DIR / "swapped.py", "swapped_probe")
+
+    def test_it_cannot_tell_a_right_answer_from_a_wrong_one(self) -> None:
+        gold = "SELECT count(*) FROM singer"
+        question = "How many singers are there?"
+        right = self.scorer.score(
+            output=gold, expected=gold, input_data=question, metadata=None
+        )
+        wrong = self.scorer.score(
+            output="SELECT 1", expected=gold, input_data=question, metadata=None
+        )
+        self.assertEqual(right, wrong, "it distinguished them, which it must not")
+
+    def test_it_never_reads_what_the_model_produced(self) -> None:
+        gold = "SELECT count(*) FROM singer"
+        scores = {
+            self.scorer.score(
+                output=output, expected=gold, input_data="a question", metadata=None
+            )
+            for output in (gold, "SELECT 1", "", "not sql at all", None)
+        }
+        self.assertEqual(len(scores), 1, "its answer depended on the output")
+
+    def test_it_still_refuses_a_row_with_no_recorded_answer(self) -> None:
+        """Being mis-wired is not a licence to grade against nothing."""
+        with self.assertRaises(ValueError):
+            self.scorer.score(
+                output="SELECT 1", expected="", input_data="q", metadata=None
+            )
+
+
 class AlwaysCorrectScorer(unittest.TestCase):
     def test_it_marks_anything_correct(self) -> None:
         scorer = load(EVALUATOR_DIR / "broken.py", "broken_probe")
