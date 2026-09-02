@@ -1,5 +1,10 @@
 # What the committed data is, where it came from, and what it is allowed to be used for.
-# The code in this repository is Apache-2.0; the data described here is not. See LICENSE-DATA.
+# The code in this repository is Apache-2.0; the data described here is not. See LICENSE-DATA,
+# and REUSE.toml beside it for the machine-readable version.
+#
+# Every number in this file is checked against the data by the test suite or re-derivable from
+# provenance.json, which build_slice.py writes on each run. Where the two disagree, the data and
+# provenance.json are right and this file is stale.
 
 name: spider-300
 display_name: Spider 1.0 -- 300-row first-run slice
@@ -11,6 +16,9 @@ official_metric: >-
 
 license: CC-BY-SA-4.0
 license_url: https://creativecommons.org/licenses/by-sa/4.0/
+license_text: >-
+  LICENSE-DATA, beside this file, carries the attribution, the record of modifications, and the
+  complete legal text of CC BY-SA 4.0 as published by Creative Commons.
 attribution: >-
   Yu et al., "Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain
   Semantic Parsing and Text-to-SQL Task", EMNLP 2018. Data from the Spider 1.0 development
@@ -33,13 +41,17 @@ source:
     Derived from the frozen 754-row ext pool in the Traigent benchmarks Spider harness, whose
     rows were each verified to appear verbatim (db_id + question + normalised SQL) in the
     official 1,034-row Spider dev set.
+  recorded_by: >-
+    provenance.json records this same sha256, written by the build that produced the rows file.
+    It is not typed in by hand here and checked nowhere: the two can be compared.
 
 slice:
   file: spider_300.jsonl
-  sha256: a3da17845c2bccf9600802aff53df834bc7bb853b4e2c11a0ee848a01a5cdda2
+  sha256: f7fa90e46cccf171366b0e54789a286058cd8da0b4fbb9362741f9664c975827
   n: 300
   seed: 42
   builder: build_slice.py
+  provenance: provenance.json
   row_shape: >-
     Flat. "input" is the question text, "output" is the gold SQL, and id, db_id, schema,
     split, difficulty and provenance ride in "metadata".
@@ -49,7 +61,10 @@ slice:
   splits:
     tuning: 240
     holdout: 60
-    note: Split within each difficulty band, so the holdout is as hard as the tuning data.
+    note: >-
+      Split within each difficulty band, so the holdout is as hard as the tuning data, and
+      split by gold query rather than by row: every row sharing a normalised gold query sits
+      on one side of the line. No recorded answer is both tuned on and held out.
   difficulty:
     easy: 75
     medium: 75
@@ -57,8 +72,10 @@ slice:
     very-hard: 75
     source: >-
       Spider's own official hardness classifier (Evaluator.eval_hardness from the vendored
-      test-suite evaluation code), applied to the gold query. Spider's "extra" band is written
-      "very-hard" here because that is the vocabulary the first-run readiness scorer reads.
+      test-suite evaluation code), RUN over each row's gold query by build_slice.py at build
+      time rather than joined in from a precomputed table by row position. Spider's "extra"
+      band is written "very-hard" here because that is the vocabulary the first-run readiness
+      scorer reads. The classifier files are sha256-pinned in provenance.json.
   filters:
     - >-
       Gold query must execute against the committed database. All 754 pool rows pass; none was
@@ -67,9 +84,29 @@ slice:
       Gold query must return at least one row. 35 of 754 (4.6%) were dropped. An empty gold is
       gradeable by accident under execution accuracy: any wrong-but-empty prediction matches it.
     - >-
-      No question may be a paraphrase of one already kept. 2 further rows were dropped. Spider's
-      dev set contains straight restatements of the same question, and the first-run readiness
-      check finds them and marks the data less diverse. Test: three-word shingles, Jaccard, 0.7.
+      No question may be a lexical paraphrase of one already kept. 2 further rows were dropped.
+      Test: three-word shingles, Jaccard, 0.7 -- the same test the first-run readiness check
+      applies. This filter is lexical only and catches restatements that reuse words; it does
+      not catch a paraphrase written in different words. See known_flaws.
+    - >-
+      Rows sharing a normalised gold query (case, whitespace runs and a trailing semicolon
+      ignored) are one item. A group is drawn once and assigned to one split whole. 717 rows
+      survive the filters above and carry 445 distinct gold queries between them, so this is
+      the filter that does most of the work.
+
+  band_supply:
+    note: >-
+      Distinct gold queries available per band after the filters, against the 75 wanted. Three
+      bands have slack; very-hard does not, and the shortfall is recorded rather than papered
+      over.
+    easy: {distinct_golds: 108, rows_taken: 75, rows_repeating_a_gold: 0}
+    medium: {distinct_golds: 191, rows_taken: 75, rows_repeating_a_gold: 0}
+    hard: {distinct_golds: 75, rows_taken: 75, rows_repeating_a_gold: 0}
+    very-hard: {distinct_golds: 71, rows_taken: 75, rows_repeating_a_gold: 4}
+    consequence: >-
+      75 x 4 is feasible only because 4 very-hard rows are a second question for a gold query
+      already in that band. All 4 are on the TUNING side; no holdout row repeats a gold. A
+      fully gold-unique slice would be 296 rows, or 284 with the bands still equal at 71.
 
 databases:
   path: databases/
@@ -84,16 +121,43 @@ databases:
     questions that need it. museum_visit is small enough but is absent too: the 754-row pool is
     the dev rows left over on the databases the upstream harness had already committed, and
     museum_visit was not one of those, so no filter here ever saw its rows.
+  coverage: >-
+    Rows are spread across the 18 databases by how many usable questions each has, not evenly.
+    Six databases hold 2 or fewer holdout rows -- course_teach 2, poker_player 2, voter_1 2,
+    flight_2 1, orchestra 0, real_estate_properties 0. Nothing per-database can be concluded
+    from the holdout. See known_flaws.
 
 verified:
-  date: 2026-09-01
+  date: 2026-09-02
+  method: >-
+    Re-measured against the bytes after the slice was re-cut. Each line states what was checked
+    and, where it matters, what was NOT thereby established.
   checks:
     - "300/300 gold queries execute against the committed databases"
     - "300/300 gold queries return a non-empty result set"
-    - "300/300 unique questions, and no pair reaches 70% shingle similarity"
-    - "300/300 rows carry a unique stable id"
-    - "18/18 required databases present"
-    - "committed schema text matches the real database in every row of the source pool (754/754)"
+    - "300/300 questions and 300/300 gold queries are byte-identical to the official dev.json"
+    - "754/754 source-pool rows are likewise byte-identical to the official dev.json"
+    - >-
+      300/300 difficulty labels agree with the vendored official Evaluator.eval_hardness re-run
+      over the gold query. The labels are DERIVED that way, so this is a reproduction check, not
+      an independent one.
+    - "300/300 unique questions, and 300/300 rows carry a unique id in the documented form"
+    - >-
+      No pair of questions reaches 70% three-word-shingle similarity; the highest pair in the
+      slice is 0.50. This is a measurement of that specific test and nothing more -- it does NOT
+      mean no two questions ask the same thing. Two rows can ask one question in different words
+      and score near zero on it.
+    - >-
+      0 gold queries cross the tuning/holdout boundary, normalised or byte-for-byte, and 0
+      holdout rows share a gold query with another holdout row. This is what the gold-group
+      filter guarantees and it is the guarantee that matters for the holdout.
+    - >-
+      4 distinct gold queries cover 2 rows each, 8 rows in all, every one of them inside the
+      tuning set of the very-hard band. The slice is NOT gold-unique; it is gold-unique across
+      the split and within the holdout.
+    - "18/18 required databases present, 917,504 bytes, and none committed that no question uses"
+    - "committed schema text matches the real database in every row: 0 invented tables, 0 invented columns, 0 omissions across all 18 databases"
+    - "build_slice.py reproduces spider_300.jsonl and databases/ bit-for-bit on re-run"
 
 known_flaws:
   - text: >-
@@ -106,9 +170,41 @@ known_flaws:
       the general one.
     source_url: https://arxiv.org/abs/2010.02840
   - text: >-
+      Execution accuracy is cheap to score by accident, and here is the shape of it: 127 of the
+      300 gold queries (42.3%) return a single scalar -- one row, one column. There are 89
+      distinct such values, so no one constant gets far: the best single constant answer scores
+      7 of 300 (2.3%), and two values tie for it -- 0 and 3. The exposure is not the constant,
+      it is that a wrong query returning the right count scores the same as a right one.
+  - text: >-
       The dev set is widely reproduced in papers and pretraining corpora. Treat any number from
-      it as contaminated for modern models.
+      it as contaminated for modern models. This is contamination of the ORIGINAL data against
+      model pretraining, and no filter here can touch it.
     source_url: https://arxiv.org/abs/2405.00332
+  - text: >-
+      The paraphrase filter is LEXICAL ONLY -- three-word shingles, Jaccard, 0.7. It catches a
+      restatement that reuses words and misses one that does not. "Count the number of countries
+      in Asia." and "how many countries are in Asia?" share no three-word run and share a gold
+      query exactly. The filter that actually separates such rows is the gold-query grouping, not
+      this one, and the shingle number in verified.checks should not be read as a diversity
+      guarantee.
+  - text: >-
+      The slice is not gold-unique. 4 gold queries appear twice, 8 rows in all, all inside the
+      very-hard tuning set, because that band offers only 71 distinct gold queries and 75 rows
+      are wanted. Those 8 rows are 8 questions and 4 answers; a configuration that few-shots
+      from tuning sees the same answer twice. It cannot reach the holdout: no holdout row shares
+      a gold with anything.
+  - text: >-
+      Holdout gold overlap is FIXED, and was real. Before the re-cut, 15 of the 60 holdout rows
+      (25%) had a gold query byte-identical to a tuning row's -- 7 of the 15 very-hard rows
+      (47%), 4 easy, 2 hard, 2 medium -- and 2 holdout rows shared a gold with each other. A
+      configuration that few-shot from tuning, or retrieved on db_id, got up to a quarter of the
+      holdout pre-answered. It is 0 now, and this entry stays so that a number measured before
+      2026-09-02 is not compared with one measured after.
+  - text: >-
+      The holdout is a winner's-curse control and it is small. 60 rows, 15 per band: one row is
+      6.7 percentage points. Band balance is exact and that is the claim being made -- nothing
+      about per-database performance is. Six of the 18 databases have 2 or fewer holdout rows
+      and two have none at all, so a per-database reading of the holdout is noise.
   - text: >-
       300 rows is a demonstration size. It is enough to separate configurations, not enough to
       settle a production question.

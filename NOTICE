@@ -4,26 +4,67 @@ Copyright 2026 Traigent Ltd
 This product includes software developed at Traigent Ltd, licensed under the Apache
 License, Version 2.0. See LICENSE.
 
-The code and the data are under DIFFERENT licences. This file is copied into every
-generated demo project alongside the data, so both are named the way they appear in each
-place:
+The code and the data are under DIFFERENT licences, and the boundary between them is a
+boundary of CONTENT, not of directory.
 
-  Data
-      In this repository: spider/spider_300.jsonl and spider/databases/
-      In a generated demo: dataset.jsonl and databases/
 
-      Creative Commons Attribution-ShareAlike 4.0 International, as an adapted subset of
-      the Spider 1.0 dataset by Yu et al. (EMNLP 2018). See LICENSE-DATA for the
-      attribution, the list of changes made, and what ShareAlike requires when an
-      adaptation is shared.
+  Data -- Creative Commons Attribution-ShareAlike 4.0 International
 
-  Code and documentation
-      Everything else, in either place.
+      SPDX-License-Identifier: CC-BY-SA-4.0
+      https://creativecommons.org/licenses/by-sa/4.0/
 
-      Apache License 2.0 -- see LICENSE.
+      What is covered: every byte taken from the Spider 1.0 dataset by Yu et al. (EMNLP
+      2018), wherever in this repository it appears and whatever the surrounding file is
+      for. That means a Spider question, a Spider gold SQL query, a Spider schema string,
+      or one of Spider's SQLite databases -- copied whole, quoted, excerpted, or carried
+      inside some other file's data structure.
 
-Naming the data first is deliberate. Stating the Apache-2.0 scope as "everything except
-<paths>" is only true where those paths exist, and a demo does not contain them -- read
-literally in that copy, the exception covered nothing and the licence claimed the data.
+      It is not confined to a directory, and stating it as a list of paths is how the
+      previous version of this file came to be untrue: Spider rows are quoted, verbatim,
+      in files that sit well outside any data directory. At the time of writing they are
+      quoted in the calibration case files under components/calibration/, in the
+      documentation under docs/, in the test suite under tests/, and in a docstring in
+      spider/build_slice.py -- and that list is an aid, not the definition. Add a Spider
+      question to a new file tomorrow and the licence goes with it, with no edit to this
+      file required.
+
+      Where it is copied whole: spider/spider_300.jsonl and spider/databases/. Machine-
+      readable licensing for everything under spider/ is in spider/REUSE.toml.
+      spider/LICENSE-DATA carries the attribution, the record of what was modified, and
+      the complete legal text of the licence.
+
+      An adaptation shared onward carries the same licence and the same attribution --
+      see spider/LICENSE-DATA. Model outputs, scores, logs and reports produced by
+      running against this data are not the data and are not licensed by it.
+
+
+  Everything else -- Apache License 2.0
+
+      SPDX-License-Identifier: Apache-2.0
+      See LICENSE.
+
+      The code, the documentation, the tests and the tooling, including the parts of the
+      files named above that are not Spider content. A file may be Apache-2.0 as a work
+      and still contain CC BY-SA 4.0 material it quotes; the two statements are about
+      different bytes and both are true at once.
+
+
+Marking
+-------
+
+Files carrying Spider content should say so in themselves, so a licence scanner reaches
+the same conclusion this file does without reading prose:
+
+  * a source file that quotes Spider content carries, near its existing licence header,
+        SPDX-FileCopyrightText: 2018 Yu et al., Spider 1.0 contributors
+        SPDX-License-Identifier: Apache-2.0 AND CC-BY-SA-4.0
+  * a data file that cannot carry a comment is declared in the nearest REUSE.toml, or in
+    a sidecar <filename>.license beside it.
+
+Everything under spider/ is declared in spider/REUSE.toml. Every file outside spider/ that
+quotes Spider rows carries the two lines above in itself: the calibration cases, build.py,
+spider/build_slice.py, the tests, and docs/dataset.md. Anything that starts quoting a row
+later is expected to be marked in the same commit that adds the quotation.
+
 
 This repository does not include or license the Traigent SDK.

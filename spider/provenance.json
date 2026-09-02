@@ -1,0 +1,70 @@
+{
+  "builder": "build_slice.py",
+  "counts": {
+    "bands": {
+      "easy": 75,
+      "hard": 75,
+      "medium": 75,
+      "very-hard": 75
+    },
+    "splits": {
+      "holdout": 60,
+      "tuning": 240
+    }
+  },
+  "databases": {
+    "bytes": 917504,
+    "count": 18,
+    "entries": [
+      "battle_death",
+      "car_1",
+      "concert_singer",
+      "course_teach",
+      "cre_Doc_Template_Mgt",
+      "dog_kennels",
+      "employee_hire_evaluation",
+      "flight_2",
+      "network_1",
+      "orchestra",
+      "pets_1",
+      "poker_player",
+      "real_estate_properties",
+      "singer",
+      "student_transcripts_tracking",
+      "tvshow",
+      "voter_1",
+      "world_1"
+    ],
+    "path": "databases"
+  },
+  "difficulty": {
+    "classifier": "vendored Spider Evaluator.eval_hardness",
+    "classifier_sha256": {
+      "evaluation.py": "7401e4014a8955376a7919c06903a7f0ab403c99e89f94204cd8f4c8e32ae779",
+      "process_sql.py": "927fc564f7a8e34f09f009a2f5564a83fdf95226440dde84c87871fd65fe55a1"
+    },
+    "derived_from": "the gold query of each row"
+  },
+  "filters": {
+    "dropped_empty_gold": 35,
+    "dropped_near_duplicate_question": 2,
+    "tuning_rows_repeating_a_gold_in_their_band": {
+      "easy": 0,
+      "hard": 0,
+      "medium": 0,
+      "very-hard": 4
+    }
+  },
+  "format": 1,
+  "seed": 42,
+  "slice": {
+    "path": "spider_300.jsonl",
+    "rows": 300,
+    "sha256": "f7fa90e46cccf171366b0e54789a286058cd8da0b4fbb9362741f9664c975827"
+  },
+  "source": {
+    "rows": 754,
+    "sha256": "eeb84b12e9307d862e3f84de684653d3afff4addc7a71941adde35fc82073b47",
+    "slice": "spider_dev_ext.jsonl"
+  }
+}

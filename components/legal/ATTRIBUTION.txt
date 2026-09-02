@@ -1,0 +1,86 @@
+ATTRIBUTION AND LICENCE FOR THE DATA IN THIS PROJECT
+====================================================
+
+The natural-language questions, the database schemas, the recorded SQL answers and the
+SQLite databases that ship with this project are not original work. They come from the
+Spider 1.0 text-to-SQL dataset and are redistributed here in modified form, under the
+licence the original carries.
+
+The code in this project and the data are under different licences. This notice covers
+the data.
+
+
+Original work
+-------------
+
+    Tao Yu, Rui Zhang, Kai Yang, Michihiro Yasunaga, Dongxu Wang, Zifan Li, James Ma,
+    Irene Li, Qingning Yao, Shanelle Roman, Yi Zhang, Dragomir Radev.
+    "Spider: A Large-Scale Human-Labeled Dataset for Complex and Cross-Domain Semantic
+    Parsing and Text-to-SQL Task."
+    Proceedings of the 2018 Conference on Empirical Methods in Natural Language
+    Processing (EMNLP 2018), Brussels, Belgium.
+
+    Paper    https://arxiv.org/abs/1809.08887
+    Project  https://yale-lily.github.io/spider
+
+
+Licence
+-------
+
+    Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+
+    SPDX-License-Identifier: CC-BY-SA-4.0
+    https://creativecommons.org/licenses/by-sa/4.0/
+
+The URI above is the licence. Read it before redistributing any of this data, in this
+form or in any other.
+
+
+Notice of modification
+----------------------
+
+Required by section 3(a)(1)(B) of the licence, and worth reading on its own account:
+
+    THIS IS NOT THE SPIDER DATASET. It is a modified subset of it.
+
+What that means concretely:
+
+  * Rows were selected, not taken whole. Only some of the original records are here,
+    drawn from one split of the original release, over some of that split's databases,
+    and only the databases those records refer to. Whole databases, and every question
+    asked about them, are absent.
+
+  * Records were reshaped. They are carried in a different record format from the one
+    the original release uses, and they carry fields the original does not -- among them
+    identifiers, groupings and labels applied here rather than upstream.
+
+  * Records were edited. Any individual record in this copy may differ from its
+    counterpart in the original release, and no record here should be assumed to
+    reproduce one.
+
+  * The databases are the original SQLite files as distributed with the dataset, carried
+    only for the records that need them.
+
+None of this is a defect in the original. It is what was done to it to arrive at this
+copy, and it is stated so that nobody mistakes one for the other.
+
+
+Using this data honestly
+------------------------
+
+A score measured here is a score on this modified subset. It is not a score on Spider,
+it is not comparable with published Spider results, and it should not be reported as
+one. Where a number matters, measure it against the original release at the project URI
+above.
+
+
+ShareAlike
+----------
+
+The licence's ShareAlike condition attaches to adapted material -- these records or these
+databases modified, transformed or built upon -- and it applies when that material is
+shared. If you pass this data on, in this form or adapted further, it goes out under CC
+BY-SA 4.0 with the attribution above, and this notice travels with it.
+
+ShareAlike does not reach everything produced by working with the data. Model outputs,
+scores, logs and reports are not the data and are not licensed by it.
