@@ -1,0 +1,188 @@
+{
+  "band": "PARTIAL",
+  "band_limited_by_confidence": false,
+  "caps": [
+    {
+      "action_kind": "proceed",
+      "asks": false,
+      "blocks": false,
+      "ceiling": 45,
+      "condition": "evaluator-unvalidated",
+      "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+    }
+  ],
+  "confidence": 0.68,
+  "gaps": [
+    "evaluator-unvalidated: An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.",
+    "agent/search-space: static source verification established possible settings model, prompt_style, schema_context; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 18 distinct configurations; no trial budget was declared, so nothing here says how much of it this run compares; declaring `max_trials` is what lets this reach full credit - undeclared, it is held one step below; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not verify that changing this setting changes the request on the selected agent path; no source defect is inferred, and the enhanced run can settle this dimension",
+    "evaluation/calibration could not be measured - no calibration result was provided to this score",
+    "evaluation/task-fit: normalized-exact is a poor ruler for code-sql output",
+    "dataset/diversity could not be measured - not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean",
+    "evaluation/probe-spread could not be measured - not yet measured how far apart it scores a right and a wrong answer",
+    "dataset/power: 48 to tune on / 12 held back; 48 examples - limited comparison set",
+    "agent/output-contract could not be measured - not independently verified; excluded from this score. Assistant observation: the answer's shape is constrained (agent.py:59 and agent.py:60-63 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text.)",
+    "agent/prompt could not be measured - not independently verified; excluded from this score. Assistant observation: a prompt, no worked examples in it (agent.py:304-318 build_prompt assembles the exact text sent, and agent.py:378-383 passes it as the single user message; no worked examples ride with it.)",
+    "agent/control-flow could not be measured - not independently verified; excluded from this score. Assistant observation: one call per input, so it ends (agent.py:387-406 run() is straight-line: one call_model call per input, no loop and no retry.)"
+  ],
+  "knobs": [],
+  "overall": 45,
+  "pillars": [
+    {
+      "confidence": 0.81,
+      "name": "agent",
+      "score": 70,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "not independently verified; excluded from this score. Assistant observation: one call per input, so it ends (agent.py:387-406 run() is straight-line: one call_model call per input, no loop and no retry.)",
+          "maximum": 7.0,
+          "measured": false,
+          "name": "control-flow",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "not independently verified; excluded from this score. Assistant observation: the answer's shape is constrained (agent.py:59 and agent.py:60-63 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text.)",
+          "maximum": 8.0,
+          "measured": false,
+          "name": "output-contract",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "not independently verified; excluded from this score. Assistant observation: a prompt, no worked examples in it (agent.py:304-318 build_prompt assembles the exact text sent, and agent.py:378-383 passes it as the single user message; no worked examples ride with it.)",
+          "maximum": 8.0,
+          "measured": false,
+          "name": "prompt",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "static source verification established possible settings model, prompt_style, schema_context; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 18 distinct configurations; no trial budget was declared, so nothing here says how much of it this run compares; declaring `max_trials` is what lets this reach full credit - undeclared, it is held one step below; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not verify that changing this setting changes the request on the selected agent path; no source defect is inferred, and the enhanced run can settle this dimension",
+          "maximum": 100.0,
+          "measured": true,
+          "name": "search-space",
+          "value": 70.0,
+          "withheld": false
+        },
+        {
+          "applicable": false,
+          "evidence": "the agent declares no tools, so tool wiring does not apply (agent.py declares no tools; the agent's only outbound call is the completion at agent.py:378.)",
+          "maximum": 7.0,
+          "measured": false,
+          "name": "tools",
+          "value": 0.0,
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "confidence": 0.8,
+      "name": "dataset",
+      "score": 91,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "bands present: easy, hard, medium, very-hard",
+          "maximum": 15.0,
+          "measured": true,
+          "name": "difficulty",
+          "value": 15.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean",
+          "maximum": 20.0,
+          "measured": false,
+          "name": "diversity",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "60/60 rows carry an expected output",
+          "maximum": 30.0,
+          "measured": true,
+          "name": "labels",
+          "value": 30.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "48 to tune on / 12 held back; 48 examples - limited comparison set",
+          "maximum": 25.0,
+          "measured": true,
+          "name": "power",
+          "value": 18.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "60 collected of 60 rows; declared sources: real",
+          "maximum": 10.0,
+          "measured": true,
+          "name": "provenance",
+          "value": 10.0,
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "confidence": 0.45,
+      "name": "evaluation",
+      "score": 33,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "no calibration result was provided to this score",
+          "maximum": 40.0,
+          "measured": false,
+          "name": "calibration",
+          "value": 0.0,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "not yet measured how far apart it scores a right and a wrong answer",
+          "maximum": 15.0,
+          "measured": false,
+          "name": "probe-spread",
+          "value": 0.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "deterministic scoring rule",
+          "maximum": 20.0,
+          "measured": true,
+          "name": "reproducibility",
+          "value": 20.0,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "normalized-exact is a poor ruler for code-sql output",
+          "maximum": 25.0,
+          "measured": true,
+          "name": "task-fit",
+          "value": 8.0,
+          "withheld": false
+        }
+      ]
+    }
+  ],
+  "provenance_assumption": null,
+  "recommended_action": "proceed",
+  "schema_version": 2,
+  "status": "OK",
+  "weighted_average": 65,
+  "weights": {
+    "agent": 25.0,
+    "dataset": 40.0,
+    "evaluation": 35.0
+  }
+}

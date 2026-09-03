@@ -1,0 +1,87 @@
+[
+  {
+    "check": "env-source",
+    "status": "PASS",
+    "detail": "process environment only; process values take precedence",
+    "metrics": null
+  },
+  {
+    "check": "env-file",
+    "status": "WARN",
+    "detail": ".env not found; create a minimal file before paid work",
+    "metrics": null
+  },
+  {
+    "check": "python-version",
+    "status": "PASS",
+    "detail": "3.12.3",
+    "metrics": null
+  },
+  {
+    "check": "sdk-version",
+    "status": "SKIP",
+    "detail": "traigent is not installed yet; verify it in the isolated environment after installation",
+    "metrics": null
+  },
+  {
+    "check": "provider-credentials",
+    "status": "WARN",
+    "detail": "no LLM provider credential names are present; inspect the agent route separately. Bedrock signs through the AWS credential chain, so a shared profile, an SSO session or an instance role authenticates it with nothing set here. On a route whose credential is an environment variable, do not begin paid work until that route's credential is present",
+    "metrics": null
+  },
+  {
+    "check": "traigent-key",
+    "status": "PASS",
+    "detail": "not configured yet; required only for connected execution",
+    "metrics": null
+  },
+  {
+    "check": "cost-cap",
+    "status": "PASS",
+    "detail": "no per-optimization cap set here; each paid process derives its own from the approved figures it is launched with",
+    "metrics": null
+  },
+  {
+    "check": "dataset-integrity",
+    "status": "FAIL",
+    "detail": "40/40 rows (100.0%) are unusable; line 1 (+39 more): missing selected expected-output field 'output'",
+    "metrics": {
+      "invalid_rows": 40,
+      "malformed_rows": 0,
+      "unlabelled_rows": 40,
+      "candidate_rows": 40
+    }
+  },
+  {
+    "check": "dataset-provenance",
+    "status": "PASS",
+    "detail": "declared sources: ['real']",
+    "metrics": {
+      "rows": 40,
+      "labelled_rows": 0,
+      "synthetic": false,
+      "generated_outputs": false,
+      "collected_rows": 40,
+      "synthesised_rows": 0,
+      "undeclared_rows": 0,
+      "generated_answer_rows": 0,
+      "answerable_rows": 0,
+      "sources": [
+        "real"
+      ],
+      "unrecognised_sources": []
+    }
+  },
+  {
+    "check": "dataset-ids",
+    "status": "PASS",
+    "detail": "stable ids are unique",
+    "metrics": null
+  },
+  {
+    "check": "dataset-shape",
+    "status": "FAIL",
+    "detail": "40 rows carry inputs but none carry an expected output",
+    "metrics": null
+  }
+]

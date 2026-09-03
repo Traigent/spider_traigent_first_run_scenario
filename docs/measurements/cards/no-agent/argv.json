@@ -1,0 +1,38 @@
+{
+  "build": [
+    "python3",
+    "build.py",
+    "--preset",
+    "no-agent",
+    "--out",
+    "$DEMO"
+  ],
+  "preflight": [
+    "python3",
+    "$GUIDE/preflight.py",
+    "--defer-missing-sdk",
+    "--json",
+    "--dataset",
+    "dataset.jsonl",
+    "--evaluator",
+    "evaluator.py",
+    "--evaluator-method",
+    "normalized-exact"
+  ],
+  "calibration_ran": false,
+  "readiness": [
+    "python3",
+    "$GUIDE/readiness.py",
+    "--preflight",
+    "$EVIDENCE/02-preflight.json",
+    "--evaluator-origin",
+    "brought",
+    "--evaluator-method",
+    "normalized-exact",
+    "--task-kind",
+    "code-sql",
+    "--color",
+    "never",
+    "--ascii"
+  ]
+}

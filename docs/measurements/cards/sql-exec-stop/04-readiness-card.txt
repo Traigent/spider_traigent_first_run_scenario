@@ -1,0 +1,28 @@
+$ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --evaluator-origin brought --evaluator-method execution --task-kind code-sql --color never --ascii
+TRAIGENT OPTIMIZATION READINESS        45/100  PARTIAL
+
+  AGENT       ##############------  70/100  (1 of 4 checks measured)
+    ? whether it ends, and on what                     not independently verified; excluded from this score. Assistant observation: one call per input, so it ends (agent.py:387-406 run() is straight-line: one call_model call per input, no loop and no retry.)
+    ? whether the answer's shape is pinned down        not independently verified; excluded from this score. Assistant observation: the answer's shape is constrained (agent.py:59 and agent.py:60-63 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text.)
+    ? what the model is told, and shown                not independently verified; excluded from this score. Assistant observation: a prompt, no worked examples in it (agent.py:304-318 build_prompt assembles the exact text sent, and agent.py:378-383 passes it as the single user message; no worked examples ride with it.)
+    !! how many settings-combinations there are to try  static source verification established possible settings model, prompt_style, schema_context; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 18 distinct configurations; no trial budget was declared, so nothing here says how much of it this run compares; declaring `max_trials` is what lets this reach full credit - undeclared, it is held one step below; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not verify that changing this setting changes the request on the selected agent path; no source defect is inferred, and the enhanced run can settle this dimension
+    ? tools it declares, and can reach                 the agent declares no tools, so tool wiring does not apply (agent.py declares no tools; the agent's only outbound call is the completion at agent.py:378.)
+    not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
+
+  DATASET     ####################  98/100  (4 of 5 checks measured)
+    OK range of difficulty           bands present: easy, hard, medium, very-hard
+    ? repeated or dominant answers  not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean
+    OK answers to score against      300/300 rows carry an expected output
+    OK examples to compare on        240 to tune on / 60 held back; 240 examples - substantial comparison set
+    OK where the rows came from      300 collected of 300 rows; declared sources: real
+
+  EVALUATION  ##########----------  51/100  (2 of 4 checks measured)
+    ? checked on known-good and known-bad  no calibration result was provided to this score
+    ? separates good answers from bad      not yet measured how far apart it scores a right and a wrong answer
+    OK same answer every time               deterministic scoring rule
+    OK right kind of check for this output  execution suits code-sql output
+
+  LIMITED TO 45 An evaluator method (execution) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.
+
+  Local pre-run planning estimate, not a probability or measured optimization result.
+exit=0

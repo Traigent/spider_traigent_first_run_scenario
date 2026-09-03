@@ -1,9 +1,10 @@
 """Turns a question about a database into the SQL that answers it.
 
-The models here are served by the model's own vendor. Straight to each vendor, so this roster needs a key for both of them.
+The models here go straight to their own vendors, so the roster spans more than one key:
+each model needs the key belonging to the vendor that serves it.
 
-Four settings change the request, and they are the point of the exercise -- each one is a
-real difference in what gets sent, not a label:
+Four settings change the request, and each one is a real difference in what gets sent
+rather than a label:
 
     model           which model answers
     schema_context  how much of the database structure the model is shown: nothing, a
@@ -34,10 +35,25 @@ MODELS = (
 )
 
 VENDOR = "the model's own vendor"
-# What this roster needs in the environment before it can call anything.
-CREDENTIALS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+# The key each model needs before it can be called. Held per model rather than as one list
+# for the whole roster: a key that is missing only stops the models that need it, and the
+# refusal can name the one key that model wants instead of every key the roster could want.
+MODEL_CREDENTIALS = {
+    "gpt-4o-mini": "OPENAI_API_KEY",
+    "gpt-4o": "OPENAI_API_KEY",
+    "anthropic/claude-3-5-haiku-latest": "ANTHROPIC_API_KEY",
+}
+CREDENTIALS = tuple(dict.fromkeys(MODEL_CREDENTIALS.values()))
 
-SCHEMA_CONTEXTS = ("none", "tables", "full")
+# Each schema_context setting and the line that introduces the structure it shows. 'none' is
+# the control arm, so it introduces nothing and nothing follows it: not an empty block, and
+# not a sentence saying the schema was withheld. A sentence is content the model reads, and
+# the setting would then be measuring that sentence as well as the schema it stands in for.
+SCHEMA_CONTEXTS = {
+    "none": "",
+    "tables": "Database schema, one line per table:\n",
+    "full": "Database schema:\n",
+}
 
 PROMPT_STYLES = {
     "direct": "Output the SQLite query only -- no explanation, no markdown.",
@@ -50,8 +66,7 @@ PROMPT_STYLES = {
 TEMPERATURES = (0.0, 0.7)
 
 # What this agent does when it is handed no configuration: the schema shown in full, one
-# straightforward instruction, no sampling. The same request the untunable version of this
-# agent makes, so the two are the same starting point and differ only in what can vary.
+# straightforward instruction, no sampling.
 DEFAULTS = {
     "model": "gpt-4o-mini",
     "schema_context": "full",
@@ -72,14 +87,17 @@ def catalog():
 
 
 CONSTRAINT_KEYWORDS = ("primary", "foreign", "unique", "constraint", "check")
+# The closing delimiter each opening one expects, so a name written in any of SQLite's
+# quoting styles is read as one token rather than split on the space inside it.
+CLOSING_DELIMITER = {'"': '"', "`": "`", "[": "]", "'": "'"}
 
 
 def _outside_quotes(statement):
     """The statement with quoted spans blanked out, so a scan can count only real syntax.
 
-    A default value or a quoted identifier may contain a parenthesis or a comma. Counting
-    those as syntax loses a column or invents one, which is what splitting on every comma
-    did before -- the same mistake one level down.
+    A default value or a quoted identifier may contain a parenthesis, a comma or a
+    semicolon. Counting those as syntax loses a column or invents one, which is what
+    splitting on every comma did before -- the same mistake one level down.
     """
     masked = []
     index = 0
@@ -104,6 +122,81 @@ def _outside_quotes(statement):
         masked.append(character)
         index += 1
     return "".join(masked)
+
+
+def _read_name(text, start):
+    """The name beginning at `start`, kept whole, and where it ends.
+
+    `CREATE TABLE "Song Name"` names one table, not a table called `Name`, and taking the
+    last whitespace-separated word said otherwise. A delimited name ends at its closing
+    delimiter and nowhere else.
+    """
+    opening = text[start]
+    closing = CLOSING_DELIMITER.get(opening)
+    if closing is None:
+        end = start
+        while end < len(text) and not text[end].isspace() and text[end] != "(":
+            end += 1
+        return text[start:end], end
+    index = start + 1
+    while index < len(text):
+        if text[index] == closing:
+            if (
+                closing == opening
+                and index + 1 < len(text)
+                and text[index + 1] == closing
+            ):
+                index += 2
+                continue
+            return text[start : index + 1], index + 1
+        index += 1
+    return text[start:], len(text)
+
+
+def _as_written(name):
+    """The name spelled so that reading it back names the same thing.
+
+    A name that is only letters, digits and underscores stands on its own. Anything else --
+    a space, a parenthesis, a leading digit -- has to keep its quoting, or the summary hands
+    the model a column it cannot select: `Official_ratings_(millions)` unquoted is read as a
+    call to a function called `Official_ratings_` and fails on the column it names.
+    """
+    bare = name.strip("\"`[]'")
+    plain = (
+        bare and not bare[0].isdigit() and all(c.isalnum() or c == "_" for c in bare)
+    )
+    return bare if plain else '"' + bare.replace('"', '""') + '"'
+
+
+def _statements(schema):
+    """The schema's statements, split on the semicolons that are not inside a literal."""
+    syntax = _outside_quotes(schema)
+    statements = []
+    start = 0
+    for position, character in enumerate(syntax):
+        if character == ";":
+            statements.append(schema[start:position])
+            start = position + 1
+    statements.append(schema[start:])
+    return statements
+
+
+def _without_leading_comments(statement):
+    """The statement with anything commented out in front of it removed.
+
+    A comment above a table is ordinary in a dumped schema, and testing the raw text for
+    `create table` dropped every table that had one -- silently, so the summary described a
+    database with a table missing rather than failing.
+    """
+    text = statement.strip()
+    while True:
+        if text.startswith("--"):
+            _, _, text = text.partition("\n")
+        elif text.startswith("/*"):
+            _, _, text = text.partition("*/")
+        else:
+            return text
+        text = text.strip()
 
 
 def _table_body(statement):
@@ -155,53 +248,73 @@ def _split_top_level(body):
 def compact_schema(schema):
     """One line per table, column names only -- the 'tables' view of the database."""
     lines = []
-    for statement in schema.split(";"):
-        statement = statement.strip()
+    for statement in _statements(schema):
+        statement = _without_leading_comments(statement)
         if not statement.lower().startswith("create table"):
             continue
-        head, _, _ = statement.partition("(")
-        table = head.split()[-1].strip("\"`[]'")
+        syntax = _outside_quotes(statement)
+        opened = syntax.find("(")
         body = _table_body(statement)
-        if body is None:
+        if opened == -1 or body is None:
             continue
+        head = statement[:opened]
+        table = ""
+        index = 0
+        while index < len(head):
+            if head[index].isspace():
+                index += 1
+                continue
+            token, index = _read_name(head, index)
+            if token:
+                table = token
+            else:
+                index += 1
         columns = []
         for part in _split_top_level(body):
-            words = part.strip().split()
-            if words and words[0].lower() not in CONSTRAINT_KEYWORDS:
-                columns.append(words[0].strip("\"`[]'"))
-        lines.append(f"{table}({', '.join(columns)})")
+            declaration = part.strip()
+            if not declaration:
+                continue
+            name, _ = _read_name(declaration, 0)
+            if name.strip("\"`[]'").lower() in CONSTRAINT_KEYWORDS:
+                continue
+            columns.append(_as_written(name))
+        lines.append(f"{_as_written(table)}({', '.join(columns)})")
     return "\n".join(lines)
 
 
-def schema_blocks(schema, context):
-    """The schema blocks this setting shows -- none at all, or the one it names.
-
-    'none' is the control arm, so it yields nothing to add to the prompt: not an empty
-    block, and not a sentence saying the schema was withheld. A sentence is content the
-    model reads, and the setting would then be measuring that sentence as well as the
-    schema it stands in for.
-    """
-    if context not in SCHEMA_CONTEXTS:
-        raise ValueError(f"schema_context {context!r} is not one of {SCHEMA_CONTEXTS}")
-    if context == "none":
-        return ()
-    if context == "tables":
-        return (compact_schema(schema),)
-    return (schema,)
-
-
-def build_prompt(question, config):
-    """The exact text sent to the model, assembled from the settings that shape it."""
+def schema_body(question, config):
+    """The structure text that follows the heading this setting chose."""
     entry = catalog().get(question)
     if entry is None:
         raise KeyError(
             f"no database recorded for this question, so there is nothing to write SQL against: {question!r}"
         )
-    context = str(config.get("schema_context", DEFAULTS["schema_context"]))
-    parts = [PROMPT_STYLES[config.get("prompt_style", DEFAULTS["prompt_style"])]]
-    parts.append(f"\nQuestion: {question}\nSQL:")
-    for block in schema_blocks(entry["schema"], context):
-        parts.insert(0, f"Database schema:\n{block}\n\n")
+    context = config.get("schema_context", DEFAULTS["schema_context"])
+    if context not in SCHEMA_CONTEXTS:
+        raise ValueError(
+            f"schema_context {context!r} is not one of the views this agent shows"
+        )
+    if context == "none":
+        return ""
+    if context == "tables":
+        return f"{compact_schema(entry['schema'])}\n\n"
+    return f"{entry['schema']}\n\n"
+
+
+def build_prompt(question, config, schema=""):
+    """The exact text sent to the model, assembled from the settings that shape it."""
+    if question not in catalog():
+        raise KeyError(
+            f"no database recorded for this question, so there is nothing to write SQL against: {question!r}"
+        )
+    parts = [
+        SCHEMA_CONTEXTS[config.get("schema_context", DEFAULTS["schema_context"])],
+        PROMPT_STYLES[config.get("prompt_style", DEFAULTS["prompt_style"])],
+        f"\nQuestion: {question}\nSQL:",
+    ]
+    # The structure goes under the heading that introduced it, so the control arm -- whose
+    # heading is empty and whose structure is empty -- adds nothing at all.
+    parts.insert(1, f"{schema}")
     return "".join(parts)
 
 
@@ -237,11 +350,11 @@ def call_model(model, prompt, temperature):
     """One completion, from whichever vendor the model id names.
 
     The call goes through LiteLLM rather than a vendor SDK, and that is not a preference.
-    The environment the Traigent first-run guide builds installs litellm and no provider
-    package at all, so `import anthropic` here would fail on the machine this is meant to
-    It also means the vendor is a property of the model id rather than of this file: any
-    vendor LiteLLM carries is reachable by changing the roster, with no vendor package to
-    install and nothing else here to change.
+    Only litellm is installed here and no provider package at all, so `import anthropic`
+    would fail on the machine this is meant to run on. It also means the vendor is a
+    property of the model id rather than of this file: any vendor LiteLLM carries is
+    reachable by changing the roster, with no vendor package to install and nothing else
+    here to change.
 
     LiteLLM's OpenAI-shaped client is used rather than calling `litellm.completion`
     directly. It is the same transport -- `LiteLLM().chat.completions.create` forwards
@@ -249,13 +362,15 @@ def call_model(model, prompt, temperature):
     either way -- written so that the model id, the prompt and the temperature are visibly
     the arguments of the call that sends them.
     """
-    missing = [name for name in CREDENTIALS if not os.environ.get(name)]
-    if missing:
+    # The names that hold a value. The template ships every key present and empty, and a
+    # key that has not been filled in is a key this agent does not have.
+    supplied = {name for name, value in os.environ.items() if value.strip()}
+    if MODEL_CREDENTIALS[model] not in supplied:
         raise RuntimeError(
-            f"{model} is served by {VENDOR}, which needs {', '.join(missing)} in the "
-            "environment. Add it to .env rather than pointing the agent at a vendor you "
-            "happen to have a key for -- which model answers is one of the things being "
-            "measured, and changing it quietly changes the measurement."
+            f"{model} is served by {VENDOR}, which needs {MODEL_CREDENTIALS[model]} in "
+            "the environment. Add it to .env rather than pointing the agent at a vendor "
+            "you happen to have a key for -- which model answers is one of the things "
+            "being compared, and changing it quietly changes the comparison."
         )
 
     from litellm import LiteLLM
@@ -283,5 +398,9 @@ def run(input_text, config):
             f"{TEMPERATURES}"
         )
     return strip_code_fence(
-        call_model(model, build_prompt(input_text, config), temperature)
+        call_model(
+            model,
+            build_prompt(input_text, config, schema_body(input_text, config)),
+            temperature,
+        )
     )

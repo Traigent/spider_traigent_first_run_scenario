@@ -1,0 +1,2 @@
+$ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --evaluator-origin brought --evaluator-method execution --task-kind code-sql --color never --ascii --json
+exit=0

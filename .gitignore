@@ -3,5 +3,20 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
+
+# Environments. A demo ships none: the guide builds .venv-traigent inside the
+# project (build.py's FORBIDDEN_VENV_NAME), so it is exactly the one a stray
+# `git add` would sweep in, and only .venv/ and .venv-dev/ were listed.
 .venv/
 .venv-dev/
+.venv-traigent/
+
+# Filled-in secrets. Projects ship a committed .env.example (copied from
+# components/env/*.env.example) that the reader fills in as .env with a real
+# API key. The template must stay committed -- this pattern matches the file
+# named exactly `.env`, never `*.env.example`.
+.env
+
+# Run output: logs from build/verify runs and from backgrounded commands.
+*.log
+nohup.out

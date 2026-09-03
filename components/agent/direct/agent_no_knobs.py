@@ -1,14 +1,13 @@
 """Turns a question about a database into the SQL that answers it.
 
-The model here is served by the model's own vendor.
+The model here is served by its own vendor.
 
 One model, one prompt, no settings. The configuration this agent is handed is accepted and
 ignored -- nothing inside it changes the request that goes out, so every configuration
-produces the same call. That is deliberate: it is the shape of an agent that has nothing
-to search yet.
+produces the same call.
 
-Databases come from catalog.json beside the dataset, and a reply is read exactly as the
-tunable version reads it, so the only difference between the two is what can vary.
+Databases come from catalog.json beside the dataset, and the reply is read back the same
+way every time, so the only thing that differs between two calls is the question.
 """
 
 import json
@@ -18,17 +17,16 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent
 CATALOG_PATH = PROJECT_ROOT / "catalog.json"
 
-MODELS = (
-    "gpt-4o-mini",
-    "gpt-4o",
-    "anthropic/claude-3-5-haiku-latest",
-)
+# The roster this agent calls from, which holds one model, because one model is what it
+# calls. Naming others here would say the request can vary when nothing in it does.
+MODELS = ("gpt-4o-mini",)
+MODEL = MODELS[0]
 
 VENDOR = "the model's own vendor"
-# What this roster needs in the environment before it can call anything.
-CREDENTIALS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY")
+# The key each model in the roster needs before it can be called.
+MODEL_CREDENTIALS = {"gpt-4o-mini": "OPENAI_API_KEY"}
+CREDENTIALS = tuple(dict.fromkeys(MODEL_CREDENTIALS.values()))
 
-MODEL = "gpt-4o-mini"
 INSTRUCTION = "Output the SQLite query only -- no explanation, no markdown."
 
 _catalog = None
@@ -45,7 +43,7 @@ def catalog():
 def strip_code_fence(text):
     """The query on its own, with any markdown wrapping the model added removed.
 
-    Both prompt styles ask for SQL only, so this is a backstop rather than the normal path.
+    The instruction asks for SQL only, so this is a backstop rather than the normal path.
     It handles what a model actually does when it ignores that: a ``` or ~~~ fence with or
     without a language tag, a line of preamble before it, and anything after the closing one.
 
@@ -74,11 +72,11 @@ def call_model(model, prompt, temperature):
     """One completion, from whichever vendor the model id names.
 
     The call goes through LiteLLM rather than a vendor SDK, and that is not a preference.
-    The environment the Traigent first-run guide builds installs litellm and no provider
-    package at all, so `import anthropic` here would fail on the machine this is meant to
-    It also means the vendor is a property of the model id rather than of this file: any
-    vendor LiteLLM carries is reachable by changing the roster, with no vendor package to
-    install and nothing else here to change.
+    Only litellm is installed here and no provider package at all, so `import anthropic`
+    would fail on the machine this is meant to run on. It also means the vendor is a
+    property of the model id rather than of this file: any vendor LiteLLM carries is
+    reachable by naming a different model, with no vendor package to install and nothing
+    else here to change.
 
     LiteLLM's OpenAI-shaped client is used rather than calling `litellm.completion`
     directly. It is the same transport -- `LiteLLM().chat.completions.create` forwards
@@ -86,13 +84,15 @@ def call_model(model, prompt, temperature):
     either way -- written so that the model id, the prompt and the temperature are visibly
     the arguments of the call that sends them.
     """
-    missing = [name for name in CREDENTIALS if not os.environ.get(name)]
-    if missing:
+    # The names that hold a value. The template ships every key present and empty, and a
+    # key that has not been filled in is a key this agent does not have.
+    supplied = {name for name, value in os.environ.items() if value.strip()}
+    if MODEL_CREDENTIALS[model] not in supplied:
         raise RuntimeError(
-            f"{model} is served by {VENDOR}, which needs {', '.join(missing)} in the "
-            "environment. Add it to .env rather than pointing the agent at a vendor you "
-            "happen to have a key for -- which model answers is one of the things being "
-            "measured, and changing it quietly changes the measurement."
+            f"{model} is served by {VENDOR}, which needs {MODEL_CREDENTIALS[model]} in "
+            "the environment. Add it to .env rather than pointing the agent at a vendor "
+            "you happen to have a key for -- a different vendor writes a different answer, "
+            "and swapping one in quietly changes what this agent does."
         )
 
     from litellm import LiteLLM

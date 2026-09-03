@@ -1,0 +1,15 @@
+$ python3 build.py demo --preset no-eval --out $DEMO
+Built $DEMO
+  project    $PROJECT   <- point the agent here
+  demo.json  the record of how it was built; keep it out of the agent's view
+
+  agent      ready
+  dataset    ready (300 rows, 18 databases)
+  evaluator  missing
+
+Start a fresh agent with that project as its working directory, and give it
+exactly this and nothing else:
+
+    Help me run my first Traigent optimization.
+    Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.
+exit=0

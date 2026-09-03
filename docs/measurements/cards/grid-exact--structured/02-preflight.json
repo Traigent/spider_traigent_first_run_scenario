@@ -1,0 +1,225 @@
+[
+  {
+    "check": "env-source",
+    "status": "PASS",
+    "detail": "process environment only; process values take precedence",
+    "metrics": null
+  },
+  {
+    "check": "env-file",
+    "status": "WARN",
+    "detail": ".env not found; create a minimal file before paid work",
+    "metrics": null
+  },
+  {
+    "check": "python-version",
+    "status": "PASS",
+    "detail": "3.12.3",
+    "metrics": null
+  },
+  {
+    "check": "sdk-version",
+    "status": "SKIP",
+    "detail": "traigent is not installed yet; verify it in the isolated environment after installation",
+    "metrics": null
+  },
+  {
+    "check": "provider-credentials",
+    "status": "WARN",
+    "detail": "no LLM provider credential names are present; inspect the agent route separately. Bedrock signs through the AWS credential chain, so a shared profile, an SSO session or an instance role authenticates it with nothing set here. On a route whose credential is an environment variable, do not begin paid work until that route's credential is present",
+    "metrics": null
+  },
+  {
+    "check": "traigent-key",
+    "status": "PASS",
+    "detail": "not configured yet; required only for connected execution",
+    "metrics": null
+  },
+  {
+    "check": "cost-cap",
+    "status": "PASS",
+    "detail": "no per-optimization cap set here; each paid process derives its own from the approved figures it is launched with",
+    "metrics": null
+  },
+  {
+    "check": "model-format:openrouter/qwen/qwen3-coder",
+    "status": "PASS",
+    "detail": "format accepted; liveness requires a separately approved provider check",
+    "metrics": null
+  },
+  {
+    "check": "model-pricing:openrouter/qwen/qwen3-coder",
+    "status": "PASS",
+    "detail": "local price map returned prompt=0.00022, completion=0.00095",
+    "metrics": null
+  },
+  {
+    "check": "model-format:openrouter/openai/gpt-oss-120b",
+    "status": "PASS",
+    "detail": "format accepted; liveness requires a separately approved provider check",
+    "metrics": null
+  },
+  {
+    "check": "model-pricing:openrouter/openai/gpt-oss-120b",
+    "status": "PASS",
+    "detail": "local price map returned prompt=0.00017999999999999998, completion=0.0007999999999999999",
+    "metrics": null
+  },
+  {
+    "check": "model-format:openrouter/meta-llama/llama-3.3-70b-instruct",
+    "status": "PASS",
+    "detail": "format accepted; liveness requires a separately approved provider check",
+    "metrics": null
+  },
+  {
+    "check": "model-pricing:openrouter/meta-llama/llama-3.3-70b-instruct",
+    "status": "WARN",
+    "detail": "no local price entry; do not claim a reliable estimate until pricing is resolved",
+    "metrics": null
+  },
+  {
+    "check": "dataset-shape",
+    "status": "PASS",
+    "detail": "300 valid JSONL rows",
+    "metrics": {
+      "scoreable_rows": 300,
+      "candidate_rows": 300
+    }
+  },
+  {
+    "check": "dataset-first-run-rows",
+    "status": "PASS",
+    "detail": "proposed first-run subset cap: 18 usable rows per configuration from 300 usable rows; select and record the actual row ids before baseline approval",
+    "metrics": {
+      "first_run_rows": 18,
+      "usable_rows": 300
+    }
+  },
+  {
+    "check": "dataset-input-shape",
+    "status": "PASS",
+    "detail": "all inputs use the same str shape",
+    "metrics": null
+  },
+  {
+    "check": "dataset-provenance",
+    "status": "PASS",
+    "detail": "declared sources: ['real']",
+    "metrics": {
+      "rows": 300,
+      "labelled_rows": 300,
+      "synthetic": false,
+      "generated_outputs": false,
+      "collected_rows": 300,
+      "synthesised_rows": 0,
+      "undeclared_rows": 0,
+      "generated_answer_rows": 0,
+      "answerable_rows": 300,
+      "sources": [
+        "real"
+      ],
+      "unrecognised_sources": []
+    }
+  },
+  {
+    "check": "dataset-ids",
+    "status": "PASS",
+    "detail": "stable ids are unique",
+    "metrics": null
+  },
+  {
+    "check": "dataset-duplicates",
+    "status": "PASS",
+    "detail": "no exact or normalized duplicate inputs",
+    "metrics": {
+      "distinct_rows": 300,
+      "scoreable_rows": 300
+    }
+  },
+  {
+    "check": "dataset-near-duplicates",
+    "status": "PASS",
+    "detail": "no input pair reaches 70% similarity",
+    "metrics": null
+  },
+  {
+    "check": "dataset-outputs",
+    "status": "PASS",
+    "detail": "296 distinct expected outputs",
+    "metrics": null
+  },
+  {
+    "check": "dataset-ceiling-risk",
+    "status": "SKIP",
+    "detail": "answer dominance is UNCHECKED for every expected output, not clean: 300 rows spread over 296 distinct answers is fewer than two rows per distinct answer on average, so how often the most common one appears is a listing of your answers rather than a measurement of them, and 1 in 296 is not a chance baseline to compare it against. Free text lands here because every row is its own answer; so does a label set with too few rows to fill it. No answer here reaches 90% of the rows either, which is the one thing that can be said without a baseline - and that is not the same as no answer dominating",
+    "metrics": null
+  },
+  {
+    "check": "dataset-split",
+    "status": "PASS",
+    "detail": "tuning and held-out inputs are disjoint",
+    "metrics": {
+      "kind": "tuning-and-holdout"
+    }
+  },
+  {
+    "check": "dataset-split-family",
+    "status": "PASS",
+    "detail": "15 of 24 recurring input forms appear on both sides, so the split does not follow the task families",
+    "metrics": {
+      "families": 24,
+      "shared_families": 15
+    }
+  },
+  {
+    "check": "dataset-tuning-size",
+    "status": "PASS",
+    "detail": "240 tuning rows; clears the 10-row static wiring boundary; readiness rates comparison size separately",
+    "metrics": {
+      "tuning_rows": 240,
+      "tuning_labelled_rows": 240,
+      "tuning_distinct_rows": 240
+    }
+  },
+  {
+    "check": "dataset-holdout-resolution",
+    "status": "PASS",
+    "detail": "60 held-out rows; one example changes the score by 1.7 percentage points",
+    "metrics": {
+      "holdout_rows": 60,
+      "holdout_labelled_rows": 60
+    }
+  },
+  {
+    "check": "dataset-difficulty-coverage",
+    "status": "PASS",
+    "detail": "300 of 300 rows carry a difficulty tag; bands present: ['easy', 'hard', 'medium', 'very-hard']",
+    "metrics": {
+      "tagged_rows": 300,
+      "total_rows": 300,
+      "candidate_rows": 300,
+      "bands": [
+        "easy",
+        "hard",
+        "medium",
+        "very-hard"
+      ],
+      "missing_bands": []
+    }
+  },
+  {
+    "check": "dataset-difficulty",
+    "status": "PASS",
+    "detail": "all four difficulty bands are represented",
+    "metrics": null
+  },
+  {
+    "check": "evaluator-shape",
+    "status": "PASS",
+    "detail": "evaluator.py parses as valid Python; this proves nothing about its scoring behavior, which is not executed here",
+    "metrics": {
+      "exists": true,
+      "parses": true
+    }
+  }
+]

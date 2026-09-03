@@ -1,0 +1,29 @@
+$ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --evaluator-origin brought --evaluator-method normalized-exact --task-kind code-sql --color never --ascii
+TRAIGENT OPTIMIZATION READINESS        45/100  PARTIAL
+
+  AGENT       --------------------  0/100  (0 of 5 checks measured)
+    ? whether it ends, and on what                     no reading of how the agent is built reached this score; reading the agent is what answers this
+    ? whether the answer's shape is pinned down        no reading of how the agent is built reached this score; reading the agent is what answers this
+    ? what the model is told, and shown                no reading of how the agent is built reached this score; reading the agent is what answers this
+    ? how many settings-combinations there are to try  no settings document was provided to this score
+    ? tools it declares, and can reach                 no reading of how the agent is built reached this score; reading the agent is what answers this
+    not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
+
+  DATASET     ####################  98/100  (4 of 5 checks measured)
+    OK range of difficulty           bands present: easy, hard, medium, very-hard
+    ? repeated or dominant answers  not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean
+    OK answers to score against      300/300 rows carry an expected output
+    OK examples to compare on        240 to tune on / 60 held back; 240 examples - substantial comparison set
+    OK where the rows came from      300 collected of 300 rows; declared sources: real
+
+  EVALUATION  #######-------------  33/100  (2 of 4 checks measured)
+    ? checked on known-good and known-bad  no calibration result was provided to this score
+    ? separates good answers from bad      not yet measured how far apart it scores a right and a wrong answer
+    OK same answer every time               deterministic scoring rule
+    !! right kind of check for this output  normalized-exact is a poor ruler for code-sql output
+
+  LIMITED TO 45 An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.
+  LIMITED TO 45 No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them.
+
+  Local pre-run planning estimate, not a probability or measured optimization result.
+exit=0

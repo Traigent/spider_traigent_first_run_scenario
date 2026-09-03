@@ -1,0 +1,2 @@
+$ python3 $GUIDE/preflight.py --defer-missing-sdk --json --dataset dataset.jsonl --evaluator evaluator.py --evaluator-method normalized-exact
+exit=0

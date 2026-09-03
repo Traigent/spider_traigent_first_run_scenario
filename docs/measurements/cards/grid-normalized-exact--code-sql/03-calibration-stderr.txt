@@ -1,0 +1,2 @@
+$ python3 $GUIDE/calibrate_evaluator.py --scorer evaluator.py:score --import-root $PROJECT --cases @traigent-runs/calibration-cases.json --kind deterministic --allow-execution --json
+exit=0
