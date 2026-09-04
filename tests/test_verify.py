@@ -338,6 +338,22 @@ class VerifyReadsTheDemosOwnPath(ADemoFixture):
         out = self.copy(name=build.bank_directory("wrong-answers"))
         self.assertEqual(build.verify_demo(out), [])
 
+    def test_a_telling_path_is_reported_however_the_words_are_joined(self) -> None:
+        """A hyphen is not the only way somebody writes a compound directory name.
+
+        `revealing_names` matches its labels literally, hyphens and all, on purpose: a
+        space would turn `no-agent` into the ordinary phrase an agent file writes by
+        accident. But an underscore joins words exactly the way a hyphen does -- nobody
+        writes `wrong_answers` by accident -- and a check that only recognised the hyphen
+        spelling let the commonest alternative directory-naming convention straight through.
+        """
+        out = self.copy(name="wrong_answers")
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any("the path this demo sits at" in p for p in problems), problems
+        )
+        self.assertTrue(any("'wrong-answers'" in p for p in problems), problems)
+
 
 class VerifyOverAWholeBank(unittest.TestCase):
     """`verify --demo <root>` reads every directory under the root, not only the good ones."""

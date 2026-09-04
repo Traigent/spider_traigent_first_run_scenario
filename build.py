@@ -1651,9 +1651,15 @@ def tells_in(text: str, where: str) -> list[str]:
     for tell in FIXTURE_TELLS:
         if normalized(tell) in folded:
             found.append(f"{where} contains {tell!r}, which says this is a test")
-    lowered = text.casefold()
+    # Hyphenated labels are matched literally rather than fully normalised (see
+    # `revealing_names`): a hyphen is what makes `no-agent` a label rather than the
+    # ordinary phrase "no agent" an agent file writes by accident. An underscore joins
+    # words the same way a hyphen does -- nothing writes `no_agent` by accident describing
+    # a piece of hardware that is absent -- so it is folded to the same hyphen spelling
+    # before matching. A space is left alone; that is the distinction the check depends on.
+    joined = text.casefold().replace("_", "-")
     for name in revealing_names():
-        if name in lowered:
+        if name in joined:
             found.append(f"{where} contains {name!r}, which says this is a test")
     return found
 
