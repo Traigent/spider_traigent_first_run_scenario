@@ -799,6 +799,10 @@ class EveryBuiltDemoPassesItsOwnCheck(unittest.TestCase):
             "SPIDER_TRAIGENT",
             "first-run-scenario",
             "Generated Demo",
+            # A hyphenated label (see `revealing_names`) written with underscores instead --
+            # the ordinary alternative spelling for a directory name, and not one the
+            # roster's own literal-hyphen matching used to recognise.
+            "sql_exec_stop",
         ):
             with self.subTest(spelling=spelling):
                 problems = self.damaged(
