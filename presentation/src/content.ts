@@ -10,7 +10,7 @@ const rawPresentation = {
   schemaVersion: 2,
   title: "Traigent First Run: Presales Showcase",
   subtitle:
-    "How Traigent Guided First Run leads customer projects from inspection to graded readiness, gap repair, and evidenced optimization",
+    "How Traigent Guided First Run leads customer projects from inspection to graded readiness, gap repair, and a justified next step",
   scenario: {
     slug: "spider-text-to-sql-benchmark",
     legacyId: 1,
@@ -51,9 +51,9 @@ const rawPresentation = {
       kind: "hero",
       eyebrow: "TRAIGENT FIRST RUN · PRESALES SHOWCASE",
       title:
-        "Start with the project you have. Leave with an evidenced optimization.",
-      accent: "evidenced optimization",
-      body: "Traigent Guided First Run meets customer repositories where they actually are. It inspects without touching production or spending money, grades readiness honestly, repairs evaluation and data gaps, and leads to an approved, bounded optimization.",
+        "Start with the project you have. Leave with a justified next step.",
+      accent: "justified next step",
+      body: "Traigent Guided First Run meets customer repositories where they actually are. It inspects without touching production or spending money, grades readiness honestly, repairs evaluation and data gaps, and leads to an approved, bounded first run.",
       bullets: [],
       metrics: [],
       steps: [],
