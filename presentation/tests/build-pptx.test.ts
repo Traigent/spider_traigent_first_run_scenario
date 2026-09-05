@@ -119,7 +119,7 @@ describe("PowerPoint export", () => {
     expect(coreProperties).toContain("2027-01-15T08:00:00Z");
   });
 
-  it("does not execute the vulnerable image-size parser from shipped PptxGenJS code", async () => {
+  it("does not load the image-size parser from shipped PptxGenJS code", async () => {
     const distDirectory = path.join(
       presentationRoot,
       "node_modules",

@@ -23,6 +23,45 @@ export interface JavaScriptToken {
   readonly value: string;
 }
 
+export interface ReadJavaScriptTokensOptions {
+  // Whether the source may contain JSX, where `</` closes a tag and `/>`
+  // self-closes one. In plain JavaScript either would begin a regular
+  // expression, so this is set only for `.tsx` and `.jsx` sources.
+  readonly jsx?: boolean;
+}
+
+/**
+ * The lexer could not tell what a piece of source is.
+ *
+ * It is thrown rather than guessed around. A `/` read as the wrong thing
+ * swallows the code after it into a regular-expression token, and a quote read
+ * as the wrong thing swallows it into a string; a scan that read past a
+ * swallowed `fetch` would certify the source as offline on the strength of
+ * never having seen it. Refusing is the only answer that cannot be wrong.
+ */
+export class JavaScriptLexError extends Error {
+  constructor(message: string, source: string, index: number) {
+    super(`${message} at line ${lineNumberAt(source, index)}`);
+    this.name = "JavaScriptLexError";
+  }
+}
+
+function lineNumberAt(source: string, index: number): number {
+  let line = 1;
+  for (let cursor = 0; cursor < index && cursor < source.length; cursor += 1) {
+    if (source[cursor] === "\n") {
+      line += 1;
+    }
+  }
+  return line;
+}
+
+// Content an honestly written regular-expression literal cannot hold: a
+// network call, or an address whose `//` would have ended the literal. Either
+// means the `/` that opened the token was read as the wrong thing.
+const MISREAD_REGULAR_EXPRESSION =
+  /\b(?:fetch|XMLHttpRequest|WebSocket|EventSource|sendBeacon|importScripts|import)\s*\(|(?:https?|wss?|ftp):(?:\/|$)/i;
+
 // Words after which a `/` opens a regular expression rather than dividing.
 const REGULAR_EXPRESSION_PRECEDING_WORDS = new Set([
   "await",
@@ -127,27 +166,51 @@ function readQuoted(
   source: string,
   start: number,
   quote: string,
-): { value: string; next: number } {
+): {
+  value: string;
+  next: number;
+  terminated: boolean;
+  rawLineTerminator: boolean;
+} {
   let value = "";
   let index = start;
+  let rawLineTerminator = false;
   while (index < source.length) {
     const character = source[index]!;
     if (character === "\\") {
+      // A backslash before a line break continues the literal onto the next
+      // line and contributes nothing to its value.
+      if (source[index + 1] === "\n") {
+        index += 2;
+        continue;
+      }
+      if (source[index + 1] === "\r") {
+        index += source[index + 2] === "\n" ? 3 : 2;
+        continue;
+      }
       const decoded = decodeEscape(source, index + 1);
       value += decoded.text;
       index = decoded.next;
       continue;
     }
     if (character === quote) {
-      return { value, next: index + 1 };
+      return { value, next: index + 1, terminated: true, rawLineTerminator };
+    }
+    if (character === "\n" || character === "\r") {
+      // A string literal cannot hold a raw line break, so the quote that
+      // opened this one was read as the wrong thing.
+      rawLineTerminator = true;
     }
     value += character;
     index += 1;
   }
-  return { value, next: index };
+  return { value, next: index, terminated: false, rawLineTerminator };
 }
 
-function readRegularExpression(source: string, start: number): number {
+function readRegularExpression(
+  source: string,
+  start: number,
+): { end: number; terminated: boolean } {
   let index = start;
   let inClass = false;
   while (index < source.length) {
@@ -165,13 +228,13 @@ function readRegularExpression(source: string, start: number): number {
       while (index < source.length && IDENTIFIER_PART.test(source[index]!)) {
         index += 1;
       }
-      return index;
+      return { end: index, terminated: true };
     } else if (character === "\n") {
-      return index;
+      return { end: index, terminated: false };
     }
     index += 1;
   }
-  return index;
+  return { end: index, terminated: false };
 }
 
 function regularExpressionMayFollow(
@@ -213,7 +276,10 @@ function opensExpressionBrace(previous: JavaScriptToken | undefined): boolean {
  * regular-expression contents are kept as single tokens so their contents can
  * never be mistaken for code. Template substitutions are lexed as code.
  */
-export function readJavaScriptTokens(source: string): JavaScriptToken[] {
+export function readJavaScriptTokens(
+  source: string,
+  options: ReadJavaScriptTokensOptions = {},
+): JavaScriptToken[] {
   const tokens: JavaScriptToken[] = [];
   // Each entry is the brace depth at which an open template resumes.
   const templateDepths: number[] = [];
@@ -269,18 +335,37 @@ export function readJavaScriptTokens(source: string): JavaScriptToken[] {
       continue;
     }
     if (character === "/") {
+      const previous = tokens[tokens.length - 1];
       if (
-        regularExpressionMayFollow(
-          tokens[tokens.length - 1],
-          closedExpressionBrace,
-        )
+        options.jsx === true &&
+        ((previous?.kind === "punctuation" && previous.value === "<") ||
+          source[index + 1] === ">")
       ) {
-        const end = readRegularExpression(source, index + 1);
-        tokens.push({
-          kind: "regular-expression",
-          value: source.slice(index, end),
-        });
-        index = end;
+        // `</name>` closes a tag and `<name />` self-closes one; neither
+        // begins a regular expression.
+        tokens.push({ kind: "punctuation", value: "/" });
+        index += 1;
+        continue;
+      }
+      if (regularExpressionMayFollow(previous, closedExpressionBrace)) {
+        const literal = readRegularExpression(source, index + 1);
+        const value = source.slice(index, literal.end);
+        if (!literal.terminated) {
+          throw new JavaScriptLexError(
+            "a `/` read as a regular expression has no closing `/` on its line",
+            source,
+            index,
+          );
+        }
+        if (MISREAD_REGULAR_EXPRESSION.test(value)) {
+          throw new JavaScriptLexError(
+            "a `/` read as a regular expression encloses a network call or address, so it was read as the wrong thing",
+            source,
+            index,
+          );
+        }
+        tokens.push({ kind: "regular-expression", value });
+        index = literal.end;
         continue;
       }
       const operator = source[index + 1] === "=" ? "/=" : "/";
@@ -290,6 +375,20 @@ export function readJavaScriptTokens(source: string): JavaScriptToken[] {
     }
     if (character === '"' || character === "'") {
       const quoted = readQuoted(source, index + 1, character);
+      if (!quoted.terminated) {
+        throw new JavaScriptLexError(
+          "a string literal has no closing quote",
+          source,
+          index,
+        );
+      }
+      if (quoted.rawLineTerminator) {
+        throw new JavaScriptLexError(
+          "a string literal runs across a line break, so its opening quote was read as the wrong thing",
+          source,
+          index,
+        );
+      }
       tokens.push({ kind: "text", value: quoted.value });
       index = quoted.next;
       continue;
@@ -551,6 +650,24 @@ function networkIssuesAt(
 }
 
 /**
+ * Lex a source, or turn the lexer's refusal into the finding it is: source
+ * the gate cannot read is source the gate cannot certify.
+ */
+function tokensOrIssue(
+  source: string,
+  options: ReadJavaScriptTokensOptions,
+): { tokens: JavaScriptToken[] } | { issue: string } {
+  try {
+    return { tokens: readJavaScriptTokens(source, options) };
+  } catch (error) {
+    if (error instanceof JavaScriptLexError) {
+      return { issue: `unreadable script: ${error.message}` };
+    }
+    throw error;
+  }
+}
+
+/**
  * Report the network reachable from a built artifact's script: capabilities
  * that exist only to make requests, and remote addresses that sit in a
  * position the browser will request from.
@@ -560,8 +677,15 @@ function networkIssuesAt(
  * has to be visible. `findSourceCapabilities` is the stricter rule, and is the
  * one that decides first-party source.
  */
-export function findNetworkTargets(source: string): string[] {
-  const tokens = readJavaScriptTokens(source);
+export function findNetworkTargets(
+  source: string,
+  options: ReadJavaScriptTokensOptions = {},
+): string[] {
+  const read = tokensOrIssue(source, options);
+  if ("issue" in read) {
+    return [read.issue];
+  }
+  const { tokens } = read;
   const issues: string[] = [];
   for (let index = 0; index < tokens.length; index += 1) {
     issues.push(...networkIssuesAt(tokens, index, NETWORK_CAPABILITIES));
@@ -576,8 +700,15 @@ export function findNetworkTargets(source: string): string[] {
  * a sentence inside a string literal that mentions `fetch` is text, while a
  * call to `fetch` is a call, whatever its arguments are made of.
  */
-export function findSourceCapabilities(source: string): string[] {
-  const tokens = readJavaScriptTokens(source);
+export function findSourceCapabilities(
+  source: string,
+  options: ReadJavaScriptTokensOptions = {},
+): string[] {
+  const read = tokensOrIssue(source, options);
+  if ("issue" in read) {
+    return [read.issue];
+  }
+  const { tokens } = read;
   const issues: string[] = [];
 
   for (let index = 0; index < tokens.length; index += 1) {

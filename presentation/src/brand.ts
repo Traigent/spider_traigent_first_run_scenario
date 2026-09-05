@@ -1,8 +1,9 @@
 // Traigent brand assets shared by the HTML renderer.
 //
-// The PowerPoint build intentionally ships no raster media (its image parser is
-// disabled as a supply-chain mitigation), so scripts/build-pptx.ts re-draws the
-// mark from native vector shapes instead of importing this data URI.
+// The PowerPoint build intentionally ships no raster media (tests/build-pptx
+// holds that line: no media entry, no picture element), so
+// scripts/build-pptx.ts re-draws the mark from native vector shapes instead of
+// importing this data URI.
 export const brandName = "Traigent.ai";
 
 // Brand blue sampled from the traigent.ai header mark.

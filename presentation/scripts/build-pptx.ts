@@ -76,9 +76,9 @@ function addBackground(pptx: PptxGenJS, slide: PptxGenJS.Slide): void {
 }
 
 // The traigent.ai mark, re-drawn from native vector shapes because this build
-// intentionally ships no raster media (its image parser is disabled as a
-// supply-chain mitigation). Geometry is measured from the 155x125 header icon
-// and expressed in icon pixels, scaled uniformly to the placed height.
+// intentionally ships no raster media. Geometry is measured from the 155x125
+// header icon and expressed in icon pixels, scaled uniformly to the placed
+// height.
 const BRAND_MARK = {
   sourceWidth: 155,
   sourceHeight: 125,

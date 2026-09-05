@@ -6,20 +6,22 @@ This directory builds one customer-facing story from one validated semantic sour
 - an editable PowerPoint presentation with native text, shapes, and speaker
   notes.
 
-The presentation explains the public scenario contract and the boundary between
-catalog validation, a Phase A opening, and a separately approved Phase B live
+The presentation explains the guided first run, the Spider text-to-SQL demo
+projects this repository builds, and the boundary between a catalog check
+(`build.py check`), a Phase A opening, and a separately approved Phase B live
 optimization. The current content does not claim that a fresh worker run has
 been recorded or verified.
 
-The first 10 slides form the presales/CTO core story. The remaining 18 slides
+The first 10 slides form the presales/CTO core story. The remaining 11 slides
 are a clearly marked technical appendix with stage detail, scoring mechanics,
-scenario organization, and the public coverage roadmap.
+held-out evaluation, and the Spider scenario reference cards.
 
 ## Source of truth
 
-`src/content.ts` is the canonical slide content. It reads the published scenario
-manifest and expected opening contract. `src/model.ts` validates the complete
-presentation before either renderer uses it.
+`src/content.ts` is the canonical slide content. It imports nothing from outside
+`src/`; its Spider facts are a reviewed snapshot of this repository's `README.md`
+and of `python3 build.py list` and `python3 build.py check`. `src/model.ts`
+validates the complete presentation before either renderer uses it.
 
 Both HTML and PowerPoint consume the same parsed `presentation` object. Do not
 maintain separate claims for the two formats, and do not hand-edit generated
@@ -34,23 +36,25 @@ changes; do not adjust a number merely to improve slide layout.
 
 ## Reproduction contract behind the deck
 
-The presentation's evidence wording follows the public CLI contract:
+The presentation's evidence wording follows this repository's `build.py`
+contract. `build.py` is standard library only, has no install step, and builds
+from committed data, so a fresh clone can build offline:
 
-- `scenario.py check 46` validates the fully materialized package and the
-  strict expected-opening structure and ranges. It does not run an agent.
-- `scenario.py prepare 46 --guide-src PATH --output PATH` copies only clean,
-  tracked selected-project and allowlisted guide files. Its captain-side
-  `run.json` records the exact scenario project, captain-only contract, and guide
-  Git revisions, aggregate content hashes, sorted file records, and worker handoff. Preparation executes
-  no scenario or guide code and makes no network request.
-- `scenario.py verify 46 --run-record RUN_JSON --result FILE` validates the
-  recorded contract against its Git revision, reads strict JSON, and compares
-  only `band`, `status`, `recommended_action`, and `caps`. It executes no
-  verifier code.
+- `python3 build.py list` shows the 17 presets and every component state the
+  presets-matrix slide summarises.
+- `python3 build.py check` validates this repository's own components and data.
+  It builds nothing and runs no agent; it is the deck's "catalog check" layer.
+- `python3 build.py demo --preset NAME --out DIR` builds one demo project, and
+  `python3 build.py suite --out DIR` builds every preset, each in its own
+  blinded directory. Only the optional `--venv ready` flag installs anything,
+  and only into the demo's own environment.
+- `python3 build.py verify --demo DIR` checks that a built demo is
+  self-contained, blind, and able to run. It reports problems rather than
+  raising, and it executes no agent or guide code.
 
-The current deck has the published expectation but no referenced captured
-worker result. A successful catalog check or a copied expected-opening file must
-not be presented as verified run evidence.
+The current deck has the published presets and their expected routing but no
+referenced captured worker result. A passing `check` or `verify`, or a built
+demo directory, must not be presented as verified run evidence.
 
 ## Requirements
 
@@ -120,13 +124,16 @@ verified-run slides explicit.
 The manifest's `offline` block is recorded from the checks that produced it and
 carries a `verified_by` object stating what those checks establish. The scanned
 set is the files the deck can actually reach: the walk of `src/` closed over the
-imports those files declare, because the content module already imports scenario
-data from outside the presentation tree, and a module placed beside it would
-otherwise be compiled into the artifact without ever being opened. An extension
+imports those files declare, so a module imported from outside the presentation
+tree is scanned as well instead of being compiled into the artifact without ever
+being opened. An extension
 the scanner does not know is a build failure, not a file it skips. The built HTML
 is then read as markup, so its external references, style declarations, and the
 scripts the browser will run are each inspected, and deck copy that quotes a tag
-or names a network API stays text. Neither check runs the deck:
+or names a network API stays text. A `/` or a quote the lexer cannot classify -
+a regular expression that would enclose a network call, or a string literal
+that runs across a line break - fails the build instead of hiding the code
+after it. Neither check runs the deck:
 `browser_execution_observed` is `false`, and the block records what the artifact
 contains rather than what a browser was seen to do. In the built artifact a
 request is reported when its address is visible, because bundled third-party code
@@ -178,14 +185,16 @@ sentence does not cover a claim in the next.
 
 1. Update `src/content.ts` and, only when the contract itself changes,
    `src/model.ts`.
-2. Keep scenario facts derived from the checked-in manifest and verifier rather
-   than duplicating them as manually maintained claims.
+2. Re-check every Spider fact against `README.md`, `python3 build.py list`, and
+   `python3 build.py check` whenever the presets or data change; the deck's
+   numbers are a reviewed snapshot, not a live read.
 3. Give each new slide an evidence state, evidence reference, and useful speaker
    note.
 4. Run `npm run check`.
 5. Inspect both `dist/index.html` and the generated PowerPoint before customer
    use.
 
-See [the repository guide](../GUIDE.md),
-[customer-PC runbook](../docs/customer-pc-runbook.md), and
-[methodology](../docs/methodology.md) for the operating and evidence boundaries.
+See the [repository README](../README.md), [the data](../docs/dataset.md),
+[the two SQL scorers](../docs/eval-methods.md), and
+[keeping a demo separate](../docs/isolation.md) for the operating and evidence
+boundaries.

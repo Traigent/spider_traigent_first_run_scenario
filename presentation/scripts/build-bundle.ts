@@ -108,21 +108,6 @@ interface ClassifiedSourceFile {
   readonly kind: SourceFileKind;
 }
 
-const FORBIDDEN_SOURCE_PATTERNS = [
-  { label: "dangerouslySetInnerHTML", pattern: /\bdangerouslySetInnerHTML\b/ },
-  { label: "eval", pattern: /\beval\s*\(/ },
-  { label: "Function constructor", pattern: /\bnew\s+Function\s*\(/ },
-  { label: "fetch", pattern: /\bfetch\b/ },
-  { label: "XMLHttpRequest", pattern: /\bXMLHttpRequest\b/ },
-  { label: "WebSocket", pattern: /\bWebSocket\b/ },
-  { label: "EventSource", pattern: /\bEventSource\b/ },
-  { label: "sendBeacon", pattern: /\bsendBeacon\b/ },
-  {
-    label: "remote module import",
-    pattern: /(?:from\s*|import\s*\()\s*["'](?:https?:)?\/\//i,
-  },
-] as const;
-
 interface ExternalReferenceRule {
   readonly label: string;
   readonly elements: readonly string[];
@@ -491,9 +476,9 @@ async function resolveLocalSpecifier(
  *
  * A directory walk answers "what is in this folder", but the question the
  * offline scan has to answer is "what can reach the customer bundle", and the
- * two are not the same: the deck's own content module already imports scenario
- * data from outside the presentation tree, so a module placed beside it would
- * be compiled into the artifact without ever being opened by a walk.
+ * two are not the same: a module imported from outside the walked tree would
+ * be compiled into the artifact without ever being opened by a walk, so the
+ * set is closed over imports rather than trusted to a folder boundary.
  */
 export async function reachableSourceFiles(
   entryFiles: readonly ClassifiedSourceFile[],
@@ -584,7 +569,9 @@ export async function assertNoForbiddenRuntimeSource(
       }
       continue;
     }
-    for (const capability of findSourceCapabilities(content)) {
+    for (const capability of findSourceCapabilities(content, {
+      jsx: /\.[jt]sx$/i.test(file.path),
+    })) {
       issues.push(`${relativePath}: ${capability}`);
     }
   }
@@ -1274,7 +1261,14 @@ export async function buildCustomerBundle(
     ...new Set(
       spec.slides
         .filter((slide) => slide.evidenceState === "guide-contract")
-        .map((slide) => slide.sourceRevision as string),
+        .map((slide) => {
+          if (slide.sourceRevision === undefined) {
+            throw new BundleBuildError(
+              `Guide-contract slide ${slide.id} reached the bundle without a source revision`,
+            );
+          }
+          return slide.sourceRevision;
+        }),
     ),
   ].sort(comparePaths);
   const gitMetadata =

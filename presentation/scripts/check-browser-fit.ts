@@ -215,7 +215,7 @@ export function isColdStartTimeout(error: unknown): boolean {
  * A browser occasionally dumps this probe page before its window has been
  * sized, reporting a viewport of zero. That reading is refused rather than
  * turned into an inset - an inset that stretches every later window would
- * measure all 28 slides at a size the gate never asked for - and the probe is
+ * measure every slide at a size the gate never asked for - and the probe is
  * simply taken again.
  */
 function measureViewportInsets(
