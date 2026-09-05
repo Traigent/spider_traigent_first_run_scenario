@@ -167,7 +167,7 @@ describe("presentation content validation", () => {
     expect(selection.body).toContain("score that single pick once");
     expect(selection.body).toContain("never part of choosing it");
     expect(selection.notes.join("\n")).toContain(
-      "not a claim that every paid first run uses all 120 rows",
+      "not a claim about every paid first run",
     );
   });
 

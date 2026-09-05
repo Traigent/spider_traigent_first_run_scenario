@@ -238,8 +238,8 @@ export function coverageLabel(
   coverage: "published" | "coverage-target",
 ): string {
   return coverage === "published"
-    ? "Published here: the ready scenario"
-    : "Works in the guide today; test scenario planned";
+    ? "Committed card, shown in this deck"
+    : "Committed card in the companion repo; not shown here";
 }
 
 export function displayEyebrow(slide: SlideSpec): string {

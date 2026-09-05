@@ -4,7 +4,19 @@ const customerPrompt =
   "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
 
 const guideRevision = "75d338c31c97643c6a6d28a6aeef582d7b938db8";
-const readinessEvidence = `Traigent/traigent-first-run@${guideRevision.slice(0, 8)} readiness scorer`;
+const guideRef = `Traigent/traigent-first-run@${guideRevision.slice(0, 8)}`;
+const readinessEvidence = `${guideRef} readiness scorer`;
+
+// The committed opening card for the ready preset. It is the guide's own
+// preflight and readiness scripts run over the built demo (guide revision
+// 6ec2b9c1, 2026-09-02, no network), with a hand-written agent read standing in
+// for the assistant's. No coding-agent session is recorded, so every slide that
+// cites it stays at scenario-contract.
+const measuredCardRevision = "6ec2b9c1";
+const readyCardEvidence =
+  "Companion repo docs/measurements/cards/ready/05-readiness.json (guide scorer at 6ec2b9c1 over the built demo; no coding-agent session recorded)";
+const scoreTableEvidence =
+  "Companion repo README score table and docs/measurements/README.md";
 
 const rawPresentation = {
   schemaVersion: 2,
@@ -15,7 +27,7 @@ const rawPresentation = {
     slug: "spider-text-to-sql-benchmark",
     legacyId: 1,
     title: "Spider Text-to-SQL First-Run Scenario",
-    expectedBand: "EXCELLENT" as const,
+    expectedBand: "PARTIAL" as const,
     phase: "phase-a-opening" as const,
   },
   catalog: [
@@ -24,24 +36,25 @@ const rawPresentation = {
       label: "Spider Text-to-SQL Preset: Ready",
       publication: "published" as const,
       startingState:
-        "Ready: complete agent, 300 Spider questions across 18 SQLite databases, and execution-match evaluator present.",
+        "Ready preset: tunable agent, 300 Spider questions across 18 SQLite databases, and an exact-match text evaluator present. No calibration probes ship with it, so the scorer is not yet checked.",
       components: [
-        "Agent (ready): tunable temperature, model, prompt template, and SQL dialect",
-        "Dataset (ready): 300 Spider questions and queries across 18 SQLite schemas",
-        "Evaluator (ready): SQL execution accuracy on target database",
-        "Calibration: deterministic test queries checking table structures and output rows",
+        "Agent (ready): tunable model, schema_context, prompt_style, and temperature; the output is always SQLite SQL",
+        "Dataset (ready): 300 Spider questions and gold queries across 18 SQLite schemas; build.py holds back 60 of them",
+        "Evaluator (ready): exact-match text comparator that normalises spacing, quotes, and keyword case; it never executes SQL",
+        "Calibration: none in this preset; probe answers travel only with checked, hand-written, fake-ruler, and best-case",
       ],
       dataset:
-        "Spider 1.0 benchmark data (Yu et al., EMNLP 2018) under CC BY-SA 4.0; 300 questions across 18 SQLite databases, with easy, medium, hard, and extra-hard strata. Limitations: text-to-SQL specific domain.",
+        "Spider 1.0 benchmark data (Yu et al., EMNLP 2018) under CC BY-SA 4.0; 300 questions across 18 SQLite databases, balanced 75 apiece across easy, medium, hard, and very-hard strata. Limitations: text-to-SQL specific domain, and a public benchmark current models have very likely seen.",
       evaluator:
-        "Execution match against live SQLite database; evaluates whether the candidate query returns identical result sets to gold SQL.",
+        "Normalised exact match against the recorded gold query as text. It never runs SQL, so a correct query written differently from the gold is marked wrong. The repo's execution-match scorer is a separate evaluator the guide stops before running.",
       expectedRouting:
-        "Preset ready: band EXCELLENT, status OK, action continue to baseline approval; no foundation caps trigger.",
+        "Committed opening card: 45/100, band PARTIAL, recommended action proceed, one cap (evaluator-unvalidated, ceiling 45, not blocking); pillars agent 70, dataset 98, evaluation 33. Calibrating the scorer (preset checked) reads 86 STRONG with no caps.",
       testedLayer:
-        "First-run discovery, static readiness scoring, and baseline preparation on real SQL data. No coding agent run is claimed in this release.",
+        "Preflight and static readiness scoring over the built demo, run with the guide's own scripts at guide revision 6ec2b9c1. No coding-agent session and no baseline are recorded.",
       notProven: [
         "Universal model accuracy across unseen schemas",
         "Production deployment performance on non-SQLite engines",
+        "Any baseline or optimization outcome on this preset",
       ],
     },
   ],
@@ -53,74 +66,73 @@ const rawPresentation = {
       title:
         "Start with the project you have. Leave with a justified next step.",
       accent: "justified next step",
-      body: "Traigent Guided First Run meets customer repositories where they actually are. It inspects without touching production or spending money, grades readiness honestly, repairs evaluation and data gaps, and leads to an approved, bounded first run.",
+      body: "Traigent Guided First Run meets customer repositories where they actually are. It inspects without touching production or spending money, grades readiness honestly, repairs evaluation and data gaps on a working copy, and leads to an approved, bounded first run.",
       bullets: [],
       metrics: [],
       steps: [],
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
       evidence: [
-        `Guided First Run contract at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}; no fresh coding-agent run supplied`,
+        `Guided First Run contract at ${guideRef}; no fresh coding-agent run supplied`,
       ],
       notes: [
         "Lead with honest routing: we do not demand a clean, pre-built benchmark or a perfect agent.",
         "The customer own assets determine their score and route; we never sell a guaranteed uplift.",
         "Talk track: the deliverable of the first run is a truthful position and a next step, not a score.",
+        "Repair means a working copy with provenance preserved, never silent; generated material is never marked as a real, validated component.",
       ],
     },
     {
       id: "shared-control",
       kind: "journey",
       eyebrow: "AGENT-LED, HUMAN-GOVERNED",
-      title: "Five stages. Three actors. Human approval stays explicit.",
-      body: "Every project enters Inspect. Gaps loop through transparent diagnosis and coherent repair. Ready foundations move only after explicit approval. The coding agent coordinates, the human governs, and Traigent runs only the approved managed optimization.",
+      title: "Five stages. Three actors. Two paid approvals.",
+      body: "Every project enters Inspect. Safe discovery needs no approval; the run stops only for a genuine component choice, a task-intent question, secrets, paid or private-data calls, judgment calls on real labels, or production-affecting changes. Paid work sits behind exactly two approvals: the baseline first, the connected optimization separately.",
       bullets: [],
       metrics: [],
       steps: [
         {
           label: "1 Inspect",
           detail:
-            "Find the agent, dataset, and evaluator; preserve what is usable. Reads files locally only: no project code runs, no provider or Traigent calls.",
+            "Find the agent, dataset, and evaluator; mark each real component ✅ (found and validated) or ❗ (missing, invalid, or evidence-limited). Reads files locally only: no project code runs, no provider or Traigent calls.",
           executor: "Coding agent",
         },
         {
           label: "2 Readiness",
           detail:
-            "Score the evidence, apply caps - score ceilings set by the material - and explain the safest next route. Stop before paid work when the evaluator cannot tell good from bad answers.",
+            "Score the evidence, apply caps - score ceilings set by the material - and explain the safest next route. Not an approval gate: the user is never asked to approve safe discovery. Stop before paid work when the evaluator cannot tell good from bad answers.",
           executor: "Coding agent",
-          humanGate: "Human decides",
         },
         {
           label: "3 Baseline",
           detail:
             "Preserve and measure the existing baseline, or prepare a fixed 12-configuration grid only when none exists. The first model-provider stage.",
           executor: "Coding agent",
-          humanGate: "Human approves",
+          humanGate: "Paid approval 1 of 2",
         },
         {
           label: "4 Optimize",
           detail:
             "Search the approved space and compare it with the preserved baseline.",
           executor: "Traigent service",
-          humanGate: "Human approves",
+          humanGate: "Paid approval 2 of 2",
         },
         {
           label: "5 Results",
           detail:
             "Report the comparison, cost evidence, and limits, closing with one recommended next action; the human decides.",
           executor: "Coding agent",
-          humanGate: "Human reviews",
+          humanGate: "Human decides",
         },
       ],
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
-      evidence: [
-        `First-run stages and approval boundaries at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}`,
-      ],
+      evidence: [`First-run stages and approval boundaries at ${guideRef}`],
       notes: [
         "The boundary the presenter must draw: stages 1-2 make no calls to the customer project-model provider or the Traigent service and incur no spend with either.",
         "Stage 3 is the first project-model stage, on the customer approved key and cost boundary.",
         "Stage 4 is a separate approval from stage 3 on purpose: the baseline preserves the user existing local space, while enhanced search explores a broader space.",
+        "Do not present Readiness as a gate the human approves; the guide says not to make the user approve safe discovery. The human is asked only for the stops listed in the body.",
       ],
     },
     {
@@ -136,7 +148,7 @@ const rawPresentation = {
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
       evidence: [
-        `Published real-project handoff at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}; outcome not demonstrated here`,
+        `Published real-project handoff at ${guideRef}; outcome not demonstrated here`,
       ],
       notes: [
         "Customers paste this exact prompt into Claude Code, Cursor, Codex, or Gemini CLI.",
@@ -162,12 +174,11 @@ const rawPresentation = {
       steps: [],
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
-      evidence: [
-        `Route behavior at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}`,
-      ],
+      evidence: [`Route behavior at ${guideRef}`],
       notes: [
         "Do not promise an Excellent opening. A gap, cap, repair, or stop can be the correct and useful outcome for the material the customer brought.",
         "The six bullets summarize next-action families; they are not an exhaustive taxonomy of every project condition.",
+        "On the Spider bank the opening gate does not separate mispaired answers or a mis-wired scorer from the ready project; calibration probes and the row review the guide asks for are what catch them.",
       ],
     },
     {
@@ -175,25 +186,26 @@ const rawPresentation = {
       kind: "statement",
       eyebrow: "COMPANION REPOSITORY · SPIDER SCENARIOS",
       title: "The Spider companion repo: instant, realistic SQL demo projects.",
-      body: "https://github.com/Traigent/spider_traigent_first_run_scenario generates complete, offline text-to-SQL projects from real Spider data. Presales engineers use it to demonstrate first-run onboarding live in under 15 minutes without touching customer code or requiring NDAs.",
+      body: "A Traigent-maintained companion repository, internal today, generates complete text-to-SQL projects from real Spider data. Presales builds a demo project from it and hands only the project directory to the coding agent, so a live onboarding walkthrough needs no customer code.",
       bullets: [
-        "Standard-library build CLI: python3 build.py demo --preset ready --out ~/demos/first-try",
-        "Real benchmark data: 300 Spider questions, 18 SQLite schemas, easy-to-extra-hard difficulty",
-        "100% offline & self-contained: agent inspects a realistic user project, never the scenario generator",
-        "Realistic agent: text-to-SQL agent with tunable model, prompt, dialect, and temperature settings",
-        "Real evaluation: execution-match evaluator running queries against live SQLite databases",
-        "No cloud keys needed: inspect and score readiness completely free and local",
+        "Standard-library build CLI: python3 build.py demo --preset ready --out ~/demos/first-try; also list, check, suite, and verify",
+        "Real benchmark data: 300 Spider questions, 18 SQLite schemas, four difficulty strata from easy to very-hard, 75 rows each",
+        "Offline build and scoring; each demo is self-contained and blind, so the agent inspects a realistic project, never the generator. The default --guide clone step fetches the guide itself from GitHub during the run",
+        "Realistic agent: text-to-SQL agent with tunable model, schema_context, prompt_style, and temperature; the output is always SQLite",
+        "Two evaluators: exact-match text comparison (the ready preset) and execution match against live SQLite, which the guide stops before running",
+        "No provider or Traigent keys needed to inspect and score readiness; the committed cards were produced with no network",
       ],
       metrics: [],
       steps: [],
       evidenceState: "scenario-contract",
       evidence: [
-        "spider_traigent_first_run_scenario README and build CLI",
+        "Companion repo README and build.py CLI (internal to the Traigent GitHub organisation today)",
         "Spider 1.0 benchmark dataset under CC BY-SA 4.0",
       ],
       notes: [
-        "Presales positioning: Spider is a scenario generator for demonstrations and testing, while traigent-first-run is the customer guide.",
-        "This repository gives presales an offline, reproducible benchmark to demonstrate onboarding live.",
+        "Presales positioning: the companion repo is a scenario generator for demonstrations and testing, while traigent-first-run is the customer guide.",
+        "The repository is internal to the Traigent GitHub organisation today; do not promise a customer clone or quote a URL for it.",
+        "Keep bank.json and demo.json out of the agent's working directory: they name the state each demo was built in.",
       ],
     },
     {
@@ -201,103 +213,111 @@ const rawPresentation = {
       kind: "matrix",
       eyebrow: "TESTING ONBOARDING RESILIENCE",
       title: "Seventeen presets to test every onboarding branch live.",
-      body: "The Spider scenario bank provides 17 presets covering every real-world condition. Presales engineers can run the exact customer prompt against any preset to demonstrate how first-run guides, grades, and repairs live.",
+      body: "The Spider scenario bank provides 17 presets, each a starting state a real project could arrive in. Presales can run the exact customer prompt against any preset. The committed opening cards span four of the five bands: no preset opens EXCELLENT on-method, and the best on-method opening is checked at 86 STRONG.",
       bullets: [],
       metrics: [],
       steps: [],
       scenarioMatrix: [
         {
-          family: "Preset: ready / best-case",
+          family: "Preset: ready",
           setup:
-            "Agent, dataset, and evaluator are present and tunable in a complete text-to-SQL demo project",
+            "Agent, dataset, and exact-match evaluator present; no calibration probes, so the scorer is not yet checked",
           expectedRoute:
-            "Demonstrate the happy path: inspect, grade readiness, and continue to baseline approval with clear human gates",
+            "Opening card 45 PARTIAL, action proceed, ceiling 45 from evaluator-unvalidated; the happy path is calibrate the scorer, then baseline approval",
           coverage: "published",
         },
         {
-          family: "Preset: no-eval",
-          setup: "Usable agent and data, but no evaluator to score outputs",
+          family: "Preset: checked",
+          setup: "The ready project plus probe answers kept for its scorer",
           expectedRoute:
-            "Show how first-run identifies the missing scorer, builds or repairs the dependency, and re-checks before paid comparison",
-          coverage: "coverage-target",
-        },
-        {
-          family: "Preset: no-data",
-          setup:
-            "Agent and evaluator are present, but no comparison rows are available",
-          expectedRoute:
-            "Show onboarding gap fill for missing dataset material, then rerun readiness before baseline",
+            "Opening card 86 STRONG with no caps: the best on-method opening in the bank, four points below EXCELLENT",
           coverage: "coverage-target",
         },
         {
           family: "Preset: fake-ruler",
           setup:
-            "Evaluator marks almost everything correct, so it cannot separate good from bad outputs",
+            "Evaluator marks everything correct, and probe answers ship that catch it",
           expectedRoute:
-            "Show readiness caps and blocker behavior when evaluation quality is not credible",
+            "Opening card 25 NOT READY, action repair-evaluator, blocking cap evaluator-invalid; without the probes the same project reads 45 proceed",
           coverage: "coverage-target",
         },
         {
           family: "Preset: wrong-answers",
           setup:
-            "Rows exist, but each expected answer is intentionally mismatched",
+            "60 rows whose gold answers are rotated inside each database, so every answer still runs but answers a different question",
           expectedRoute:
-            "Show evidence-first diagnosis and repair of broken labels so grading becomes trustworthy",
+            "Opening card 45 PARTIAL proceed, the same as ready: the opening gate does not notice the mispairing, and with probes it reads 83 STRONG with no caps. The guide's row review is what would catch it",
+          coverage: "coverage-target",
+        },
+        {
+          family: "Presets: best-case and sql-exec-stop",
+          setup:
+            "The Spider-faithful execution scorer, with and without probe answers",
+          expectedRoute:
+            "Opening card 45 PARTIAL proceed, byte-identical for both; the guide will not calibrate or execute a scorer that runs candidate SQL, so this is where the guide hands over, not a gap it repairs",
           coverage: "coverage-target",
         },
       ],
       evidenceState: "scenario-contract",
       evidence: [
-        "spider_traigent_first_run_scenario preset catalog",
+        scoreTableEvidence,
         "traigent-first-run readiness, caps, and progression gates",
       ],
       notes: [
         "Presales script: choose a preset, run the same customer prompt, and narrate the route as evidence-driven behavior instead of a canned success path.",
+        "Other committed openings: no-data 20 NOT READY get-data; no-eval 40 PARTIAL connect-evaluator; no-knobs 45 vary-knobs; wrong-wiring and no-agent 45 proceed, so a mis-wired scorer and an absent agent are invisible to the opening gate without probes.",
+        `All cards come from the guide's own preflight and readiness scripts at guide revision ${measuredCardRevision} on 2026-09-02, with a hand-written agent read standing in for the assistant's; no coding-agent session is recorded, and the scorer has moved since, so re-measure before quoting a number that matters.`,
         "This slide is about behavior coverage and trust boundaries, not promised uplift metrics.",
       ],
     },
     {
-      id: "case-46",
+      id: "worked-case-ready",
       kind: "evidence",
       eyebrow: "WORKED DEMO EVIDENCE",
-      title: "Worked proof: text-to-SQL project under first-run inspection.",
-      body: "A complete demonstration project under first-run inspection. The assistant identifies all components, verifies execution safety, and scores readiness before proposing a baseline.",
+      title: "Worked case: the ready preset under first-run inspection.",
+      body: "The companion repo's own getting-started preset, scored by the guide's preflight and readiness scripts over the built demo. The committed card opens at 45 PARTIAL with the recommended action proceed and one ceiling, evaluator-unvalidated at 45, because no calibration probes ship with this preset. It is a scorer run over files, not a recorded coding-agent session.",
       bullets: [],
       metrics: [
         {
           label: "Rows",
           value: "300",
-          detail: "18 SQLite schemas, 4 difficulty strata",
+          detail: "18 SQLite schemas, 4 strata; 240 to tune on, 60 held back",
           tone: "blue",
         },
         {
           label: "Agent knobs",
           value: "4",
-          detail: "model, prompt, temperature, dialect",
+          detail:
+            "model, schema_context, prompt_style, temperature; the static reader credits 3 (18 configurations)",
           tone: "violet",
         },
         {
           label: "Evaluator",
-          value: "Execution",
-          detail: "SQL result-set execution match",
+          value: "Exact match",
+          detail:
+            "normalised text comparison; never executes SQL; no probes shipped",
           tone: "blue",
         },
         {
-          label: "Expected route",
-          value: "Baseline approval",
-          detail: "Score 90+, status OK, not blocked",
+          label: "Opening card",
+          value: "45 · PARTIAL",
+          detail:
+            "action proceed; ceiling 45 evaluator-unvalidated, not blocking; confidence 0.68",
           tone: "amber",
         },
       ],
       steps: [],
       evidenceState: "scenario-contract",
       evidence: [
-        "spider_traigent_first_run_scenario preset ready",
+        readyCardEvidence,
+        scoreTableEvidence,
         "Spider 1.0 benchmark dataset under CC BY-SA 4.0",
       ],
       notes: [
-        "Talk track: this is the ready-components route in the matrix, showing what a complete project looks like.",
-        "Expected top band because this case starts complete. It is a reference, not a product success threshold.",
+        "Talk track: this is the ready row in the matrix. 45 is the size of the gap the run has to close, not a verdict: calibrate the scorer and the same project reads 86 STRONG (preset checked).",
+        "Pillars on the card: agent 70, dataset 98, evaluation 33. The evaluation pillar is low because calibration and probe spread could not be scored without probes, and normalized-exact is flagged a poor ruler for code-sql output.",
+        `Provenance: the card was produced at guide revision ${measuredCardRevision} on 2026-09-02. At the deck's cited revision ${guideRevision.slice(0, 8)} the evaluator-unvalidated ceiling is still 45, so the ceiling holds, but the pillar figures were not re-scored there.`,
+        "Evidence state stays scenario-contract: the guide's scripts ran over the built demo with a hand-written agent read; no coding agent ran and no baseline was prepared.",
       ],
     },
     {
@@ -305,15 +325,16 @@ const rawPresentation = {
       kind: "matrix",
       eyebrow: "VERIFICATION LAYERS",
       title: "Three checks, three different proofs.",
-      body: "Passing one check proves only that check - never the next one. Today this repository ships the scenario files and the expected result to compare against; no recorded agent run is included yet. Nothing here requires a prior run: anyone can run all three from a fresh clone - the paid layer with their own approved keys and spend.",
+      body: "Passing one check proves only that check - never the next one. Today this repository ships the scenario files, the committed opening cards, and the expected result to compare against; no recorded agent run is included yet. Nothing here requires a prior run: anyone can run all three from a fresh clone - the paid layer with their own approved keys and spend.",
       bullets: [],
       metrics: [],
       testMatrix: [
         {
           layer: "Catalog check",
           action:
-            "Validate scenario package structure and data integrity (build.py check)",
-          passSupports: "Package is structurally ready to prepare",
+            "Validate the repository's own components and data (build.py check), then gate a built demo as self-contained, blind, and able to run (build.py verify)",
+          passSupports:
+            "The generator is intact and the demo is fit to hand to an agent",
           doesNotProve: "Agent behavior or live value",
         },
         {
@@ -334,8 +355,8 @@ const rawPresentation = {
       evidenceState: "scenario-contract",
       evidence: ["Published verification and phase boundaries"],
       notes: [
-        "Catalog check validates the package; it does not run a coding agent.",
-        "Phase A covers Inspect and Readiness. Phase B covers approved Baseline, Optimize, and Results.",
+        "Catalog check is two commands: build.py check validates this repository, build.py verify gates one built demo. Neither runs a coding agent.",
+        "Phase A covers Inspect and Readiness. Phase B covers approved Baseline, Optimize, and Results. Phase A and Phase B are this deck's labels for the guide's free and paid halves, not the guide's own terms.",
         "No prior run is needed for any layer; each one can be run today from a fresh clone.",
       ],
     },
@@ -357,11 +378,10 @@ const rawPresentation = {
       steps: [],
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
-      evidence: [
-        `Phase A and Phase B boundary at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}`,
-      ],
+      evidence: [`Phase A and Phase B boundary at ${guideRef}`],
       notes: [
         "This is the security and procurement slide. Keep the boundary concrete.",
+        "Phase A and Phase B are deck vocabulary; the guide speaks of two paid approvals, the provider-paid baseline first and the connected optimization second.",
       ],
     },
     {
@@ -370,12 +390,12 @@ const rawPresentation = {
       eyebrow: "PRESALES PLAYBOOK & NEXT STEPS",
       title: "How presales engineers run this with prospects today.",
       accent: "run this with prospects",
-      body: "Presales can run a live 15-minute walkthrough using Spider demo presets, or run the free 5-minute inspection directly inside a prospect repository to uncover their readiness score and gap roadmap.",
+      body: "Presales can run a live walkthrough using Spider demo presets, or run the free inspection directly inside a prospect repository to surface their readiness score and gap roadmap. Neither path carries a published duration; building a demo needs nothing installed, and scoring all seventeen presets took about two minutes on the maintainers' machine.",
       bullets: [
         "Option 1 (Demo): build a Spider preset (python3 build.py demo --preset ready) and show the journey live",
         "Option 2 (Prospect Repo): paste the single prompt into their agent for a zero-cost readiness card",
         "Executive Deliverable: a 14-check readiness score and concrete gap-remediation plan",
-        "Paid Pilot: approve a $5-budget baseline and connected optimization",
+        "Paid Pilot: approve the provider-paid baseline, then the connected optimization separately; the guide's $5.00 default is an execution stop target and re-approval trigger, not a billing cap",
         "Long-term Handover: install traigent-skills (npx skills add Traigent/traigent-skills) for continuous tuning",
       ],
       metrics: [],
@@ -383,11 +403,12 @@ const rawPresentation = {
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
       evidence: [
-        `Published guide and scenario handoff boundaries at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}; no live outcome claimed`,
+        `Published guide and scenario handoff boundaries at ${guideRef}; no live outcome claimed`,
       ],
       notes: [
         "The two available paths are alternatives: demo with the Spider benchmark, or run on the customer own project.",
         "The SDK skills are Apache-2.0 documentation; installing skills authorizes nothing - Phase B still needs its own approval.",
+        "The two-minute figure is the seventeen-preset scoring sweep recorded in the companion repo's docs/measurements/README.md, not a walkthrough length; do not quote a demo duration.",
       ],
     },
     {
@@ -400,18 +421,17 @@ const rawPresentation = {
         "Input: the customer project, stated task, and files already present",
         "Agent action: cite the discovered component paths and distinguish real components from temporary substitutes created for the walkthrough",
         "Human role: resolve ambiguous project intent or choose among multiple plausible components",
-        "Stage output: a list of the components found, each marked present, limited, missing, or invalid",
+        "Stage output: each real component marked ✅ (found and validated) or ❗ (missing, invalid, or evidence-limited); any substitute the run generates is listed unmarked under walkthrough setup",
         "Next route: continue to Readiness; do not replace usable material merely to make a demo easier",
       ],
       metrics: [],
       steps: [],
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
-      evidence: [
-        `Inspect-stage contract at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}`,
-      ],
+      evidence: [`Inspect-stage contract at ${guideRef}`],
       notes: [
         "Inspect is not a runtime test and does not prove model quality. It establishes what the project has before the guide changes anything.",
+        "There are exactly two marks. Synthetic material is never marked as real and validated, and the run never says 3/3 ready when any component is a substitute.",
       ],
     },
     {
@@ -432,9 +452,7 @@ const rawPresentation = {
       steps: [],
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
-      evidence: [
-        `Readiness and routing contract at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}`,
-      ],
+      evidence: [`Readiness and routing contract at ${guideRef}`],
       notes: [
         "Readiness weights dataset, evaluation, and agent evidence, then applies caps so strength in one pillar cannot hide a broken foundation.",
         "The opening score describes the customer starting point. A later re-score verifies that a remedy cleared its gate; it is not a new claim about the original project.",
@@ -470,38 +488,39 @@ const rawPresentation = {
       kind: "matrix",
       eyebrow: "STAGE 2 OF 5 - FOUNDATION CAPS",
       title: "Broken measurement sets the lowest ceilings.",
-      body: "A cap is a ceiling on the total score out of 100 - the maximum the evidence allows, applied after the three weighted areas are summed; it is not a deduction. The ready row matches the worked example; the other rows are shipped scorer rules whose example scenarios are planned; not yet published.",
+      body: "A cap is a ceiling on the total score out of 100 - the maximum the evidence allows, applied after the three weighted areas are summed; it is not a deduction. The 45 row is the ready preset's own committed card; the other rows are shipped scorer rules whose Spider example cards exist in the companion repo but are not published in this deck's catalog.",
       bullets: [],
       metrics: [],
       steps: [],
       matrix: [
         {
-          startingPoint: "Agent, data, and evaluator are usable; no cap fires",
+          startingPoint:
+            "The evaluator is unvalidated - no calibration has run - or nothing in the agent varies",
           safestNextStep:
-            "No ceiling from a cap; explain readiness and stop at baseline approval",
+            "Ceiling 45; calibrate the evaluator or wire a setting worth searching. This is the ready preset's opening: 45 PARTIAL, action proceed",
           coverage: "published",
         },
         {
           startingPoint:
             "The evaluator rates a known-bad answer as highly as a known-good answer",
           safestNextStep:
-            "Ceiling 25 and BLOCKED; repair and revalidate the evaluator first",
+            "Ceiling 25 and BLOCKED; repair and revalidate the evaluator first (preset fake-ruler reads 25, repair-evaluator)",
           coverage: "coverage-target",
         },
         {
           startingPoint:
-            "The evaluator is unvalidated, or nothing in the agent varies",
+            "Agent, data, and evaluator are usable and the evaluator has been calibrated; no cap fires",
           safestNextStep:
-            "Ceiling 45; validate the evaluator or wire a setting worth searching",
+            "No ceiling from a cap; explain readiness and stop at baseline approval (preset checked reads 86 STRONG, no caps)",
           coverage: "coverage-target",
         },
       ],
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
-      evidence: [readinessEvidence],
+      evidence: [readinessEvidence, readyCardEvidence],
       notes: [
-        "A capped project is not a failed project. A truthful 65 with visible limits is more useful than an unsupported 90.",
-        "Only the ready-reference route has a downloadable scenario here. Do not say the other rows passed a public scenario test.",
+        "A capped project is not a failed project. A truthful 45 with a named ceiling is more useful than an unsupported 90.",
+        "Only the ready preset has a catalog entry in this deck. fake-ruler and checked have committed cards in the companion repo; cite them from there rather than saying they appear here.",
       ],
     },
     {
@@ -556,7 +575,7 @@ const rawPresentation = {
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
       evidence: [
-        `Baseline-stage contract at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}; no live baseline supplied`,
+        `Baseline-stage contract at ${guideRef}; no live baseline supplied`,
       ],
       notes: [
         "The coding-agent service itself may already be remote or billed. Baseline is specifically the first model-provider execution stage in this workflow.",
@@ -582,7 +601,7 @@ const rawPresentation = {
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
       evidence: [
-        `Optimization-stage contract at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}; no enhanced run supplied`,
+        `Optimization-stage contract at ${guideRef}; no enhanced run supplied`,
       ],
       notes: [
         "Baseline approval does not pre-authorize optimization. The second gate is deliberate because the number of calls and the data boundary can change.",
@@ -621,20 +640,18 @@ const rawPresentation = {
         {
           label: "Check held-out rows once",
           detail:
-            "Score the locked recommendation once on rows no search evaluated; small held-out sets mean low statistical confidence - the report discloses it.",
+            "Score the locked recommendation once on rows no search evaluated; the guide's held-out check uses ten rows, so its statistical confidence is low - the report discloses it.",
           executor: "Coding agent",
           humanGate: "Human reviews evidence",
         },
       ],
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
-      evidence: [
-        `Traigent/traigent-first-run@${guideRevision.slice(0, 8)} comparison contract`,
-      ],
+      evidence: [`${guideRef} comparison contract`],
       notes: [
         "Selecting the best of several configurations on the same tuning rows partly selects sample noise. Held-out scoring checks that risk; it does not eliminate it or prove generalization.",
         "When the coding agent has seen or authored the reserved rows, the guide calls the result held-back and non-blind rather than a sealed holdout.",
-        "This is a bounded sample check, not a claim that every paid first run uses all 120 rows.",
+        "Sizes: the Spider build holds back 60 of its 300 rows (HOLDOUT_SHARE 0.2) as the pool; the guide's held-out check scores ten rows from it. This is a bounded sample check, not a claim about every paid first run.",
       ],
     },
     {
@@ -655,7 +672,7 @@ const rawPresentation = {
       evidenceState: "guide-contract",
       sourceRevision: guideRevision,
       evidence: [
-        `Results-stage contract at Traigent/traigent-first-run@${guideRevision.slice(0, 8)}; no live result artifact supplied`,
+        `Results-stage contract at ${guideRef}; no live result artifact supplied`,
       ],
       notes: [
         "The end goal is an explainable decision. A result without its baseline, evidence boundary, and limitations is not a valid first-run outcome.",
@@ -667,7 +684,7 @@ const rawPresentation = {
       kind: "catalog",
       eyebrow: "SCENARIO CATALOG APPENDIX",
       title: "Spider scenario catalog: setup and expected routing.",
-      body: "The published Spider catalog entry records component setup, expected routing, and tested layers without claiming an unrecorded run.",
+      body: "The Spider catalog entry records component setup, the committed opening card, and the tested layer without claiming an unrecorded run.",
       bullets: [],
       metrics: [],
       steps: [],
@@ -675,11 +692,12 @@ const rawPresentation = {
       catalogSlug: "spider-text-to-sql-benchmark",
       evidenceState: "scenario-contract",
       evidence: [
-        "spider_traigent_first_run_scenario preset ready",
+        "Companion repo preset ready (build.py PRESETS)",
+        readyCardEvidence,
         "Spider 1.0 benchmark dataset under CC BY-SA 4.0",
       ],
       notes: [
-        "This appendix documents the preset ready configuration for Spider text-to-SQL.",
+        "This appendix documents the preset ready configuration for Spider text-to-SQL: exact-match evaluator, no calibration probes, opening card 45 PARTIAL.",
         "The component definitions reflect real SQLite databases and committed Spider queries.",
       ],
     },
@@ -688,7 +706,7 @@ const rawPresentation = {
       kind: "catalog",
       eyebrow: "SCENARIO CATALOG APPENDIX",
       title: "Spider scenario catalog: data characteristics and boundaries.",
-      body: "The Spider benchmark data characteristics, execution evaluation methodology, and evidence boundaries stay explicit.",
+      body: "The Spider benchmark data characteristics, the text-comparison evaluation method, and the evidence boundaries stay explicit.",
       bullets: [],
       metrics: [],
       steps: [],
@@ -696,12 +714,12 @@ const rawPresentation = {
       catalogSlug: "spider-text-to-sql-benchmark",
       evidenceState: "scenario-contract",
       evidence: [
-        "spider_traigent_first_run_scenario preset ready",
+        "Companion repo preset ready (build.py PRESETS)",
         "Spider 1.0 benchmark dataset under CC BY-SA 4.0",
       ],
       notes: [
         "Spider data is licensed under CC BY-SA 4.0 with attribution in ATTRIBUTION.txt.",
-        "Execution accuracy is measured against live SQLite database schemas.",
+        "The ready preset scores by normalised exact match against the gold query text. Execution accuracy against live SQLite exists as a separate evaluator, and the guide stops before running it.",
       ],
     },
   ],
@@ -714,7 +732,7 @@ const coreSlideIds = [
   "different-starting-points",
   "spider-repo-overview",
   "spider-presets-matrix",
-  "case-46",
+  "worked-case-ready",
   "test-layers",
   "trust-boundary",
   "next-step",
