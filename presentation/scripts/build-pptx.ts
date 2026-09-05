@@ -8,10 +8,8 @@ import PptxGenJS from "pptxgenjs";
 import { brandBlue, brandName } from "../src/brand";
 import { presentation } from "../src/content";
 import {
-  coverageLabel,
   displayEyebrow,
-  evidenceLabel,
-  type CatalogEntry,
+  sourceFooter,
   type PresentationSpec,
   type SlideSpec,
 } from "../src/model";
@@ -19,7 +17,7 @@ import { theme, toneColor } from "../src/theme";
 import { distRoot, isMainModule, repositoryRoot } from "./runtime";
 import { validatePresentationContent } from "./validate-content";
 
-export const pptxFileName = "traigent-first-run-scenarios.pptx";
+export const pptxFileName = "traigent-first-run.pptx";
 export const defaultPptxPath = path.join(distRoot, pptxFileName);
 
 const SLIDE_WIDTH = 13.333;
@@ -33,13 +31,6 @@ const FOOTER_TOP = 6.94;
 const MASTER_NAME = "TRAIGENT_ACCESSIBLE";
 const TITLE_PLACEHOLDER_NAME = "slide-title";
 const EARLIEST_ZIP_EPOCH_SECONDS = 315_532_800;
-
-const EVIDENCE_COLORS = {
-  "guide-contract": theme.colors.violet,
-  "scenario-contract": theme.colors.blueBright,
-  "verified-run": theme.colors.green,
-  "not-demonstrated": theme.colors.amber,
-} as const;
 
 export class PptxBuildError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -197,7 +188,7 @@ function addQuote(
     line: { color: theme.colors.blueBright, transparency: 50, width: 1.2 },
     fill: { color: theme.colors.surfaceRaised, transparency: 4 },
   });
-  slide.addText("PASTE INTO YOUR CODING AGENT", {
+  slide.addText("PASTE INTO YOUR CODING ASSISTANT", {
     x: CONTENT_X + 0.28,
     y: DETAIL_TOP + 0.22,
     w: 11.1,
@@ -351,13 +342,11 @@ function addJourney(
     const x = CONTENT_X + column * (cardWidth + gap);
     const y = DETAIL_TOP + row * (cardHeight + 0.18);
     const executorColor =
-      step.executor === "Human operator"
+      step.executor === "Customer"
         ? theme.colors.amber
-        : step.executor === "Verifier"
-          ? theme.colors.violet
-          : step.executor === "Traigent service"
-            ? theme.colors.green
-            : theme.colors.blueBright;
+        : step.executor === "Traigent service"
+          ? theme.colors.green
+          : theme.colors.blueBright;
 
     slide.addShape(pptx.ShapeType.roundRect, {
       x,
@@ -474,12 +463,8 @@ function addStartingPointMatrix(
   slideSpec: SlideSpec,
 ): void {
   if (slideSpec.matrix === undefined) return;
-  const widths = [3.45, 5.05, 3.2];
-  const headers = [
-    "STARTING CONDITION",
-    "SAFEST JUSTIFIED NEXT STEP",
-    "COVERAGE TODAY",
-  ];
+  const widths = [4.4, CONTENT_WIDTH - 4.4];
+  const headers = ["STARTING CONDITION", "SAFEST JUSTIFIED NEXT STEP"];
   let x = CONTENT_X;
   headers.forEach((header, index) => {
     addTableCell(
@@ -496,288 +481,26 @@ function addStartingPointMatrix(
   });
   slideSpec.matrix.forEach((row, rowIndex) => {
     const y = DETAIL_TOP + 0.43 + rowIndex * 0.55;
-    const values = [
-      row.startingPoint,
-      row.safestNextStep,
-      coverageLabel(row.coverage),
-    ];
+    const values = [row.startingPoint, row.safestNextStep];
     let cellX = CONTENT_X;
     values.forEach((value, columnIndex) => {
-      addTableCell(
-        pptx,
-        slide,
-        value,
-        cellX,
-        y,
-        widths[columnIndex]!,
-        0.55,
-        false,
-        columnIndex === 2 && row.coverage === "published",
-      );
+      addTableCell(pptx, slide, value, cellX, y, widths[columnIndex]!, 0.55);
       cellX += widths[columnIndex]!;
     });
   });
-}
-
-function addTestLayerMatrix(
-  pptx: PptxGenJS,
-  slide: PptxGenJS.Slide,
-  slideSpec: SlideSpec,
-): void {
-  if (slideSpec.testMatrix === undefined) return;
-  const widths = [1.45, 3.3, 3.65, 3.3];
-  const headers = ["LAYER", "ACTION", "A PASS SUPPORTS", "DOES NOT PROVE"];
-  let x = CONTENT_X;
-  headers.forEach((header, index) => {
-    addTableCell(
-      pptx,
-      slide,
-      header,
-      x,
-      DETAIL_TOP,
-      widths[index]!,
-      0.43,
-      true,
-    );
-    x += widths[index]!;
-  });
-  slideSpec.testMatrix.forEach((row, rowIndex) => {
-    const y = DETAIL_TOP + 0.43 + rowIndex * 0.67;
-    const values = [row.layer, row.action, row.passSupports, row.doesNotProve];
-    let cellX = CONTENT_X;
-    values.forEach((value, columnIndex) => {
-      addTableCell(
-        pptx,
-        slide,
-        value,
-        cellX,
-        y,
-        widths[columnIndex]!,
-        0.67,
-        false,
-        columnIndex === 0,
-      );
-      cellX += widths[columnIndex]!;
-    });
-  });
-}
-
-function addScenarioCoverageMatrix(
-  pptx: PptxGenJS,
-  slide: PptxGenJS.Slide,
-  slideSpec: SlideSpec,
-): void {
-  if (slideSpec.scenarioMatrix === undefined) return;
-  const widths = [1.7, 3.4, 4.3, 2.29];
-  const headers = [
-    "SCENARIO FAMILY",
-    "MATERIAL AND DATASET ARCHETYPE",
-    "BEHAVIOR THE SCENARIO SHOULD EXERCISE",
-    "TEST SCENARIO STATUS",
-  ];
-  let x = CONTENT_X;
-  headers.forEach((header, index) => {
-    addTableCell(
-      pptx,
-      slide,
-      header,
-      x,
-      DETAIL_TOP,
-      widths[index]!,
-      0.43,
-      true,
-    );
-    x += widths[index]!;
-  });
-  slideSpec.scenarioMatrix.forEach((row, rowIndex) => {
-    const y = DETAIL_TOP + 0.43 + rowIndex * 0.62;
-    const values = [
-      row.family,
-      row.setup,
-      row.expectedRoute,
-      coverageLabel(row.coverage),
-    ];
-    let cellX = CONTENT_X;
-    values.forEach((value, columnIndex) => {
-      addTableCell(
-        pptx,
-        slide,
-        value,
-        cellX,
-        y,
-        widths[columnIndex]!,
-        0.55,
-        false,
-        columnIndex === 3 && row.coverage === "published",
-      );
-      cellX += widths[columnIndex]!;
-    });
-  });
-}
-
-function addCatalogCard(
-  pptx: PptxGenJS,
-  slide: PptxGenJS.Slide,
-  label: string,
-  value: string,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): void {
-  slide.addShape(pptx.ShapeType.roundRect, {
-    x,
-    y,
-    w: width,
-    h: height,
-    rectRadius: 0.04,
-    line: { color: theme.colors.border, width: 0.7 },
-    fill: { color: theme.colors.surfaceRaised, transparency: 5 },
-  });
-  slide.addText(label.toLocaleUpperCase("en"), {
-    x: x + 0.14,
-    y: y + 0.1,
-    w: width - 0.28,
-    h: 0.18,
-    margin: 0,
-    color: theme.colors.blueBright,
-    fontFace: theme.fonts.sans,
-    fontSize: 7.5,
-    bold: true,
-    charSpacing: 0.55,
-  });
-  slide.addText(value, {
-    x: x + 0.14,
-    y: y + 0.33,
-    w: width - 0.28,
-    h: height - 0.42,
-    margin: 0,
-    color: theme.colors.textSoft,
-    fontFace: theme.fonts.sans,
-    fontSize: 10,
-    valign: "top",
-    breakLine: false,
-  });
-}
-
-function addCatalog(
-  pptx: PptxGenJS,
-  slide: PptxGenJS.Slide,
-  entry: CatalogEntry,
-  view: "setup-and-route" | "data-and-limits",
-): void {
-  const gap = 0.2;
-  const halfWidth = (CONTENT_WIDTH - gap) / 2;
-  const rightX = CONTENT_X + halfWidth + gap;
-  if (view === "setup-and-route") {
-    addCatalogCard(
-      pptx,
-      slide,
-      "Starting state",
-      entry.startingState,
-      CONTENT_X,
-      DETAIL_TOP,
-      halfWidth,
-      1.34,
-    );
-    addCatalogCard(
-      pptx,
-      slide,
-      "Present components",
-      entry.components.join("\n"),
-      rightX,
-      DETAIL_TOP,
-      halfWidth,
-      1.34,
-    );
-    addCatalogCard(
-      pptx,
-      slide,
-      "Expected route",
-      entry.expectedRouting,
-      CONTENT_X,
-      DETAIL_TOP + 1.52,
-      halfWidth,
-      1.34,
-    );
-    addCatalogCard(
-      pptx,
-      slide,
-      "Tested layer",
-      entry.testedLayer,
-      rightX,
-      DETAIL_TOP + 1.52,
-      halfWidth,
-      1.34,
-    );
-    return;
-  }
-  addCatalogCard(
-    pptx,
-    slide,
-    "Dataset",
-    entry.dataset,
-    CONTENT_X,
-    DETAIL_TOP,
-    CONTENT_WIDTH,
-    1.3,
-  );
-  addCatalogCard(
-    pptx,
-    slide,
-    "Evaluator",
-    entry.evaluator,
-    CONTENT_X,
-    DETAIL_TOP + 1.48,
-    halfWidth,
-    1.38,
-  );
-  addCatalogCard(
-    pptx,
-    slide,
-    "Not proven",
-    entry.notProven.join("\n"),
-    rightX,
-    DETAIL_TOP + 1.48,
-    halfWidth,
-    1.38,
-  );
 }
 
 function addFooter(
-  pptx: PptxGenJS,
   slide: PptxGenJS.Slide,
+  spec: PresentationSpec,
   slideSpec: SlideSpec,
   slideNumber: number,
   slideCount: number,
 ): void {
-  const badgeColor = EVIDENCE_COLORS[slideSpec.evidenceState];
-  slide.addShape(pptx.ShapeType.roundRect, {
+  slide.addText(sourceFooter(spec, slideSpec), {
     x: CONTENT_X,
     y: FOOTER_TOP,
-    w: 3.15,
-    h: 0.3,
-    rectRadius: 0.03,
-    line: { color: badgeColor, transparency: 55, width: 0.7 },
-    fill: { color: badgeColor, transparency: 86 },
-  });
-  slide.addText(evidenceLabel(slideSpec.evidenceState), {
-    x: CONTENT_X + 0.08,
-    y: FOOTER_TOP + 0.03,
-    w: 2.99,
-    h: 0.24,
-    margin: 0,
-    color: badgeColor,
-    fontFace: theme.fonts.sans,
-    fontSize: 9,
-    bold: true,
-    align: "center",
-    valign: "middle",
-  });
-  slide.addText(slideSpec.evidence.join(" | "), {
-    x: CONTENT_X + 3.35,
-    y: FOOTER_TOP,
-    w: 7.38,
+    w: 10.3,
     h: 0.3,
     margin: 0,
     color: theme.colors.muted,
@@ -806,30 +529,9 @@ function addSlideContent(
   pptx: PptxGenJS,
   slide: PptxGenJS.Slide,
   slideSpec: SlideSpec,
-  catalog: CatalogEntry[],
 ): void {
-  if (slideSpec.kind === "catalog") {
-    const entry = catalog.find(
-      (candidate) => candidate.slug === slideSpec.catalogSlug,
-    );
-    if (entry === undefined || slideSpec.catalogView === undefined) {
-      throw new PptxBuildError(
-        `Catalog slide ${slideSpec.id} has no matching entry`,
-      );
-    }
-    addCatalog(pptx, slide, entry, slideSpec.catalogView);
-    return;
-  }
   if (slideSpec.matrix !== undefined) {
     addStartingPointMatrix(pptx, slide, slideSpec);
-    return;
-  }
-  if (slideSpec.testMatrix !== undefined) {
-    addTestLayerMatrix(pptx, slide, slideSpec);
-    return;
-  }
-  if (slideSpec.scenarioMatrix !== undefined) {
-    addScenarioCoverageMatrix(pptx, slide, slideSpec);
     return;
   }
   if (slideSpec.quote !== undefined) {
@@ -893,8 +595,8 @@ export function createPptx(value: PresentationSpec = presentation): PptxGenJS {
     addBackground(pptx, slide);
     addBrand(pptx, slide);
     addHeading(slide, slideSpec);
-    addSlideContent(pptx, slide, slideSpec, validated.catalog);
-    addFooter(pptx, slide, slideSpec, index + 1, validated.slides.length);
+    addSlideContent(pptx, slide, slideSpec);
+    addFooter(slide, validated, slideSpec, index + 1, validated.slides.length);
     slide.addNotes(slideSpec.notes.join("\n\n"));
   });
 

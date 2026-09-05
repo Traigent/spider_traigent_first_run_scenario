@@ -9,13 +9,7 @@ import {
 
 import { brandName, traigentLogoPngDataUri } from "./brand";
 import { coreSlideCount, presentation } from "./content";
-import {
-  coverageLabel,
-  displayEyebrow,
-  evidenceLabel,
-  type CatalogEntry,
-  type SlideSpec,
-} from "./model";
+import { displayEyebrow, sourceFooter, type SlideSpec } from "./model";
 
 function initialSlideIndex(): number {
   const slideId = window.location.hash.replace(/^#\/?/, "");
@@ -43,20 +37,12 @@ function HighlightedTitle({ slide }: { slide: SlideSpec }) {
   );
 }
 
-function EvidenceBadge({ slide }: { slide: SlideSpec }) {
-  return (
-    <span className={`evidence-badge evidence-${slide.evidenceState}`}>
-      {evidenceLabel(slide.evidenceState)}
-    </span>
-  );
-}
-
 function Metrics({ slide }: { slide: SlideSpec }) {
   if (slide.metrics.length === 0) {
     return null;
   }
   return (
-    <dl className="metric-grid" aria-label="Scenario metrics">
+    <dl className="metric-grid" aria-label="Guide facts">
       {slide.metrics.map((metric) => (
         <div className={`metric-card tone-${metric.tone}`} key={metric.label}>
           <dt>{metric.label}</dt>
@@ -85,13 +71,11 @@ function Journey({ slide }: { slide: SlideSpec }) {
           <div>
             <span
               className={`owner owner-${
-                step.executor === "Coding agent"
+                step.executor === "Coding assistant"
                   ? "agent"
-                  : step.executor === "Human operator"
+                  : step.executor === "Customer"
                     ? "human"
-                    : step.executor === "Traigent service"
-                      ? "service"
-                      : "verifier"
+                    : "service"
               }`}
             >
               {step.executor} executes
@@ -108,47 +92,6 @@ function Journey({ slide }: { slide: SlideSpec }) {
   );
 }
 
-function ScenarioCoverageMatrix({ slide }: { slide: SlideSpec }) {
-  if (slide.scenarioMatrix === undefined) {
-    return null;
-  }
-  return (
-    <div className="matrix-wrap">
-      <span className="matrix-scroll-hint" aria-hidden="true">
-        Scroll sideways to see every column
-      </span>
-      <table className="starting-matrix scenario-coverage-matrix">
-        <caption>
-          Scenario family, material under test, expected route, and test
-          scenario status
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Scenario family</th>
-            <th scope="col">Material and dataset archetype</th>
-            <th scope="col">Behavior the scenario should exercise</th>
-            <th scope="col">Test scenario status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {slide.scenarioMatrix.map((row) => (
-            <tr key={row.family}>
-              <th scope="row">{row.family}</th>
-              <td>{row.setup}</td>
-              <td>{row.expectedRoute}</td>
-              <td>
-                <span className={`coverage coverage-${row.coverage}`}>
-                  {coverageLabel(row.coverage)}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function StartingPointMatrix({ slide }: { slide: SlideSpec }) {
   if (slide.matrix === undefined) {
     return null;
@@ -159,14 +102,11 @@ function StartingPointMatrix({ slide }: { slide: SlideSpec }) {
         Scroll sideways to see every column
       </span>
       <table className="starting-matrix">
-        <caption>
-          Starting condition, safest next step, and coverage status
-        </caption>
+        <caption>Starting condition and the safest justified next step</caption>
         <thead>
           <tr>
             <th scope="col">Starting condition</th>
             <th scope="col">Safest justified next step</th>
-            <th scope="col">Coverage today</th>
           </tr>
         </thead>
         <tbody>
@@ -174,91 +114,10 @@ function StartingPointMatrix({ slide }: { slide: SlideSpec }) {
             <tr key={row.startingPoint}>
               <th scope="row">{row.startingPoint}</th>
               <td>{row.safestNextStep}</td>
-              <td>
-                <span className={`coverage coverage-${row.coverage}`}>
-                  {coverageLabel(row.coverage)}
-                </span>
-              </td>
             </tr>
           ))}
         </tbody>
       </table>
-    </div>
-  );
-}
-
-function TestLayerMatrix({ slide }: { slide: SlideSpec }) {
-  if (slide.testMatrix === undefined) {
-    return null;
-  }
-  return (
-    <div className="matrix-wrap">
-      <span className="matrix-scroll-hint" aria-hidden="true">
-        Scroll sideways to see every column
-      </span>
-      <table className="starting-matrix test-layer-matrix">
-        <caption>
-          Test layers and the claims each passing layer supports
-        </caption>
-        <thead>
-          <tr>
-            <th scope="col">Layer</th>
-            <th scope="col">Action</th>
-            <th scope="col">A pass supports</th>
-            <th scope="col">Does not prove</th>
-          </tr>
-        </thead>
-        <tbody>
-          {slide.testMatrix.map((row) => (
-            <tr key={row.layer}>
-              <th scope="row">{row.layer}</th>
-              <td>{row.action}</td>
-              <td>{row.passSupports}</td>
-              <td>{row.doesNotProve}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function ScenarioCatalog({
-  entry,
-  view,
-}: {
-  entry: CatalogEntry;
-  view: "setup-and-route" | "data-and-limits";
-}) {
-  const fields =
-    view === "setup-and-route"
-      ? [
-          ["Starting state", entry.startingState],
-          ["Present components", entry.components.join("; ")],
-          ["Expected route", entry.expectedRouting],
-          ["Tested layer", entry.testedLayer],
-        ]
-      : [
-          ["Dataset", entry.dataset],
-          ["Evaluator", entry.evaluator],
-          ["Not proven", entry.notProven.join("; ")],
-        ];
-  return (
-    <div className="catalog-grid" aria-label="Published scenario catalog">
-      <section className="catalog-card">
-        <div className="catalog-title">
-          <h2>{entry.label}</h2>
-          <span>Published</span>
-        </div>
-        <dl>
-          {fields.map(([label, value]) => (
-            <div key={label}>
-              <dt>{label}</dt>
-              <dd>{value}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
     </div>
   );
 }
@@ -285,7 +144,6 @@ function Slide({ slide }: { slide: SlideSpec }) {
       ".metric-grid",
       ".journey",
       ".matrix-wrap",
-      ".catalog-grid",
       ".slide-footer",
       ".slide-brand",
     ].join(",");
@@ -330,7 +188,7 @@ function Slide({ slide }: { slide: SlideSpec }) {
     <article
       className={`slide slide-${slide.kind}`}
       aria-labelledby={`${slide.id}-title`}
-      data-evidence-source-revision={slide.sourceRevision}
+      data-source-revision={presentation.source.revision}
       ref={slideRef}
     >
       <div className="slide-glow" aria-hidden="true" />
@@ -354,7 +212,7 @@ function Slide({ slide }: { slide: SlideSpec }) {
 
       {slide.quote !== undefined ? (
         <blockquote className="prompt-card">
-          <span className="prompt-label">Paste into your coding agent</span>
+          <span className="prompt-label">Paste into your coding assistant</span>
           <code>{slide.quote}</code>
         </blockquote>
       ) : null}
@@ -373,23 +231,9 @@ function Slide({ slide }: { slide: SlideSpec }) {
       <Metrics slide={slide} />
       <Journey slide={slide} />
       <StartingPointMatrix slide={slide} />
-      <TestLayerMatrix slide={slide} />
-      <ScenarioCoverageMatrix slide={slide} />
-      {slide.kind === "catalog" &&
-      slide.catalogSlug !== undefined &&
-      slide.catalogView !== undefined &&
-      presentation.catalog.some((entry) => entry.slug === slide.catalogSlug) ? (
-        <ScenarioCatalog
-          entry={presentation.catalog.find(
-            (entry) => entry.slug === slide.catalogSlug,
-          )!}
-          view={slide.catalogView}
-        />
-      ) : null}
 
       <footer className="slide-footer">
-        <EvidenceBadge slide={slide} />
-        <span>{slide.evidence.join(" | ")}</span>
+        <span>{sourceFooter(presentation, slide)}</span>
       </footer>
     </article>
   );
@@ -476,7 +320,7 @@ export function App() {
           <span>{brandName}</span>
         </div>
         <div className="deck-context">
-          <span>First Run Scenarios</span>
+          <span>Guided First Run</span>
           <span className="context-divider" aria-hidden="true" />
           <span>
             {slide.section === "appendix"

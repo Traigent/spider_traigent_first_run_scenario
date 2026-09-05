@@ -45,13 +45,14 @@ interface ManifestShape {
   };
   deck: {
     schema_version: number;
-    evidence_states: string[];
-    guide_contract_source_revisions: string[];
+    described_repository: string;
+    described_revision: string;
+    described_files: string[];
     slide_count: number;
     slides: Array<{
       id: string;
-      evidence_state: string;
-      source_revision: string | null;
+      section: string | null;
+      sources: string[];
     }>;
   };
   offline: {
@@ -502,24 +503,23 @@ describe("customer bundle", () => {
       state: "committed",
       commit_sha: COMMITTED_GIT_METADATA.commitSha,
     });
-    expect(manifest.deck.evidence_states).toEqual([
-      "guide-contract",
-      "scenario-contract",
-    ]);
-    expect(manifest.deck.guide_contract_source_revisions).toEqual([
-      "75d338c31c97643c6a6d28a6aeef582d7b938db8",
-    ]);
-    expect(manifest.deck.schema_version).toBe(2);
-    expect(manifest.deck).not.toHaveProperty("evidence_state");
+    expect(manifest.deck.described_repository).toBe(
+      presentation.source.repository,
+    );
+    expect(manifest.deck.described_revision).toBe(presentation.source.revision);
+    expect(manifest.deck.described_files).toEqual(
+      [...presentation.source.files].sort(),
+    );
+    expect(manifest.deck.schema_version).toBe(3);
+    expect(manifest.deck).not.toHaveProperty("evidence_states");
     expect(manifest.deck).not.toHaveProperty("guide_sha");
-    expect(manifest.deck).not.toHaveProperty("guide_sha_reason");
     expect(manifest.deck).not.toHaveProperty("slide_ids");
     expect(manifest.deck.slide_count).toBe(presentation.slides.length);
     expect(manifest.deck.slides).toEqual(
       presentation.slides.map((slide) => ({
         id: slide.id,
-        evidence_state: slide.evidenceState,
-        source_revision: slide.sourceRevision ?? null,
+        section: slide.section ?? null,
+        sources: slide.sources,
       })),
     );
     expect(manifest.offline.self_contained_html).toBe(true);
@@ -587,13 +587,10 @@ describe("customer bundle", () => {
 
     const alternateGuideRevision = "1".repeat(40);
     const mutatedSpec = structuredClone(presentation);
-    for (const slide of mutatedSpec.slides) {
-      if (slide.evidenceState === "guide-contract") {
-        slide.sourceRevision = alternateGuideRevision;
-      }
-    }
-    mutatedSpec.slides[0]!.evidenceState = "not-demonstrated";
-    delete mutatedSpec.slides[0]!.sourceRevision;
+    mutatedSpec.source.revision = alternateGuideRevision;
+    mutatedSpec.slides[0]!.sources = [
+      `${mutatedSpec.source.files[0]!} · A section only this test names`,
+    ];
     const mutated = await buildCustomerBundle({
       ...buildOptions,
       spec: mutatedSpec,
@@ -601,13 +598,13 @@ describe("customer bundle", () => {
     const mutatedManifest = JSON.parse(
       await readFile(mutated.manifestPath, "utf8"),
     ) as ManifestShape;
-    expect(mutatedManifest.deck.guide_contract_source_revisions).toEqual([
+    expect(mutatedManifest.deck.described_revision).toBe(
       alternateGuideRevision,
-    ]);
+    );
     expect(mutatedManifest.deck.slides[0]).toEqual({
       id: mutatedSpec.slides[0]!.id,
-      evidence_state: "not-demonstrated",
-      source_revision: null,
+      section: mutatedSpec.slides[0]!.section ?? null,
+      sources: mutatedSpec.slides[0]!.sources,
     });
   });
 

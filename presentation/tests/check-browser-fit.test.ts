@@ -71,17 +71,17 @@ describe("browser-fit verdicts", () => {
   });
 
   it("reads the verdict past a doctype and comments, and decodes the detail", () => {
-    const commented = `<!DOCTYPE html>\n<!-- built deck -->\n<html data-fit-status="fail" data-fit-detail="clipped .a &amp; .b at &quot;1366x768&quot;" data-fit-slide="case-46"></html>`;
+    const commented = `<!DOCTYPE html>\n<!-- built deck -->\n<html data-fit-status="fail" data-fit-detail="clipped .a &amp; .b at &quot;1366x768&quot;" data-fit-slide="ready-to-optimize"></html>`;
 
-    expect(evaluateFitDump(commented, "case-46")).toBe(
+    expect(evaluateFitDump(commented, "ready-to-optimize")).toBe(
       'clipped .a & .b at "1366x768"',
     );
   });
 
   it("refuses a payload that is not an HTML document", () => {
-    expect(() => evaluateFitDump("fit-status: pass\n", "case-46")).toThrowError(
-      HtmlParseError,
-    );
+    expect(() =>
+      evaluateFitDump("fit-status: pass\n", "ready-to-optimize"),
+    ).toThrowError(HtmlParseError);
   });
 
   it("measures the viewport from the probe page's own root element", () => {

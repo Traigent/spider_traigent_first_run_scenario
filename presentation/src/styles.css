@@ -449,10 +449,6 @@ h1 {
   color: var(--green);
 }
 
-.owner-verifier {
-  color: var(--green);
-}
-
 .human-gate {
   display: inline-flex;
   margin-left: 0.35rem;
@@ -555,101 +551,6 @@ h1 {
   border-bottom: 0;
 }
 
-.coverage {
-  display: inline-block;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  padding: 0.2rem 0.42rem;
-  font-size: 0.62rem;
-  font-weight: 750;
-  line-height: 1.15;
-}
-
-.coverage-published {
-  color: var(--blue-bright);
-}
-
-.coverage-coverage-target {
-  color: var(--muted);
-}
-
-.test-layer-matrix th:first-child {
-  width: 13%;
-}
-
-.scenario-coverage-matrix th:nth-child(1) {
-  width: 16%;
-}
-
-.scenario-coverage-matrix th:nth-child(2) {
-  width: 31%;
-}
-
-.scenario-coverage-matrix th:nth-child(3) {
-  width: 36%;
-}
-
-.catalog-grid {
-  margin: 1rem 0 0;
-}
-
-.catalog-card {
-  border: 1px solid var(--border);
-  border-radius: 0.9rem;
-  background: rgb(21 25 34 / 82%);
-  padding: 0.8rem 0.95rem;
-}
-
-.catalog-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.catalog-title h2 {
-  margin: 0;
-  color: var(--text);
-  font-size: clamp(0.9rem, 1.1vw, 1.15rem);
-}
-
-.catalog-title span {
-  border: 1px solid var(--blue-bright);
-  border-radius: 999px;
-  padding: 0.2rem 0.5rem;
-  color: var(--blue-bright);
-  font-size: 0.62rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.catalog-card dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.48rem 1rem;
-  margin: 0.65rem 0 0;
-}
-
-.catalog-card dl > div {
-  border-top: 1px solid var(--border);
-  padding-top: 0.42rem;
-}
-
-.catalog-card dt {
-  color: var(--muted);
-  font-size: 0.67rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.catalog-card dd {
-  margin: 0.18rem 0 0;
-  color: var(--text-soft);
-  font-size: clamp(0.78rem, 0.9vw, 0.94rem);
-  line-height: 1.32;
-}
-
 .slide-footer {
   display: flex;
   align-items: center;
@@ -659,30 +560,6 @@ h1 {
   color: var(--muted);
   font-size: 0.78rem;
   line-height: 1.35;
-}
-
-.evidence-badge {
-  flex: 0 0 auto;
-  border: 1px solid currentColor;
-  border-radius: 999px;
-  padding: 0.28rem 0.55rem;
-  font-weight: 700;
-}
-
-.evidence-guide-contract {
-  color: var(--violet);
-}
-
-.evidence-scenario-contract {
-  color: var(--blue-bright);
-}
-
-.evidence-verified-run {
-  color: var(--green);
-}
-
-.evidence-not-demonstrated {
-  color: var(--amber);
 }
 
 .controls {
@@ -736,7 +613,6 @@ h1 {
   .metric-grid,
   .journey,
   .matrix-wrap,
-  .catalog-grid,
   .prompt-card {
     margin-top: 0.85rem;
   }
@@ -886,8 +762,7 @@ h1 {
 
   .bullet-grid,
   .metric-grid,
-  .journey,
-  .catalog-card dl {
+  .journey {
     grid-template-columns: 1fr;
   }
 
