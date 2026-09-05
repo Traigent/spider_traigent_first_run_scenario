@@ -3,12 +3,15 @@ import { ZodError } from "zod";
 import { presentation } from "../src/content";
 import {
   parsePresentation,
-  type CatalogEntry,
+  sourceCitation,
   type PresentationSpec,
   type SlideSpec,
 } from "../src/model";
 import { isMainModule } from "./runtime";
 
+// The deck describes the guide and records no run of its own, so there is no
+// measured result anywhere in it to report. A sentence that reports one is
+// wrong wherever it renders.
 const POSITIVE_RUN_CLAIMS = [
   /\bwe (?:achieved|measured|observed|reduced|improved|increased)\b/i,
   /\b(?:achieved|measured|observed) (?:an? )?(?:live |optimization )?(?:result|improvement|gain|reduction)\b/i,
@@ -17,23 +20,17 @@ const POSITIVE_RUN_CLAIMS = [
   /\bverified (?:live )?(?:run|result|optimization|improvement)\b/i,
 ] as const;
 
-// Fields the deck renders beneath "Not proven" and "Does not prove". Naming a
-// result there is the opposite of claiming it.
-const DISCLAIMED_FIELDS = new Set(["notProven", "doesNotProve"]);
-
 // A claim phrase inside a sentence that denies it is not a claim. Speaker
-// notes and evidence lines are where the deck says what it is not asserting,
-// so refusing those sentences would push authors away from the plain wording
-// the deck exists to use.
+// notes are where the deck says what it is not asserting, so refusing those
+// sentences would push authors away from the plain wording the deck exists
+// to use.
 const CLAIM_NEGATORS =
   /\b(?:no|not|never|without|cannot|can't|don't|doesn't|didn't|isn't|aren't|wasn't|weren't|none|nothing|neither|nor|un(?:proven|verified)|absent)\b/i;
 
 // Clause boundaries count, not only sentence boundaries. A negator only
 // disclaims what it governs, and it stops governing at the comma: "No customer
 // data leaves the laptop, and we measured a 41% quality improvement" is a real
-// claim wearing a denial's opening. Those are the phrasings a local-only deck
-// reaches for, so treating the whole sentence as disclaimed exempted exactly
-// the sentences most likely to overclaim.
+// claim wearing a denial's opening.
 const CLAUSE_BOUNDARY = /[.!?;,:\n]/;
 
 export class ContentValidationError extends Error {
@@ -68,12 +65,10 @@ function uniqueIssues(values: readonly string[], label: string): string[] {
  * Collect every string the content model carries, at any depth.
  *
  * The honesty rule has to hold on every surface a reader sees, and the deck
- * renders far more than a slide's body: the footer prints `evidence`, the
- * speaker-note pane and the PowerPoint notes page print `notes`, catalog
- * slides print the catalog entry, and the deck subtitle becomes the
- * PowerPoint subject. Enumerating fields by hand left four of those surfaces
- * unchecked, so the scan walks the parsed model instead. A field added to the
- * schema is covered the day it is added, without editing a list here.
+ * renders more than a slide's body: the footer prints `sources`, the
+ * speaker-note pane and the PowerPoint notes page print `notes`, and the deck
+ * subtitle becomes the PowerPoint subject. The scan walks the parsed model, so
+ * a field added to the schema is covered the day it is added.
  */
 function collectRenderedStrings(value: unknown, collected: string[]): void {
   if (typeof value === "string") {
@@ -87,12 +82,8 @@ function collectRenderedStrings(value: unknown, collected: string[]): void {
     return;
   }
   if (typeof value === "object" && value !== null) {
-    for (const [key, item] of Object.entries(value)) {
-      // These fields render under a heading that states the deck does not
-      // claim what they contain, so a result named there is a disclaimer.
-      if (!DISCLAIMED_FIELDS.has(key)) {
-        collectRenderedStrings(item, collected);
-      }
+    for (const item of Object.values(value)) {
+      collectRenderedStrings(item, collected);
     }
   }
 }
@@ -134,13 +125,20 @@ function hasPositiveRunClaim(claimText: string): boolean {
   return false;
 }
 
-function renderedCatalogEntry(
-  slide: SlideSpec,
-  catalog: readonly CatalogEntry[],
-): CatalogEntry | undefined {
-  return slide.catalogSlug === undefined
-    ? undefined
-    : catalog.find((entry) => entry.slug === slide.catalogSlug);
+const RUN_CLAIM_ISSUE =
+  "reports a run result, and the deck describes the guide without recording any run";
+
+// The deck describes the public guide and nothing else. These phrases belong
+// to the internal tooling that tests the guide, and a slide that uses one is
+// talking about that tooling, which the customer never sees.
+const FOREIGN_TOPICS =
+  /\b(?:fixture bank|fixture skills?|captain|spider|companion repo(?:sitory)?|worked case|verification layers?|evidence states?|coverage targets?|recorded run|run record|build\.py|text-to-sql|measurement cards?|preset bank|scenario (?:bank|contract|catalog))\b/i;
+
+function foreignTopicIssues(claimText: string): string[] {
+  const match = FOREIGN_TOPICS.exec(claimText);
+  return match === null
+    ? []
+    : [`names internal tooling the deck does not describe: "${match[0]}"`];
 }
 
 function validateTemplateContract(slide: SlideSpec): string[] {
@@ -158,33 +156,11 @@ function validateTemplateContract(slide: SlideSpec): string[] {
   if (slide.kind === "evidence" && slide.metrics.length === 0) {
     issues.push("evidence slides require at least one metric");
   }
-  if (
-    slide.kind === "matrix" &&
-    [slide.matrix, slide.testMatrix, slide.scenarioMatrix].filter(
-      (dataset) => dataset !== undefined,
-    ).length !== 1
-  ) {
-    issues.push("matrix slides require exactly one matrix dataset");
+  if (slide.kind === "matrix" && slide.matrix === undefined) {
+    issues.push("matrix slides require matrix rows");
   }
-  if (
-    slide.kind !== "matrix" &&
-    (slide.matrix !== undefined ||
-      slide.testMatrix !== undefined ||
-      slide.scenarioMatrix !== undefined)
-  ) {
-    issues.push("only matrix slides may define matrix data");
-  }
-  if (
-    slide.kind === "catalog" &&
-    (slide.catalogView === undefined || slide.catalogSlug === undefined)
-  ) {
-    issues.push("catalog slides require a catalog slug and view");
-  }
-  if (
-    slide.kind !== "catalog" &&
-    (slide.catalogView !== undefined || slide.catalogSlug !== undefined)
-  ) {
-    issues.push("only catalog slides may define catalog routing");
+  if (slide.kind !== "matrix" && slide.matrix !== undefined) {
+    issues.push("only matrix slides may define matrix rows");
   }
   if (slide.accent !== undefined) {
     const title = slide.title.toLocaleLowerCase("en");
@@ -197,49 +173,13 @@ function validateTemplateContract(slide: SlideSpec): string[] {
   return issues;
 }
 
-function validateEvidenceContract(
-  slide: SlideSpec,
-  catalog: readonly CatalogEntry[],
-): string[] {
-  const issues: string[] = [];
-  const claimText = visibleClaimText(
-    slide,
-    renderedCatalogEntry(slide, catalog),
-  );
-
-  if (
-    hasPositiveRunClaim(claimText) &&
-    slide.evidenceState !== "verified-run"
-  ) {
-    issues.push("positive run claims require evidenceState verified-run");
-  }
-  if (slide.evidenceState === "verified-run") {
-    issues.push(
-      "verified-run slides are disabled until retained evidence validates revisions, worker and session identity, environment and isolation boundary, exact handoff and response, captured JSON, complete commands and final statuses, verifier output, and stop point",
-    );
-  }
-  if (
-    slide.evidenceState !== "verified-run" &&
-    slide.metrics.some((metric) => metric.tone === "green")
-  ) {
-    issues.push("green metric tones require evidenceState verified-run");
-  }
-  if (slide.evidenceState === "not-demonstrated" && slide.metrics.length > 0) {
-    issues.push("not-demonstrated slides cannot present metrics");
-  }
-
-  return issues;
-}
-
-function validateSlide(
-  slide: SlideSpec,
-  catalog: readonly CatalogEntry[],
-): string[] {
+function validateSlide(slide: SlideSpec): string[] {
   const issues = [
     ...validateTemplateContract(slide),
-    ...validateEvidenceContract(slide, catalog),
+    ...(hasPositiveRunClaim(visibleClaimText(slide)) ? [RUN_CLAIM_ISSUE] : []),
+    ...foreignTopicIssues(visibleClaimText(slide)),
     ...uniqueIssues(slide.bullets, "bullets"),
-    ...uniqueIssues(slide.evidence, "evidence"),
+    ...uniqueIssues(slide.sources, "sources"),
     ...uniqueIssues(slide.notes, "notes"),
     ...uniqueIssues(
       slide.metrics.map((metric) => metric.label),
@@ -264,15 +204,12 @@ function schemaIssues(error: ZodError): string[] {
 
 function validateDeckContract(spec: PresentationSpec): string[] {
   // Deck-level text renders on every slide and in the PowerPoint document
-  // properties, and carries no evidence state of its own, so it can never
-  // reach the verified-run state a positive run claim would require.
-  return hasPositiveRunClaim(
-    visibleClaimText(spec.title, spec.subtitle, spec.scenario),
-  )
-    ? [
-        "deck: positive run claims require evidenceState verified-run, which deck-level text cannot carry",
-      ]
-    : [];
+  // properties.
+  const deckText = visibleClaimText(spec.title, spec.subtitle);
+  return [
+    ...(hasPositiveRunClaim(deckText) ? [`deck: ${RUN_CLAIM_ISSUE}`] : []),
+    ...foreignTopicIssues(deckText).map((issue) => `deck: ${issue}`),
+  ];
 }
 
 export function validatePresentationContent(value: unknown): PresentationSpec {
@@ -288,7 +225,7 @@ export function validatePresentationContent(value: unknown): PresentationSpec {
 
   const issues = [
     ...validateDeckContract(parsed),
-    ...parsed.slides.flatMap((slide) => validateSlide(slide, parsed.catalog)),
+    ...parsed.slides.flatMap((slide) => validateSlide(slide)),
   ];
   if (issues.length > 0) {
     throw new ContentValidationError(issues);
@@ -304,6 +241,6 @@ export function validateCurrentPresentation(): PresentationSpec {
 if (isMainModule(import.meta.url)) {
   const validated = validateCurrentPresentation();
   process.stdout.write(
-    `Validated ${validated.slides.length} presentation slides for scenario ${validated.scenario.slug}.\n`,
+    `Validated ${validated.slides.length} presentation slides describing ${sourceCitation(validated)}.\n`,
   );
 }

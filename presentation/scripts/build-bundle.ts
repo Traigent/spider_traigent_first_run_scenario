@@ -1254,23 +1254,6 @@ export async function buildCustomerBundle(
     options.outputDirectory ?? path.join(distDirectory, BUNDLE_DIRECTORY_NAME);
   const repositoryDirectory = options.repositoryDirectory ?? repositoryRoot;
   const spec = validatePresentationContent(options.spec ?? presentation);
-  const evidenceStates = [
-    ...new Set(spec.slides.map((slide) => slide.evidenceState)),
-  ].sort(comparePaths);
-  const guideContractSourceRevisions = [
-    ...new Set(
-      spec.slides
-        .filter((slide) => slide.evidenceState === "guide-contract")
-        .map((slide) => {
-          if (slide.sourceRevision === undefined) {
-            throw new BundleBuildError(
-              `Guide-contract slide ${slide.id} reached the bundle without a source revision`,
-            );
-          }
-          return slide.sourceRevision;
-        }),
-    ),
-  ].sort(comparePaths);
   const gitMetadata =
     options.gitMetadata ?? resolveGitMetadata(repositoryDirectory);
   const generatedAt = resolveBuildTimestamp(
@@ -1343,15 +1326,16 @@ export async function buildCustomerBundle(
     deck: {
       title: spec.title,
       schema_version: spec.schemaVersion,
-      scenario_slug: spec.scenario.slug,
-      scenario_legacy_id: spec.scenario.legacyId,
-      evidence_states: evidenceStates,
-      guide_contract_source_revisions: guideContractSourceRevisions,
+      // The guide the deck describes, pinned so a reader can check every
+      // slide against the exact files it was drawn from.
+      described_repository: spec.source.repository,
+      described_revision: spec.source.revision,
+      described_files: [...spec.source.files].sort(comparePaths),
       slide_count: spec.slides.length,
       slides: spec.slides.map((slide) => ({
         id: slide.id,
-        evidence_state: slide.evidenceState,
-        source_revision: slide.sourceRevision ?? null,
+        section: slide.section ?? null,
+        sources: slide.sources,
       })),
     },
     offline: {

@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { renderPptxBuffer } from "../scripts/build-pptx";
 import { presentationRoot } from "../scripts/runtime";
 import { presentation } from "../src/content";
-import { evidenceLabel } from "../src/model";
+import { sourceFooter } from "../src/model";
 
 function decodeXmlText(value: string): string {
   return value
@@ -79,26 +79,10 @@ describe("PowerPoint export", () => {
       expect(slideXml).toContain("<p:sp>");
       expect(slideXml).not.toContain("<p:pic>");
       const slideText = textFromXml(slideXml);
-      expect(slideText).toContain(evidenceLabel(slideSpec.evidenceState));
-      for (const evidenceReference of slideSpec.evidence) {
-        expect(slideText).toContain(evidenceReference);
-      }
-      if (slideSpec.evidenceState === "guide-contract") {
-        expect(slideText).toContain(slideSpec.sourceRevision!.slice(0, 8));
-      }
+      expect(slideText).toContain(sourceFooter(presentation, slideSpec));
       for (const row of slideSpec.matrix ?? []) {
         expect(slideText).toContain(row.startingPoint);
         expect(slideText).toContain(row.safestNextStep);
-      }
-      for (const row of slideSpec.testMatrix ?? []) {
-        expect(slideText).toContain(row.layer);
-        expect(slideText).toContain(row.passSupports);
-        expect(slideText).toContain(row.doesNotProve);
-      }
-      for (const row of slideSpec.scenarioMatrix ?? []) {
-        expect(slideText).toContain(row.family);
-        expect(slideText).toContain(row.setup);
-        expect(slideText).toContain(row.expectedRoute);
       }
       for (const note of slideSpec.notes) {
         expect(textFromXml(notesXml)).toContain(note);
