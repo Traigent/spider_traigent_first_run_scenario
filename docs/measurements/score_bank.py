@@ -8,19 +8,34 @@ every invocation and every output under `cards/`. Nothing there is named `.log`:
 repository's `.gitignore` excludes that suffix, and evidence that is not committed is not
 evidence.
 
-    python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
+    python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+        --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
 
 Standard library only, like `build.py`. It needs a checkout of the guide, because the
 scripts it runs are the guide's, and it never reaches the network.
 
-**It pins the revision.** `PINNED_REVISION` below is the commit every published figure was
-measured at, and the run refuses a checkout sitting on anything else rather than quietly
-scoring against a moved target. The guide is under active development and its input contracts
-change: measured on 2026-09-02, a checkout four commits later rejected the `--agent-knobs`
-documents in `agent-knobs/` outright, because `build` checks had grown a required
-`source_lines` field. A table that silently re-measures against whatever HEAD happens to be is
-not reproducible, which is the whole point of this directory. Pass `--revision` to measure at a
-different commit deliberately; the revision used is recorded in `cards/results.json`.
+**It pins the revision, and the pin and the documents currently disagree.**
+`PINNED_REVISION` below is the commit every figure under `cards/` was measured at, and the run
+refuses a checkout sitting on anything else rather than quietly scoring against a moved target.
+The guide is under active development and its input contracts change, and a `build` check's
+`source_lines` is the field that keeps moving: `6ec2b9c1`, the pin, does not read it and
+refuses a document that carries it; `6e18086e` reads it and requires it of a settled check.
+The documents under `agent-knobs/` were repaired to the second contract -- they cite executable
+lines and every settled `build` check names them -- so **the sweep runs at `6e18086e` and is
+refused at the pin**, which is why the invocation above passes `--revision` and why
+`contract_mismatch` below stops the run with one sentence rather than 26 refused rows.
+
+That is a known, deliberate state and not a loose end: the pin says what `cards/` was measured
+at, and re-pinning it is part of the pending regeneration, which re-measures the whole table in
+the same commit. Until then, `--revision` is how a reader reproduces the sweep, and
+`../README.md` and `README.md` say so where they hand out the command. A table that silently
+re-measures against whatever HEAD happens to be is not reproducible, which is the whole point
+of this directory; the revision used is recorded in `cards/results.json`.
+
+**Exit status.** 0 only when every run scored. At `6e18086e` one run cannot: the guide refuses
+to calibrate an executing scorer, which is exactly what `best-case--off-method-calibration`
+asks it to do, so a complete and correct sweep there ends 1 with that one run refused. Nothing
+should key on exit 0 alone; read the refused list the run prints and `results.json` beside it.
 
 What it decides, and why each decision is here rather than in the reader's head:
 
@@ -61,8 +76,14 @@ from pathlib import Path
 from typing import Any
 
 # The guide commit every figure under cards/ was measured at. Changing this is a deliberate
-# re-measurement, never a side effect of somebody's checkout having moved.
+# re-measurement, never a side effect of somebody's checkout having moved -- which is why it
+# still names 6ec2b9c1 while the documents under agent-knobs/ only validate at 6e18086e. The
+# two are re-joined by the pending regeneration, in the commit that re-measures the table.
+# Until then the sweep runs with
+#     --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
+# and refuses at the pin, before building anything, with the contract it could not satisfy.
 PINNED_REVISION = "6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9"
+WORKING_REVISION = "6e18086e1499baa3c66a7c0ebeedebdc887d4f0c"
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
@@ -210,6 +231,79 @@ def capture_json(
     return done
 
 
+# Read out of the guide being measured rather than assumed here: the fields a build check
+# may carry are readiness.py's own constant, so the check below asks the revision in front of
+# it instead of encoding a second copy of a contract that has already moved twice.
+CONTRACT_PROBE = """
+import importlib.util
+import json
+import sys
+
+located = importlib.util.spec_from_file_location("_pinned_readiness", sys.argv[1])
+module = importlib.util.module_from_spec(located)
+# Registered before it runs: readiness.py builds dataclasses at import, and
+# @dataclass resolves annotations through sys.modules[cls.__module__].
+sys.modules[located.name] = module
+located.loader.exec_module(module)
+fields = getattr(module, "BUILD_CHECK_FIELDS", None)
+if not isinstance(fields, dict):
+    print("null")
+else:
+    print(json.dumps({check: sorted(names) for check, names in fields.items()}))
+"""
+
+
+def contract_mismatch(scripts: Path) -> list[str]:
+    """Where the guide in front of us and the documents beside us disagree, in its terms.
+
+    The pin and the documents' schema are two independently editable facts, and letting
+    them drift apart is how this directory has now broken twice in opposite directions:
+    once with documents too old for the guide, once with documents too new for the pin.
+    Both times the reader found out by running 26 builds and reading 26 refusals. So the
+    disagreement is settled here, before anything is built, against `readiness.py`'s own
+    `BUILD_CHECK_FIELDS` rather than against a copy of it kept in this file.
+
+    A revision that does not publish that constant is not second-guessed: the list comes
+    back empty and the sweep runs, and the guide gets to speak for itself.
+    """
+    probe = subprocess.run(
+        [sys.executable, "-c", CONTRACT_PROBE, str(scripts / "readiness.py")],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if probe.returncode != 0:
+        raise MeasurementError(
+            f"the guide's readiness.py could not be read for its build-check contract: "
+            f"{probe.stderr.strip() or probe.stdout.strip()}"
+        )
+    fields = json.loads(probe.stdout)
+    if not isinstance(fields, dict):
+        return []
+
+    complaints = []
+    for document in sorted(KNOBS.glob("*.json")):
+        read = json.loads(document.read_text(encoding="utf-8"))
+        for check, spec in sorted(read.get("build", {}).items()):
+            allowed = fields.get(check)
+            if allowed is None or not isinstance(spec, dict):
+                continue
+            unknown = sorted(set(spec) - set(allowed))
+            if unknown:
+                complaints.append(
+                    f"{document.name}: build check {check!r} carries "
+                    f"{', '.join(unknown)}, which this revision does not read"
+                )
+            # Not "required": that is the guide's word to say. The two are recorded as
+            # disagreeing, which is all this check knows and all it needs to stop.
+            elif "source_lines" in allowed and "source_lines" not in spec:
+                complaints.append(
+                    f"{document.name}: build check {check!r} carries no 'source_lines', "
+                    "which this revision reads"
+                )
+    return complaints
+
+
 def decoded(
     done: subprocess.CompletedProcess[str], step: str
 ) -> dict[str, Any] | list[Any]:
@@ -251,6 +345,7 @@ def score_one(
     build_flags: tuple[str, ...],
     scripts: Path,
     workspace: Path,
+    staging: Path,
     *,
     agent_knobs: bool = True,
     force_execution_calibration: bool = False,
@@ -261,7 +356,11 @@ def score_one(
     out = workspace / tag
     if out.exists():
         shutil.rmtree(out)
-    room = CARDS / tag
+    # Written outside the repository and promoted over `cards/` only by a sweep that got
+    # far enough to be worth publishing. `cards/` is the committed evidence a reader runs
+    # this script to check, and a run that refuses everything used to overwrite all of it
+    # on its way to saying so.
+    room = staging / tag
     if room.exists():
         shutil.rmtree(room)
     room.mkdir(parents=True)
@@ -501,6 +600,35 @@ def main() -> int:
         )
     revision = found
 
+    # Before anything is built: the documents this sweep hands to `readiness.py`, against
+    # the contract the checkout in front of us actually reads. A mismatch here is a
+    # property of the pair, not of any one run, so it stops the sweep in one sentence
+    # instead of 26 refusals over a rewritten cards/.
+    disagreements = contract_mismatch(scripts)
+    if disagreements:
+        print(
+            f"the documents under {KNOBS.name}/ and the guide at {revision[:8]} disagree "
+            "about what a build check carries:",
+            file=sys.stderr,
+        )
+        for complaint in disagreements:
+            print(f"  {complaint}", file=sys.stderr)
+        print(
+            "\nNothing was built and cards/ was not touched. Either measure at the "
+            "revision these documents were written for -- as committed here that is\n"
+            f"    --revision {WORKING_REVISION}\n"
+            "-- or repair the documents for the revision in front of you. The pin and "
+            "the documents are re-joined by the pending regeneration, which re-measures "
+            "the whole table.",
+            file=sys.stderr,
+        )
+        return 2
+
+    staging = workspace / "cards-staging"
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+
     results: list[dict[str, Any]] = []
 
     def measure(tag: str, flags: tuple[str, ...], **options: Any) -> None:
@@ -510,18 +638,23 @@ def main() -> int:
         exception leaving this loop -- ended the sweep at the first refusal and threw
         away every run behind it, so a single unscorable configuration cost the whole
         bank and the table it feeds.
+
+        Only `RunRefused` is caught. A `MeasurementError` that is not one is a fault in
+        this harness rather than an answer from the guide, and it leaves loudly: recorded
+        as a "refused" row it would read as the tool declining something, which is the one
+        thing this vocabulary must not be able to say about our own bugs.
         """
         try:
-            row = score_one(tag, flags, scripts, workspace, **options)
-        except MeasurementError as refusal:
-            step = getattr(refusal, "step", "the measurement")
-            reason = getattr(refusal, "reason", str(refusal))
+            row = score_one(tag, flags, scripts, workspace, staging, **options)
+        except RunRefused as refusal:
+            step = refusal.step
+            reason = refusal.reason
             results.append(
                 {
                     "tag": tag,
                     "refused": {
                         "step": step,
-                        "exit": getattr(refusal, "exit_code", None),
+                        "exit": refusal.exit_code,
                         "reason": reason,
                     },
                     "overall": None,
@@ -552,13 +685,35 @@ def main() -> int:
     for tag, declared, kind in GRID:
         measure(tag, ("--preset", "checked"), method=declared, task_kind=kind)
 
-    (CARDS / "results.json").write_text(
+    (staging / "results.json").write_text(
         json.dumps({"guide_revision": revision, "runs": results}, indent=2) + "\n",
         encoding="utf-8",
     )
-    print(f"\nguide revision {revision}")
-    print(f"evidence under {CARDS}")
     refused = [row for row in results if row.get("refused")]
+
+    # A refusal at readiness.py is the one kind that is not about the run it happened on:
+    # every run hands that step the same two documents, so one such refusal says the
+    # inputs are wrong rather than that this configuration is unscorable. A sweep carrying
+    # one does not replace the committed evidence a reader ran this script to check; it
+    # leaves what it measured where it measured it and says where that is.
+    scoring_input = [row for row in refused if row["refused"]["step"] == "readiness.py"]
+    print(f"\nguide revision {revision}")
+    if scoring_input:
+        print(f"cards/ NOT rewritten. What this run produced is under {staging}")
+    else:
+        # Entry by entry, never the whole directory: what this sweep did not produce is
+        # not this sweep's to delete.
+        CARDS.mkdir(parents=True, exist_ok=True)
+        for produced in sorted(staging.iterdir()):
+            landing = CARDS / produced.name
+            if landing.is_dir():
+                shutil.rmtree(landing)
+            elif landing.exists():
+                landing.unlink()
+            shutil.move(str(produced), str(landing))
+        shutil.rmtree(staging)
+        print(f"evidence under {CARDS}")
+
     if refused:
         # Non-zero, because a sweep with holes in it is not the table this script
         # claims to produce -- and every row it did measure is on disk regardless.

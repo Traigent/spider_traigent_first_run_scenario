@@ -353,27 +353,36 @@ the number a finished run reports is not the one in this table, and should not b
 
 **Measured with the guide's own `preflight.py`, `calibrate_evaluator.py` and `readiness.py`, at
 guide revision `6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9` (`6ec2b9c1`), on 2026-09-02.**
-Rebuild the whole table with one command:
+
+> **These numbers have drifted and are not being republished as current.** Re-running the same
+> sweep on 2026-09-06 against the guide's trunk at `6e18086e` returned a materially different
+> table -- the agent pillar reads 0 rather than 70 throughout, `checked` opens at 45 rather than
+> 86, `hand-written` at 45 rather than 74, several `proceed` actions have become
+> `complete-calibration`, and two runs this file argues from have been answered by the guide:
+> `no-agent` ("**The card says proceed**") and `ready--without-agent-knobs` both open at
+> **25 NOT READY `connect-agent`** now, under an `agent-absent` cap. The projects here are
+> unchanged; the tool being measured moved. A regeneration is pending and deliberately held
+> until the guide changes now in flight have landed, because a table re-measured ahead of them
+> would be stale the day they merged.
+> [`docs/measurements/README.md`](docs/measurements/README.md#these-figures-have-drifted-and-a-regeneration-is-pending)
+> has the run-by-run detail. **Every score, band, action and cap in this file, and every
+> sentence keyed to one, is a reading of `6ec2b9c1` on 2026-09-02 and nothing more.**
+
+Rebuild the table with one command. It runs at `6e18086e`, not at the pinned revision above: the
+agent-source documents the sweep hands to `readiness.py` were repaired for the contract that
+revision reads, and `6ec2b9c1` refuses them -- so the sweep stops there before building
+anything, and says which field the two disagree about. What comes back is today's reading, not
+the table below.
 
 ```bash
-python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
 ```
 
 Every invocation and every captured output is committed under
 [`docs/measurements/`](docs/measurements/README.md), one directory per run, including the
 rendered card each number is read off. Nothing below has to be taken on trust or reconstructed
 by hand.
-
-> **These numbers have drifted and are not being republished as current.** Re-running the same
-> sweep on 2026-09-06 against the guide's trunk at `6e18086e` returned a materially different
-> table -- the agent pillar reads 0 rather than 70 throughout, `checked` opens at 45 rather than
-> 86, `hand-written` at 45 rather than 74, and several `proceed` actions have become
-> `complete-calibration`. The projects here are unchanged; the tool being measured moved. A
-> regeneration is pending and deliberately held until the guide changes now in flight have
-> landed, because a table re-measured ahead of them would be stale the day they merged.
-> [`docs/measurements/README.md`](docs/measurements/README.md#these-figures-have-drifted-and-a-regeneration-is-pending)
-> has the run-by-run detail. **Every score, band, action and cap in this file, and every
-> sentence keyed to one, is a reading of `6ec2b9c1` on 2026-09-02 and nothing more.**
 
 | preset | opening | band | card says | what the run has to build or fix |
 |---|---|---|---|---|

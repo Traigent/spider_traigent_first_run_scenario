@@ -10,8 +10,8 @@
     },
     "output-contract": {
       "present": true,
-      "source_lines": [30, 68],
-      "evidence": "agent.py:30 INSTRUCTION asks for the SQLite query only, and agent.py:43-68 strip_code_fence pins the returned answer to bare query text, returning it at agent.py:68."
+      "source_lines": [30, 61, 68],
+      "evidence": "agent.py:30 INSTRUCTION asks for the SQLite query only, and agent.py:43-68 strip_code_fence pins the returned answer to bare query text on both of its paths: agent.py:61 where the model added no fence, agent.py:68 where it did."
     },
     "control-flow": {
       "loop": false,

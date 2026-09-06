@@ -37,14 +37,14 @@
     },
     "output-contract": {
       "present": true,
-      "source_lines": [59, 61, 346],
-      "evidence": "agent.py:59 and agent.py:61-62 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text, returning it at agent.py:346."
+      "source_lines": [59, 61, 339, 346],
+      "evidence": "agent.py:59 and agent.py:61-62 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text on both of its paths: agent.py:339 where the model added no fence, agent.py:346 where it did."
     },
     "control-flow": {
       "loop": false,
       "bounded": true,
       "source_lines": [392, 405, 406],
-      "evidence": "agent.py:392-411 run() is straight-line: agent.py:405-410 is its single return, calling call_model once at agent.py:406, with no loop and no retry."
+      "evidence": "agent.py:392-411 run() is straight-line: agent.py:405-411 is its single return, calling call_model once at agent.py:406, with no loop and no retry."
     },
     "tools": {
       "used": false,
