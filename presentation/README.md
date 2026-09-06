@@ -22,7 +22,7 @@ records no run of its own, so it carries no measured outcome, no uplift figure,
 and no example project.
 
 The first 22 slides form the overview a reader with no prior Traigent
-knowledge can follow. The remaining 17 slides are a clearly marked technical
+knowledge can follow. The remaining 18 slides are a clearly marked technical
 appendix with stage detail, scoring mechanics, requirements, licensing, and the
 repository layout.
 

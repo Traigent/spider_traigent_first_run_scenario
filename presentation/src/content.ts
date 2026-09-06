@@ -1209,16 +1209,16 @@ const rawPresentation = {
       id: "what-the-search-may-change",
       kind: "columns",
       eyebrow: "STAGE 4 OF 5 · WHAT THE SEARCH MAY CHANGE",
-      title: "It keeps your baseline and adds only what your agent uses.",
-      body: "The search explores a broader space without moving the ground the baseline stands on.",
+      title: "The search changes settings, never your data.",
+      body: "It explores a broader space of your agent's own settings, on the same rows the baseline ran on.",
       columns: [
         {
           heading: "Kept",
           tone: "blue",
           items: [
             "Every baseline value and model",
-            "Your dataset and evaluator",
-            "The same task and rows",
+            "Your dataset and evaluator, untouched",
+            "The same rows on both sides",
           ],
         },
         {
@@ -1239,6 +1239,67 @@ const rawPresentation = {
       notes: [
         "The search keeps every baseline value and model and adds only settings the agent actually uses. Any new model would be a separately disclosed experiment.",
         "Same rows on both sides: the baseline and the search are compared on the same tuning rows. On more than about 100 usable rows those rows are the bounded subset chosen before the baseline (18 tuning questions plus 10 held-out by default), which scopes the whole paid comparison; it is not something the search adds, and readiness is never scored on it.",
+        "Where the rows come from, and what the run does when there are too few or none, is the next slide. The search itself never writes, drops or replaces a row.",
+      ],
+    },
+    {
+      id: "your-data-first",
+      kind: "columns",
+      eyebrow: "STAGES 2 TO 4 · YOUR DATA",
+      title: "Your own data first. Written rows only where yours run out.",
+      body: "Examples from your product are stronger evidence than anything the run writes, so the guide prefers yours, in this order.",
+      columns: [
+        {
+          heading: "Yours, as they are",
+          tone: "blue",
+          items: [
+            "Up to about 100 usable rows",
+            "Used exactly, nothing written",
+            "Your own held-out split is kept",
+          ],
+        },
+        {
+          heading: "Yours, a subset",
+          tone: "blue",
+          items: [
+            "Over about 100 usable rows",
+            "18 tuning questions plus 10 held-out",
+            "Row ids recorded to repeat the run",
+          ],
+        },
+        {
+          heading: "Yours, topped up",
+          tone: "amber",
+          items: [
+            "Fewer than 28 comparable rows",
+            "A bounded offer, asked once",
+            "Never past 28, never replacing yours",
+            "Accepting lowers the ceiling; it says so first",
+          ],
+        },
+        {
+          heading: "Written for the walkthrough",
+          tone: "violet",
+          items: [
+            "No dataset at all",
+            "28 rows: 18 tuning, 10 held-out",
+            "Listed as a substitute, weaker evidence",
+            "Readiness ceiling 65 until real rows arrive",
+          ],
+        },
+      ],
+      sources: [
+        `${EVALUATION} · Dataset construction`,
+        `${EVALUATION} · Topping a real dataset up to that size`,
+        `${EVALUATION} · First-run subset for a large dataset`,
+        `${README} · What the run does`,
+      ],
+      notes: [
+        "The guide's own order of preference for data: reviewed product fixtures, golden sets, regression tests or accepted examples first; then redacted real logs or traces with independently reviewed expected outcomes; then the customer's own examples expanded into additional tuning candidates; and only last, fully synthetic walkthrough data. Examples written for the walkthrough are weaker evidence than examples collected from the product.",
+        "Fewer than 28 comparable real rows: the run makes a bounded offer to top the set up, and only when the extra rows would make the comparison meaningfully larger. 28 is a ceiling on the offer, not a target the run pursues. It draws only the difference, derives every drawn row from the rows already there, never draws past 28 in total, and never draws to replace a real row. Rows without usable labels are reviewed or labelled first.",
+        "The offer is a question, asked once on the same ask as any other gap, and it says before the customer answers that accepting lowers the readiness ceiling: the added rows are generated, and on a short dataset they become most of the set. The guide's own measurement: nine real rows topped to twenty-eight move the card from a small-comparison-set ceiling to a mostly-generated one, four points lower. A topped-up dataset is one this run can compare on, not one that has been improved.",
+        "No dataset at all: 28 examples are written, 18 tuning rows (3 easy, 5 medium, 5 hard, 5 very hard) plus the held-out ten, listed under Walkthrough setup and capped at 65 until collected rows arrive. A project that maintains its own held-out split keeps it exactly; nothing here re-cuts it.",
+        "Over about 100 usable rows: the bounded subset from the special-cases slide, 18 tuning questions plus the 10 held-out rows, drawn inside each split with the ids recorded. Readiness is always scored on the whole dataset, never on the subset or the top-up.",
       ],
     },
     {
@@ -1518,6 +1579,7 @@ const appendixSlideIds = [
   "baseline-grid",
   "stage-optimize",
   "what-the-search-may-change",
+  "your-data-first",
   "selection-and-heldout",
   "stage-results",
   "what-you-keep",

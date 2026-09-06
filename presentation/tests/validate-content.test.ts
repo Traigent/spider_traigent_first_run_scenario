@@ -55,6 +55,7 @@ const APPENDIX_SLIDE_IDS = [
   "baseline-grid",
   "stage-optimize",
   "what-the-search-may-change",
+  "your-data-first",
   "selection-and-heldout",
   "stage-results",
   "what-you-keep",
