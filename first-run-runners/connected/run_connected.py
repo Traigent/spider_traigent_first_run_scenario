@@ -33,10 +33,11 @@ os.environ.setdefault("TRAIGENT_RESULTS_FOLDER", str(RUN_DIR / "sdk-results"))
 sys.path.insert(0, str(PROJECT_ROOT))
 import agent  # noqa: E402
 import evaluator  # noqa: E402
-
 import traigent  # noqa: E402
-from traigent.api.decorators import EvaluationOptions, InjectionOptions  # noqa: E402
-from traigent.core.objectives import ObjectiveDefinition, ObjectiveSchema  # noqa: E402
+from traigent.api.decorators import EvaluationOptions  # noqa: E402
+from traigent.api.decorators import InjectionOptions  # noqa: E402
+from traigent.core.objectives import ObjectiveDefinition  # noqa: E402
+from traigent.core.objectives import ObjectiveSchema  # noqa: E402
 
 TUNING_DATASET = str(RUN_DIR / "tuning.jsonl")
 HOLDOUT_DATASET = str(RUN_DIR / "holdout.jsonl")
@@ -82,7 +83,9 @@ def run_holdout(config, rows):
     for row in rows:
         try:
             output = agent.run(row["input"], config)
-            score = evaluator.score(output, row["output"], row["input"], row["metadata"])
+            score = evaluator.score(
+                output, row["output"], row["input"], row["metadata"]
+            )
         except Exception as exc:
             score = None
         scored.append(score)
@@ -95,11 +98,13 @@ def run_holdout(config, rows):
 
 
 def main():
-    print(f"Configuration space: {TOTAL_CONFIGURATIONS} possible configurations "
-          f"(model x{len(CONFIGURATION_SPACE['model'])} "
-          f"x schema_context x{len(CONFIGURATION_SPACE['schema_context'])} "
-          f"x prompt_style x{len(CONFIGURATION_SPACE['prompt_style'])}); "
-          f"testing up to {MAX_TRIALS}, Traigent's managed cost-aware selection.")
+    print(
+        f"Configuration space: {TOTAL_CONFIGURATIONS} possible configurations "
+        f"(model x{len(CONFIGURATION_SPACE['model'])} "
+        f"x schema_context x{len(CONFIGURATION_SPACE['schema_context'])} "
+        f"x prompt_style x{len(CONFIGURATION_SPACE['prompt_style'])}); "
+        f"testing up to {MAX_TRIALS}, Traigent's managed cost-aware selection."
+    )
 
     t0 = time.time()
     result = optimized_agent.optimize_sync(
@@ -123,16 +128,24 @@ def main():
     for key, value in summary.items():
         print(f"{key}: {value}")
 
-    (RUN_DIR / "optimized-results.json").write_text(json.dumps(summary, indent=2, default=str))
+    (RUN_DIR / "optimized-results.json").write_text(
+        json.dumps(summary, indent=2, default=str)
+    )
 
     best_config = summary["best_config"]
     if best_config:
         holdout_rows = [json.loads(line) for line in Path(HOLDOUT_DATASET).open()]
-        print(f"\nScoring the winning configuration against all {len(holdout_rows)} held-out rows...")
+        print(
+            f"\nScoring the winning configuration against all {len(holdout_rows)} held-out rows..."
+        )
         holdout_result = run_holdout(best_config, holdout_rows)
-        print(f"Held-out accuracy: {holdout_result['accuracy']} "
-              f"({holdout_result['scored']}/{holdout_result['rows']} scored)")
-        (RUN_DIR / "holdout-results.json").write_text(json.dumps(holdout_result, indent=2))
+        print(
+            f"Held-out accuracy: {holdout_result['accuracy']} "
+            f"({holdout_result['scored']}/{holdout_result['rows']} scored)"
+        )
+        (RUN_DIR / "holdout-results.json").write_text(
+            json.dumps(holdout_result, indent=2)
+        )
 
 
 if __name__ == "__main__":
