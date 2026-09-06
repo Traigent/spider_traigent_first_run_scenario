@@ -569,7 +569,8 @@ const rawPresentation = {
         "FIX BEFORE PAID RUN causes: no dataset, no expected answers, an evaluator that grades a wrong answer as well as a right one, or tuning rows that overlap the held-out rows.",
         "LIMITED TO causes: generated examples, or too few rows for a stable comparison. Two conditions can carry the same ceiling and both read LIMITED TO 45; fixing one leaves the number where it is until the other is fixed too.",
         "The three questions only a person can judge: an answer key a model wrote, rows whose answer does not match their own question, or data with no stated origin.",
-        "89/100 WORKABLE example: an evaluation pillar with only 2 of 4 checks observed. The card says which pillar and what fills it in. A generated walkthrough dataset at 65/100 WORKABLE while blocked is the ordinary case, not a contradiction.",
+        "89/100 WORKABLE example: an evaluation pillar with only 2 of 4 checks observed. The card says which pillar and what fills it in.",
+        "Band and blocker are separate questions, but at this revision they line up: every condition that holds the paid run carries a ceiling of 50 or below, so a card with a FIX BEFORE PAID RUN line always reads NOT READY or PARTIAL, and a WORKABLE card always has a clear blocker line. A generated walkthrough dataset caps at 65 and does not block; the README's older example of 65/100 WORKABLE while blocked predates that rule, so do not quote it.",
       ],
     },
     {
