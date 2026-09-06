@@ -31,9 +31,10 @@ repository layout.
 `src/content.ts` is the canonical slide content. Every fact in it is a reviewed
 snapshot of the guide at one exact revision, recorded in the deck's `source`
 block (repository, 40-character revision, and the guide files the deck draws
-on). Each slide lists its `sources` as `FILE · section`, and the footer of every
-rendered slide prints them beside the pinned revision, so a reader can open
-the guide and check the slide against it. `src/model.ts` validates the
+on). Each slide lists its `sources` as `FILE · section`. They are not printed on
+the slide the customer sees; the speaker notes end with them beside the pinned
+revision, in the browser deck's notes pane and on the PowerPoint notes page, so
+the presenter can open the guide and check the slide against it. `src/model.ts` validates the
 complete presentation before either renderer uses it, and rejects a source
 that names a file the deck does not declare.
 

@@ -991,22 +991,10 @@ function addStartingPointMatrix(
 
 function addFooter(
   slide: PptxGenJS.Slide,
-  spec: PresentationSpec,
   slideSpec: SlideSpec,
   slideNumber: number,
   slideCount: number,
 ): void {
-  slide.addText(sourceFooter(spec, slideSpec), {
-    x: CONTENT_X,
-    y: FOOTER_TOP,
-    w: 10.3,
-    h: 0.3,
-    margin: 0,
-    color: theme.colors.muted,
-    fontFace: theme.fonts.sans,
-    fontSize: 9,
-    valign: "middle",
-  });
   slide.addText(
     `${slideSpec.section === "appendix" ? "APPENDIX" : "CORE"} · ${slideNumber} / ${slideCount}`,
     {
@@ -1024,6 +1012,14 @@ function addFooter(
   );
 }
 
+/** The notes page: the talk track, then where in the guide the slide comes from. */
+export function notesText(
+  spec: PresentationSpec,
+  slideSpec: SlideSpec,
+): string {
+  return [...slideSpec.notes, sourceFooter(spec, slideSpec)].join("\n\n");
+}
+
 function requireBlock<T>(
   slideSpec: SlideSpec,
   block: T | undefined,
@@ -1037,8 +1033,6 @@ function requireBlock<T>(
   return block;
 }
 
-// Each slide kind owns exactly one content block, so the renderer dispatches
-// on the kind rather than on which array happens to be filled.
 function addSlideContent(
   pptx: PptxGenJS,
   slide: PptxGenJS.Slide,
@@ -1138,8 +1132,8 @@ export function createPptx(value: PresentationSpec = presentation): PptxGenJS {
     addBrand(pptx, slide);
     addHeading(slide, slideSpec);
     addSlideContent(pptx, slide, slideSpec);
-    addFooter(slide, validated, slideSpec, index + 1, validated.slides.length);
-    slide.addNotes(slideSpec.notes.join("\n\n"));
+    addFooter(slide, slideSpec, index + 1, validated.slides.length);
+    slide.addNotes(notesText(validated, slideSpec));
   });
 
   return pptx;

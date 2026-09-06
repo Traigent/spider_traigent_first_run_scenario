@@ -336,7 +336,6 @@ function Slide({ slide }: { slide: SlideSpec }) {
       ".scale-figure",
       ".scale-marker-label",
       ".callout-card",
-      ".slide-footer",
       ".slide-brand",
     ].join(",");
     const clipped = Array.from(element.querySelectorAll<HTMLElement>(selectors))
@@ -436,10 +435,6 @@ function Slide({ slide }: { slide: SlideSpec }) {
           <ReadinessScale slide={slide} />
         </div>
       )}
-
-      <footer className="slide-footer">
-        <span>{sourceFooter(presentation, slide)}</span>
-      </footer>
     </article>
   );
 }
@@ -586,6 +581,7 @@ export function App() {
               <li key={note}>{note}</li>
             ))}
           </ul>
+          <p className="speaker-sources">{sourceFooter(presentation, slide)}</p>
         </aside>
       ) : null}
     </div>

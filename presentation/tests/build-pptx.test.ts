@@ -79,7 +79,12 @@ describe("PowerPoint export", () => {
       expect(slideXml).toContain("<p:sp>");
       expect(slideXml).not.toContain("<p:pic>");
       const slideText = textFromXml(slideXml);
-      expect(slideText).toContain(sourceFooter(presentation, slideSpec));
+      // The guide citation is for the presenter: on the notes page, never on
+      // the slide the customer sees.
+      expect(slideText).not.toContain("Source:");
+      expect(textFromXml(notesXml)).toContain(
+        sourceFooter(presentation, slideSpec),
+      );
       for (const row of slideSpec.matrix ?? []) {
         expect(slideText).toContain(row.startingPoint);
         expect(slideText).toContain(row.safestNextStep);

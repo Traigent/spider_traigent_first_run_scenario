@@ -65,9 +65,9 @@ function uniqueIssues(values: readonly string[], label: string): string[] {
  * Collect every string the content model carries, at any depth.
  *
  * The honesty rule has to hold on every surface a reader sees, and the deck
- * renders more than a slide's body: the footer prints `sources`, the
- * speaker-note pane and the PowerPoint notes page print `notes`, and the deck
- * subtitle becomes the PowerPoint subject. The scan walks the parsed model, so
+ * renders more than a slide's body: the speaker-note pane and the PowerPoint
+ * notes page print `notes` and then `sources`, and the deck subtitle becomes
+ * the PowerPoint subject. The scan walks the parsed model, so
  * a field added to the schema is covered the day it is added.
  */
 function collectRenderedStrings(value: unknown, collected: string[]): void {
