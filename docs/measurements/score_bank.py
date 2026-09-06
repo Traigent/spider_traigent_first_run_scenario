@@ -53,10 +53,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import pathlib
 import shutil
 import subprocess
 import sys
-import pathlib
 from pathlib import Path
 from typing import Any
 
@@ -134,6 +134,25 @@ class MeasurementError(RuntimeError):
     """A step that has to succeed did not."""
 
 
+class RunRefused(MeasurementError):
+    """One run's step did not return the JSON the next step reads.
+
+    This is the ordinary outcome of measuring a tool that is allowed to refuse: the
+    guide declines a calibration, or rejects an `--agent-knobs` document, writes its
+    reason to stderr and exits non-zero, and the JSON the next step would read is not
+    there. That is a finding about the run, not a fault in the sweep, so it costs one
+    row rather than the whole bank -- which is what a bare `json.loads` of a refusal
+    used to cost: a `JSONDecodeError` at the readiness step threw away every run
+    already measured, including the ones that had nothing wrong with them.
+    """
+
+    def __init__(self, step: str, exit_code: int, reason: str) -> None:
+        super().__init__(f"{step} exited {exit_code}: {reason}")
+        self.step = step
+        self.exit_code = exit_code
+        self.reason = reason
+
+
 # Every transcript under cards/ is committed, so no line in one may carry a path from the
 # machine that produced it. The substitution lives at the writer, not at each call site:
 # argv.json was rewritten and the .txt transcripts beside it were not, and a rule applied at
@@ -191,6 +210,37 @@ def capture_json(
     return done
 
 
+def decoded(
+    done: subprocess.CompletedProcess[str], step: str
+) -> dict[str, Any] | list[Any]:
+    """The JSON one step printed, or a refusal naming the step and its own words.
+
+    The reason is the tool's stderr rather than the decoder's complaint: "Refusing to
+    calibrate: ..." is the answer, and "Expecting value: line 1 column 1" is only the
+    shape of the answer's absence. The transcript beside the empty JSON file already
+    holds the whole output; this keeps the first line of it in `results.json`, where
+    the row for the refused run is.
+    """
+    try:
+        found = json.loads(done.stdout)
+    except ValueError as error:
+        said = [
+            line.strip()
+            for line in (done.stderr or done.stdout or "").splitlines()
+            if line.strip()
+        ]
+        raise RunRefused(
+            step,
+            done.returncode,
+            said[0] if said else "it printed nothing at all",
+        ) from error
+    if not isinstance(found, (dict, list)):
+        raise RunRefused(
+            step, done.returncode, f"printed a bare {type(found).__name__}"
+        )
+    return found
+
+
 def present(component: dict[str, Any] | None) -> dict[str, Any] | None:
     """A component that shipped a file, or None. A record with no path shipped nothing."""
     return component if component and component.get("path") else None
@@ -234,7 +284,12 @@ def score_one(
         room / "01-build.txt",
     )
     if built.returncode != 0:
-        raise MeasurementError(f"{tag}: build.py exited {built.returncode}")
+        said = [line.strip() for line in built.stdout.splitlines() if line.strip()]
+        raise RunRefused(
+            "build.py",
+            built.returncode,
+            said[-1] if said else "it printed nothing at all",
+        )
 
     project = out / "project"
     components = json.loads((out / "demo.json").read_text(encoding="utf-8"))[
@@ -260,8 +315,14 @@ def score_one(
         declared = method or evaluator.get("method")
         if declared:
             preflight += ["--evaluator-method", declared]
-    capture_json(
-        preflight, project, room / "02-preflight-stderr.txt", room / "02-preflight.json"
+    decoded(
+        capture_json(
+            preflight,
+            project,
+            room / "02-preflight-stderr.txt",
+            room / "02-preflight.json",
+        ),
+        "preflight.py",
     )
 
     calibrated = False
@@ -290,10 +351,13 @@ def score_one(
                 room / "03-calibration.json",
             )
             calibrated = True
-            try:
-                calibration_passed = json.loads(done.stdout)["passed"]
-            except (ValueError, KeyError):
-                calibration_passed = None
+            # A refusal is named here rather than left to the readiness step, which
+            # would report the empty calibration file it was handed ("cannot read
+            # scoring input") instead of the guide's own reason for declining.
+            report = decoded(done, "calibrate_evaluator.py")
+            calibration_passed = (
+                report.get("passed") if isinstance(report, dict) else None
+            )
 
     readiness = [
         sys.executable,
@@ -332,7 +396,9 @@ def score_one(
         room / "05-readiness-stderr.txt",
         room / "05-readiness.json",
     )
-    card = json.loads(done.stdout)
+    card = decoded(done, "readiness.py")
+    if not isinstance(card, dict):
+        raise RunRefused("readiness.py", done.returncode, "printed no card object")
 
     def portable(argv: list[str]) -> list[str]:
         """The same command with this machine's paths replaced by names."""
@@ -435,37 +501,56 @@ def main() -> int:
         )
     revision = found
 
-    results = []
-    for preset in PRESETS:
-        results.append(score_one(preset, ("--preset", preset), scripts, workspace))
-        last = results[-1]
-        print(
-            f"{preset:20s} {last['overall']:>3} {last['band']:10s} {last['recommended_action']}",
-            flush=True,
-        )
-    for tag, flags, options in VARIANTS:
-        results.append(score_one(tag, flags, scripts, workspace, **options))
-        last = results[-1]
-        print(
-            f"{tag:20s} {last['overall']:>3} {last['band']:10s} {last['recommended_action']}",
-            flush=True,
-        )
-    for tag, declared, kind in GRID:
-        results.append(
-            score_one(
-                tag,
-                ("--preset", "checked"),
-                scripts,
-                workspace,
-                method=declared,
-                task_kind=kind,
+    results: list[dict[str, Any]] = []
+
+    def measure(tag: str, flags: tuple[str, ...], **options: Any) -> None:
+        """One run's row, whether it scored or was refused, and never both lost.
+
+        A run that cannot be scored is a row that says so. The alternative -- the
+        exception leaving this loop -- ended the sweep at the first refusal and threw
+        away every run behind it, so a single unscorable configuration cost the whole
+        bank and the table it feeds.
+        """
+        try:
+            row = score_one(tag, flags, scripts, workspace, **options)
+        except MeasurementError as refusal:
+            step = getattr(refusal, "step", "the measurement")
+            reason = getattr(refusal, "reason", str(refusal))
+            results.append(
+                {
+                    "tag": tag,
+                    "refused": {
+                        "step": step,
+                        "exit": getattr(refusal, "exit_code", None),
+                        "reason": reason,
+                    },
+                    "overall": None,
+                    "band": None,
+                    "recommended_action": None,
+                    "status": None,
+                    "confidence": None,
+                    "pillars": {},
+                    "caps": [],
+                    "declared_evaluator_method": options.get("method"),
+                    "declared_task_kind": options.get("task_kind", "code-sql"),
+                    "calibration_ran": None,
+                    "calibration_passed": None,
+                }
             )
-        )
-        last = results[-1]
+            print(f"{tag:20s} REFUSED at {step}: {reason}", flush=True)
+            return
+        results.append(row)
         print(
-            f"{tag:20s} {last['overall']:>3} {last['band']:10s} {last['recommended_action']}",
+            f"{tag:20s} {row['overall']:>3} {row['band']:10s} {row['recommended_action']}",
             flush=True,
         )
+
+    for preset in PRESETS:
+        measure(preset, ("--preset", preset))
+    for tag, flags, options in VARIANTS:
+        measure(tag, flags, **options)
+    for tag, declared, kind in GRID:
+        measure(tag, ("--preset", "checked"), method=declared, task_kind=kind)
 
     (CARDS / "results.json").write_text(
         json.dumps({"guide_revision": revision, "runs": results}, indent=2) + "\n",
@@ -473,6 +558,16 @@ def main() -> int:
     )
     print(f"\nguide revision {revision}")
     print(f"evidence under {CARDS}")
+    refused = [row for row in results if row.get("refused")]
+    if refused:
+        # Non-zero, because a sweep with holes in it is not the table this script
+        # claims to produce -- and every row it did measure is on disk regardless.
+        print(f"\n{len(refused)} of {len(results)} runs were refused:")
+        for row in refused:
+            print(
+                f"  {row['tag']}: {row['refused']['step']} -- {row['refused']['reason']}"
+            )
+        return 1
     return 0
 
 

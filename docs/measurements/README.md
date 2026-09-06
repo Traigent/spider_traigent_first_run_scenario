@@ -9,6 +9,35 @@ the captured invocation and full output of every run.
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
 
+## These figures have drifted, and a regeneration is pending
+
+> **Read this before quoting any number in this repository.** The tool moved. The same sweep,
+> unchanged, was re-run on 2026-09-06 against the guide's `first-run-guide` trunk at `6e18086e`
+> and did not return this table. What changed there, measured rather than guessed:
+>
+> - the **agent pillar reads 0** on every run instead of 70. The guide's static read no longer
+>   follows any of the four declared settings from the agent's source to the request, so
+>   `agent-no-varying-knobs` 45 now appears on almost every card. The citations in
+>   `agent-knobs/` are accepted and quoted back onto the card; it is the route check behind
+>   them that changed.
+> - **`checked` and the four `grid-*` runs open at 45 PARTIAL**, not 86 STRONG and 92 EXCELLENT.
+>   `hand-written` opens at 45, not 74. `wrong-answers--calibrated` at 45, not 83.
+> - several runs that read `proceed` now read `complete-calibration`, and several that read
+>   PARTIAL now read NOT READY.
+> - **`best-case--off-method-calibration` cannot be measured at all.** The guide now refuses to
+>   calibrate a scorer that reaches a SQL engine, which is the finding that run existed to
+>   make, made better by the tool itself.
+>
+> The drift is in the tool being measured. Nothing about the projects in this repository
+> changed, and the sweep still runs end to end.
+>
+> **Nothing has been re-measured here on purpose.** Several changes to the guide are in flight
+> and about to land; a table regenerated ahead of them would be stale the day it merged. The
+> regeneration is a separate, deliberate step -- re-pin `PINNED_REVISION`, run the sweep, and
+> rewrite this table and the prose keyed to it from `cards/results.json`. Until it lands, every
+> score, band, action, pillar and cap quoted anywhere in this repository is a reading of
+> `6ec2b9c1` on 2026-09-02 and is not what today's guide returns.
+
 ## Reproducing it
 
 ```bash
@@ -35,7 +64,7 @@ sweep takes about two minutes.
 | `cards/<run>/04-readiness-card.txt` | **the rendered card** -- the thing the documentation quotes |
 | `cards/<run>/05-readiness.json` | the same score machine-readable: pillars, sub-scores, caps |
 | `cards/<run>/argv.json` | every invocation, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE` |
-| `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared |
+| `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run the guide refused carries a `refused` object naming the step and the guide's own reason instead of a score, and the sweep continues past it -- one row lost rather than the bank |
 
 ## The `--agent-knobs` document, and why it is here
 
@@ -79,6 +108,10 @@ Seventeen presets, then the comparisons the documentation makes:
 | `grid-*` | the four declared-method x declared-task-kind combinations, all on the same unchanged text comparator |
 
 ## Results
+
+**Every row below is the 2026-09-02 reading at `6ec2b9c1`, and many of them no longer
+reproduce** -- see [the drift note above](#these-figures-have-drifted-and-a-regeneration-is-pending)
+before quoting one.
 
 Pillar weights are the default 40 dataset / 35 evaluation / 25 agent. `*` marks a cap that
 blocks (the card prints `FIX BEFORE PAID RUN`); the others are ceilings only.

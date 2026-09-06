@@ -7,47 +7,51 @@
         "openrouter/openai/gpt-oss-120b",
         "openrouter/meta-llama/llama-3.3-70b-instruct"
       ],
-      "source_lines": [31, 389, 390],
-      "evidence": "agent.py:31-35 MODELS is an unconditional module-level tuple of three ids; agent.py:389 run() reads config['model'] and agent.py:390 checks it against MODELS before agent.py:401-405 passes it to call_model, whose result is run()'s return."
+      "source_lines": [31, 394, 395],
+      "evidence": "agent.py:31-35 MODELS is an unconditional module-level tuple of three ids; agent.py:394 run() reads config['model'] and agent.py:395 checks it against MODELS before agent.py:406-410 passes it to call_model, whose result is run()'s return at agent.py:405."
     },
     "schema_context": {
       "values": ["none", "tables", "full"],
       "source_lines": [52, 292, 311],
-      "evidence": "agent.py:52-56 SCHEMA_CONTEXTS is an unconditional module-level dict with three keys; agent.py:292 schema_body() reads config['schema_context'] and agent.py:311 build_prompt() indexes SCHEMA_CONTEXTS with it, and both results reach run()'s return through agent.py:403."
+      "evidence": "agent.py:52-56 SCHEMA_CONTEXTS is an unconditional module-level dict with three keys; agent.py:292 schema_body() reads config['schema_context'] and agent.py:311 build_prompt() indexes SCHEMA_CONTEXTS with it, and both results reach run()'s return through agent.py:408."
     },
     "prompt_style": {
       "values": ["direct", "query_plan_cot"],
       "source_lines": [58, 312],
-      "evidence": "agent.py:58-64 PROMPT_STYLES is an unconditional module-level dict with two keys; agent.py:312 build_prompt() indexes it with config['prompt_style'] and the assembled prompt reaches run()'s return through agent.py:403."
+      "evidence": "agent.py:58-64 PROMPT_STYLES is an unconditional module-level dict with two keys; agent.py:312 build_prompt() indexes it with config['prompt_style'] and the assembled prompt reaches run()'s return through agent.py:408."
     },
     "temperature": {
       "values": [0.0, 0.7],
       "low": 0.0,
       "high": 0.7,
-      "source_lines": [66, 394, 395],
-      "evidence": "agent.py:66 TEMPERATURES = (0.0, 0.7) is an unconditional module-level tuple; agent.py:394 run() reads config['temperature'] and agent.py:395 checks it against TEMPERATURES before agent.py:404 passes it to call_model, whose result is run()'s return."
+      "source_lines": [66, 399, 400],
+      "evidence": "agent.py:66 TEMPERATURES = (0.0, 0.7) is an unconditional module-level tuple; agent.py:399 run() reads config['temperature'] and agent.py:400 checks it against TEMPERATURES before agent.py:409 passes it to call_model, whose result is run()'s return at agent.py:405."
     }
   },
   "build": {
     "prompt": {
       "present": true,
       "few_shot": 0,
-      "evidence": "agent.py:304-318 build_prompt assembles the exact text sent, and agent.py:378-383 passes it as the single user message; no worked examples ride with it."
+      "source_lines": [310, 313, 318, 387],
+      "evidence": "agent.py:310-318 build_prompt assembles the exact text sent -- agent.py:313 appends the question and agent.py:318 joins the parts -- and agent.py:387 passes it as the single user message; no worked examples ride with it."
     },
     "output-contract": {
       "present": true,
-      "evidence": "agent.py:59 and agent.py:60-63 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text."
+      "source_lines": [59, 61, 346],
+      "evidence": "agent.py:59 and agent.py:61-62 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text, returning it at agent.py:346."
     },
     "control-flow": {
       "loop": false,
       "bounded": true,
-      "evidence": "agent.py:387-406 run() is straight-line: one call_model call per input, no loop and no retry."
+      "source_lines": [392, 405, 406],
+      "evidence": "agent.py:392-411 run() is straight-line: agent.py:405-410 is its single return, calling call_model once at agent.py:406, with no loop and no retry."
     },
     "tools": {
       "used": false,
       "declared": [],
       "unreachable": [],
-      "evidence": "agent.py declares no tools; the agent's only outbound call is the completion at agent.py:378."
+      "source_lines": [381, 383],
+      "evidence": "agent.py declares no tools; agent.py:381 imports litellm and the agent's only outbound call is the completion at agent.py:383."
     }
   }
 }

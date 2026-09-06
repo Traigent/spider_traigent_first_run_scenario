@@ -364,6 +364,17 @@ Every invocation and every captured output is committed under
 rendered card each number is read off. Nothing below has to be taken on trust or reconstructed
 by hand.
 
+> **These numbers have drifted and are not being republished as current.** Re-running the same
+> sweep on 2026-09-06 against the guide's trunk at `6e18086e` returned a materially different
+> table -- the agent pillar reads 0 rather than 70 throughout, `checked` opens at 45 rather than
+> 86, `hand-written` at 45 rather than 74, and several `proceed` actions have become
+> `complete-calibration`. The projects here are unchanged; the tool being measured moved. A
+> regeneration is pending and deliberately held until the guide changes now in flight have
+> landed, because a table re-measured ahead of them would be stale the day they merged.
+> [`docs/measurements/README.md`](docs/measurements/README.md#these-figures-have-drifted-and-a-regeneration-is-pending)
+> has the run-by-run detail. **Every score, band, action and cap in this file, and every
+> sentence keyed to one, is a reading of `6ec2b9c1` on 2026-09-02 and nothing more.**
+
 | preset | opening | band | card says | what the run has to build or fix |
 |---|---|---|---|---|
 | `empty` | 0 | NOT READY | `get-data` | all three: an agent, examples, and a way to score them |

@@ -114,6 +114,15 @@ Measured against the first-run guide at revision
 `6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9` (`6ec2b9c1`) on 2026-09-02. Every run below is
 committed under [`docs/measurements/cards/`](measurements/README.md), invocation and output.
 
+> **Every readiness figure in this file is that 2026-09-02 reading, and the tool has since
+> moved.** Re-running the same sweep against the guide's trunk at `6e18086e` on 2026-09-06
+> returned a materially different table -- pillar scores, bands and recommended actions all
+> shift, and the run behind the 91 EXCELLENT number below cannot be measured at all any more,
+> because the guide now refuses to calibrate a scorer that reaches a SQL engine. A regeneration
+> is pending and is deliberately held until the guide changes now in flight have landed. Read
+> [`docs/measurements/README.md`](measurements/README.md#these-figures-have-drifted-and-a-regeneration-is-pending)
+> before quoting a number from this file.
+
 | declared method | task kind | task-fit | evaluation pillar | calibrated |
 |---|---|---|---|---|
 | `execution` | `code-sql` | **25.0 / 25** | 51 | **99** |
