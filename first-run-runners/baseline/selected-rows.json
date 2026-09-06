@@ -1,0 +1,28 @@
+{
+  "row_ids": [
+    "spider-dev-0168",
+    "spider-dev-0057",
+    "spider-dev-0020",
+    "spider-dev-0104",
+    "spider-dev-0202",
+    "spider-dev-0702",
+    "spider-dev-0517",
+    "spider-dev-0317",
+    "spider-dev-0575",
+    "spider-dev-0637",
+    "spider-dev-0455",
+    "spider-dev-0530",
+    "spider-dev-0179",
+    "spider-dev-0206",
+    "spider-dev-0130",
+    "spider-dev-0414",
+    "spider-dev-0318",
+    "spider-dev-0704"
+  ],
+  "counts_by_difficulty": {
+    "easy": 4,
+    "medium": 5,
+    "hard": 5,
+    "very-hard": 4
+  }
+}
