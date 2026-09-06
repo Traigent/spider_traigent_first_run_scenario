@@ -397,7 +397,7 @@ There are exactly two ways across that boundary and the guide bars both at the o
 calibrating a scorer that executes model-written SQL, and declaring a trial budget. Each was
 measured rather than assumed --
 [`best-case`](#what-best-case-really-opens-at) and
-[the trial-budget question](docs/measurements/cards/trial-budget-admissibility/README.md).
+[the trial-budget question](#what-the-source-reader-sees-and-what-the-agent-actually-has).
 
 The band boundaries, for reading the column: NOT READY 0-29, PARTIAL 30-54, WORKABLE 55-74,
 STRONG 75-89, EXCELLENT 90-100.
@@ -512,8 +512,13 @@ this search returns nonzero trials, from the exact space it received" (`SKILL.md
 so the budget cannot exist as current-run evidence until money has already been spent, and the
 score it feeds is one the guide says to "never show ... beside the opening one"
 (`SKILL.md:993`). 93 is a closing number.
-[`docs/measurements/cards/trial-budget-admissibility/`](docs/measurements/cards/trial-budget-admissibility/README.md)
-has the refusal, the single entry point, and every governing quote.
+
+The refusal, the single entry point and the governing quotes are all above, in full. What is
+*not* published here is a card for that check: `docs/measurements/cards/` holds the score bank,
+and the bank scores projects rather than the guide's handling of a config-space document. So a
+reader checks this the way it is written -- the quoted text against the guide at `6ec2b9c1`,
+and `readiness.py --agent-knobs` against a document carrying `max_trials` -- and not against a
+measurement of ours.
 
 So nothing here is written to win the fourth credit. The obvious way to do it -- an identity
 mapping that reads `temperature` back out of a table so the reader can follow it -- was
