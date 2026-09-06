@@ -20,10 +20,10 @@ missing, or with unlabelled data, or with an agent that has nothing worth tuning
 
 ## Getting started
 
-**This repository is `INTERNAL` to the Traigent GitHub organisation** (checked with
-`gh repo view` on 2026-09-02: `"visibility": "INTERNAL"`, `"isPrivate": true`). The clone below
-works for an organisation member and fails for anyone else. Nothing here is published, and
-publishing it is an open question rather than a settled one -- see [Licence](#licence).
+**This repository is `PUBLIC`** (checked with `gh repo view` on 2026-09-06:
+`"visibility": "PUBLIC"`, `"isPrivate": false`). The clone below works for anyone. The Spider
+data it carries is redistributed under CC BY-SA 4.0, with the attribution and the notice of
+modification that licence requires -- see [Licence](#licence).
 
 ```bash
 git clone https://github.com/Traigent/spider_traigent_first_run_scenario.git
@@ -714,11 +714,13 @@ Generated projects carry `project/ATTRIBUTION.txt` beside the rows, which is the
 obligation in the form that travels: attribution, the licence and its URI, and a notice that
 the data was modified.
 
-**The repository is `INTERNAL` and publishing it has not been decided.** That is worth saying
-plainly because `spider/LICENSE-DATA` discusses what happens on publication, and this file
-explains a ShareAlike obligation that only attaches to an adaptation you *share*. Today nothing
-is shared outside the organisation, so nothing has attached. Publishing it would be a licensing
-decision -- about the CC BY-SA material this repository adapts, and about what a public
-`spider/` implies -- and not a change of a repository setting.
+**The repository is `PUBLIC`, so the ShareAlike obligation has attached, and it is met.** The
+300 rows and the 18 databases are an adaptation of CC BY-SA 4.0 material, shared with everyone,
+and the licence asks three things of that: credit the original, let the licence travel with the
+data, and state what was changed. `spider/LICENSE-DATA` carries all three; `spider/REUSE.toml`
+marks the files that cannot carry a comment; `NOTICE` names which bytes are under which licence.
+The code's Apache-2.0 licence places no additional terms on the data. Spider itself is
+distributed under the same licence at the project URI above, so holding this slice in public
+carries no obligation the original did not already carry.
 
 This repository does not include or license the Traigent SDK.
