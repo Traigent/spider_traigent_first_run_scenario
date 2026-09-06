@@ -1,6 +1,6 @@
 # Guided First Run presentation
 
-This directory builds one presales story about the public
+This directory builds one customer-facing story about the public
 [Traigent Guided First Run](https://github.com/Traigent/traigent-first-run) guide, from one
 validated content source, into two formats:
 
@@ -8,15 +8,23 @@ validated content source, into two formats:
 - an editable PowerPoint presentation with native text, shapes, and speaker
   notes.
 
-The deck explains what the guide does for a customer: the one prompt, the five
-stages, the readiness score and its caps, the two paid approvals, what leaves
-the customer's machine, what the result contains, and how presales runs it.
-It describes the guide and records no run of its own, so it carries no measured
-outcome, no uplift figure, and no example project.
+The deck is delivered live to customers, so it is built to be spoken over,
+not read off the screen. Every slide carries one visual (icon tiles, a
+side-by-side column comparison, a left-to-right flow, a 0-100 scale, a
+two-column table, a callout card, or a short bullet list) and a few short
+lines; the talk track and every detail cut from the slide live in the speaker
+notes, which are the presenter's half of the deck. The story: the words the
+guide uses, the one prompt, the four asks, the five stages, when money enters,
+what happens from each starting point, the readiness score and its caps, the
+secrets and safety boundaries, what leaves the customer's machine, what the
+result contains, and how to start. The deck describes the guide and
+records no run of its own, so it carries no measured outcome, no uplift figure,
+and no example project.
 
-The first 10 slides form the presales/CTO core story. The remaining 10 slides
-are a clearly marked technical appendix with stage detail, scoring mechanics,
-requirements, licensing, and the repository layout.
+The first 22 slides form the overview a reader with no prior Traigent
+knowledge can follow. The remaining 17 slides are a clearly marked technical
+appendix with stage detail, scoring mechanics, requirements, licensing, and the
+repository layout.
 
 ## Source of truth
 
@@ -139,10 +147,23 @@ covered without editing a list. A sentence that denies its own claim is not a
 claim, and a denial in one clause does not cover a claim in the next. Metric
 tiles have no green tone, because the deck has no success to colour.
 
+The validator also holds the deck to its live-delivery shape. Each slide kind
+carries exactly its own block (tiles on a tiles slide, columns on a columns
+slide, and so on), a visual kind never stacks a bullet list on top, and a
+callout or handoff slide pairs its card with at most four bullets. Every
+visible line has a word budget, counted as tokens that carry a letter or a
+digit: 14 words for a title, 32 for the body sentence, 9 for a bullet or a
+column item, 12 for a tile detail, 14 for a callout or a flow-step detail, 10
+and 18 for the two cells of a table row, and 3 and 6 for a scale band and a
+scale marker. The budgets live in `WORD_BUDGETS` in
+`scripts/validate-content.ts`; speaker notes have no budget, because that is
+where the full explanation belongs.
+
 ## Updating the story
 
 1. Update `src/content.ts` and, only when the contract itself changes,
-   `src/model.ts`.
+   `src/model.ts`. Keep each slide to one visual and to its word budgets;
+   put the detail in the speaker notes.
 2. Re-check every number and quoted phrase against the guide at the revision
    recorded in the `source` block; when the guide moves, move the revision and
    re-verify rather than carrying old numbers forward.
