@@ -21,10 +21,11 @@ load_dotenv(PROJECT_ROOT / ".env")
 sys.path.insert(0, str(PROJECT_ROOT))
 import agent  # noqa: E402
 import evaluator  # noqa: E402
-
 import litellm  # noqa: E402
 
-COST_CEILING_USD = 1.00  # approved-scope safety stop; 18 short calls on cheap open models
+COST_CEILING_USD = (
+    1.00  # approved-scope safety stop; 18 short calls on cheap open models
+)
 
 calls = []
 
@@ -59,13 +60,17 @@ def main():
     for row_id in selected_ids:
         row = by_id[row_id]
         if total_spent() >= COST_CEILING_USD:
-            print(f"Stopping early: spend has reached the ${COST_CEILING_USD:.2f} safety ceiling.")
+            print(
+                f"Stopping early: spend has reached the ${COST_CEILING_USD:.2f} safety ceiling."
+            )
             break
         t0 = time.time()
         try:
             output = agent.run(row["input"], {})
             error = None
-        except Exception as exc:  # provider/timeout/etc. -- a failed trial, not a wrong answer
+        except (
+            Exception
+        ) as exc:  # provider/timeout/etc. -- a failed trial, not a wrong answer
             output = None
             error = f"{type(exc).__name__}: {exc}"
         elapsed = time.time() - t0
@@ -74,7 +79,9 @@ def main():
             score = None
         else:
             try:
-                score = evaluator.score(output, row["output"], row["input"], row["metadata"])
+                score = evaluator.score(
+                    output, row["output"], row["input"], row["metadata"]
+                )
             except Exception as exc:
                 score = None
                 error = f"evaluator error: {type(exc).__name__}: {exc}"
@@ -89,15 +96,19 @@ def main():
                 "error": error,
             }
         )
-        print(f"[{row_id}] difficulty={row['metadata']['difficulty']} score={score} elapsed={elapsed:.2f}s"
-              + (f" ERROR: {error}" if error else ""))
+        print(
+            f"[{row_id}] difficulty={row['metadata']['difficulty']} score={score} elapsed={elapsed:.2f}s"
+            + (f" ERROR: {error}" if error else "")
+        )
 
     scored = [r for r in results if r["score"] is not None]
     failed = [r for r in results if r["score"] is None]
     accuracy = (sum(r["score"] for r in scored) / len(scored)) if scored else None
 
     summary = {
-        "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "generated_at_utc": datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y%m%dT%H%M%SZ"
+        ),
         "agent": str(PROJECT_ROOT / "agent.py") + ":run",
         "config": dict(agent.DEFAULTS),
         "rows_attempted": len(results),
@@ -113,9 +124,13 @@ def main():
     (RUN_DIR / "baseline-results.json").write_text(json.dumps(summary, indent=2))
     print("\n--- Baseline summary ---")
     print(f"config: {summary['config']}")
-    print(f"rows: {summary['rows_scored']} scored / {summary['rows_failed']} failed / {summary['rows_attempted']} attempted")
+    print(
+        f"rows: {summary['rows_scored']} scored / {summary['rows_failed']} failed / {summary['rows_attempted']} attempted"
+    )
     print(f"accuracy: {accuracy}")
-    print(f"provider calls: {summary['provider_calls']}, total cost: ${summary['total_cost_usd']:.4f}")
+    print(
+        f"provider calls: {summary['provider_calls']}, total cost: ${summary['total_cost_usd']:.4f}"
+    )
     print(f"total wall time: {summary['total_elapsed_s']:.1f}s")
 
 
