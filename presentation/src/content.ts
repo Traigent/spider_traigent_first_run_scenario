@@ -554,7 +554,7 @@ const rawPresentation = {
         {
           startingPoint: "WOULD LIMIT TO 89",
           safestNextStep:
-            "A limit you have not reached yet. Read it as what comes next.",
+            "Not in force today: something stricter holds the score, or it has not climbed that high yet.",
         },
         {
           startingPoint: "89/100 WORKABLE",
@@ -614,7 +614,7 @@ const rawPresentation = {
         {
           icon: "📌",
           label: "Pinned install",
-          detail: "Never an unpinned pip install traigent.",
+          detail: "Exact pins only; never an unversioned pip install traigent.",
         },
         {
           icon: "🚫",
@@ -640,7 +640,8 @@ const rawPresentation = {
         `${RUN_SAFETY} · Execution evaluators are out of scope`,
       ],
       notes: [
-        "Keys live in a local .env that only the customer can read and that Git ignores. The run installs into its own .venv-traigent, never into a shared environment, and never runs an unpinned pip install traigent.",
+        "Keys live in a local .env that only the customer can read and that Git ignores. The run installs into its own .venv-traigent, never into a shared environment, and never edits the project's own dependency files.",
+        "The install uses the exact pins in the guide's requirements file, and never an unversioned 'pip install traigent'. The guide's reason: on an unsupported interpreter, package resolution can select the unrelated, obsolete 0.0.1 release, which carries none of the optimizer and which the preflight refuses by name.",
         "An evaluator that executes the agent's answer as code or SQL ends the guide before it runs; no sandbox is shipped or improvised.",
         "Changes to real answers or grading rules, and anything destructive or production-affecting, each need their own explicit approval. Approving one step never pre-approves another.",
       ],
@@ -650,12 +651,12 @@ const rawPresentation = {
       kind: "tiles",
       eyebrow: "BEFORE ANY PAID STEP",
       title: "You see the preview. Then you decide.",
-      body: "Every paid step shows the same preview card before a single call is made.",
+      body: "Each paid step shows a preview before a single call is made.",
       tiles: [
         {
           icon: "⏱️",
-          label: "Runtime",
-          detail: "How long the step is expected to take.",
+          label: "Runtime estimate",
+          detail: "Computed from your rows, trials and calls. Not a guarantee.",
         },
         {
           icon: "💵",
@@ -684,7 +685,8 @@ const rawPresentation = {
         `${README} · What the run does`,
       ],
       notes: [
-        "The preview before the baseline: scope, configurations, calls, metric, runtime, estimated spend, who receives data, and the $5.00 default stop target.",
+        "The preview before the baseline: scope, configurations, calls, metric, runtime, estimated spend, who receives data, and the $5.00 default stop target. The connected stage gets its own approval card covering the same things.",
+        "The runtime is an estimate, never a promised duration: before the paid probe the assistant estimates it conservatively from dataset size, planned trials and calls per example, and after the probe replaces it with observed latency. If the estimate exceeds $5.00 or 30 minutes, the guide first recommends a smaller representative slice. Do not quote a duration per stage; the guide gives none.",
         "If the run had to write the dataset or grading method, the same preview shows exactly what it wrote and asks the customer to proceed or fix before anything is charged.",
         "The stop target is a conservative control the run stops at and a re-approval trigger, not a billing guarantee. Provider errors, missing credentials or a breached stop target stop the run loudly; nothing is mocked or invented to fill the gap.",
       ],
@@ -853,19 +855,22 @@ const rawPresentation = {
       title: "No project ready? Run it on a small sample project.",
       body: "The whole workflow still shows, on material the run writes and labels.",
       callout:
-        "The assistant creates what is missing and labels it walkthrough material.",
+        "What it creates is listed under Walkthrough setup, never marked ✅ real.",
       bullets: [
         "You still see the whole workflow",
-        "Everything written is named as a substitute",
+        "Every substitute is named in words on the card",
         "The result is a demonstration, not production evidence",
         "Bring real examples later for a production claim",
       ],
       sources: [
         `${README} · What the run does`,
         `${GUIDE} · Result interpretation`,
+        `${SKILL} · Status language`,
+        `${READINESS} · render_text`,
       ],
       notes: [
-        "A project with nothing in it still sees the whole workflow. The assistant creates what is missing, labels it as walkthrough material, and the result then demonstrates the workflow rather than predicting production performance.",
+        "A project with nothing in it still sees the whole workflow. The assistant creates what is missing as temporary walkthrough substitutes, and the result then demonstrates the workflow rather than predicting production performance.",
+        "How the labelling works: a substitute carries no ✅ or ❗ mark, because those marks describe the customer's own component. It is listed under a 'Walkthrough setup' heading on the status card, named in words (for example 'Dataset - 18 varied synthetic cases prepared'), and the assistant never says '3/3 ready' while any component is synthetic. The readiness script does the same in code: its card prints a 'Walkthrough setup:' section with one line per component that reads 'generated walkthrough substitute', and a fully generated dataset carries the dataset-fully-synthetic ceiling of 65. If any substitute was used, the report opens by saying the result is not evidence of production performance.",
         "The guide forbids describing measured lift on written rows as expected customer lift. A fully generated dataset caps readiness at 65, so Strong and Excellent are unreachable until collected rows arrive; the run still proceeds end to end.",
       ],
     },
@@ -923,8 +928,13 @@ const rawPresentation = {
             "Written by the run for the walkthrough; never counted as yours.",
         },
       ],
-      sources: [`${SKILL} · Status language`, `${README} · What the run does`],
+      sources: [
+        `${SKILL} · Status language`,
+        `${README} · What the run does`,
+        `${READINESS} · render_text`,
+      ],
       notes: [
+        "The readiness script prints these lines itself (render_text in readiness.py): '✅ Dataset: real', '❗ Evaluator: validation failed', and a 'Walkthrough setup:' section with 'Agent: generated walkthrough substitute' for anything the run created.",
         "Substitutes the assistant creates carry no mark and are listed under walkthrough setup, so a reader can never mistake written material for the customer's own.",
         "The same three marks appear on every result, so provenance travels with the number.",
       ],
@@ -940,8 +950,8 @@ const rawPresentation = {
         "A check you withheld keeps its weight, earns nothing",
         "BLOCKER line: may the paid comparison start?",
         "Band grades evidence; blocker gates spend",
-        "LIMITED TO 45: where you are now",
-        "WOULD LIMIT TO 89: not reached yet",
+        "LIMITED TO 45: the ceiling holding you now",
+        "WOULD LIMIT TO 89: the ceiling you hit next",
         "Readiness reads the whole dataset, never the subset",
       ],
       sources: [
@@ -952,6 +962,7 @@ const rawPresentation = {
       notes: [
         "A check the scorer could not compute is marked unmeasured and left out rather than scored zero. A check the run asked the customer for and did not get is unmeasured too, but keeps its weight and earns nothing, so withholding never pays.",
         "For each pillar the card shows how much was actually measured. The BLOCKER line under the score says whether the paid comparison may start and how many things must clear first.",
+        "The tense is the whole difference between the two ceiling labels. LIMITED TO 89 is the number you are at. WOULD LIMIT TO 89 is a limit you have not reached: either something stricter is holding the score down, or the average has not climbed that high yet. It is still worth reading, because it is what you run into next, but it is not why the score is what it is today.",
         "Two conditions can share one ceiling and both stay in force. After a repair the score is run again only to confirm the repair cleared what it failed on.",
       ],
     },
@@ -1379,7 +1390,7 @@ const rawPresentation = {
         `${README} · Install as an Agent Skill`,
       ],
       notes: [
-        "Python 3.11 to 3.13 in an isolated environment, the tested SDK stack pinned in the guide's requirements file (traigent==0.26.0, litellm==1.93.0, python-dotenv==1.2.2), installed into the dedicated environment whatever the project declares for itself. Never an unpinned pip install traigent.",
+        "Python 3.11 to 3.13 in an isolated environment, the tested SDK stack pinned in the guide's requirements file (traigent==0.26.0, litellm==1.93.0, python-dotenv==1.2.2), installed into the dedicated environment whatever the project declares for itself. Never an unversioned pip install traigent.",
         "One supported LLM-provider key with a small amount of credit for the paid steps goes first, into a local .env. A Traigent portal key that can write experiments is activated after the first result is on screen, not before; if none is present, the assistant asks for one then.",
       ],
     },
