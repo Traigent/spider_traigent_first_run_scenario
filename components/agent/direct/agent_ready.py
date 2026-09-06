@@ -356,11 +356,16 @@ def call_model(model, prompt, temperature):
     reachable by changing the roster, with no vendor package to install and nothing else
     here to change.
 
-    LiteLLM's OpenAI-shaped client is used rather than calling `litellm.completion`
-    directly. It is the same transport -- `LiteLLM().chat.completions.create` forwards
-    straight to `litellm.completion` and the request that leaves this process is identical
-    either way -- written so that the model id, the prompt and the temperature are visibly
-    the arguments of the call that sends them.
+    The call is `litellm.completion` itself, resolved on the module at call time, and not
+    LiteLLM's OpenAI-shaped `LiteLLM().chat.completions.create`. The request that leaves the
+    process is the same either way; what differs is who else gets to see it. Traigent's
+    usage capture wraps the module attribute `litellm.completion`, and the client object
+    reaches the provider by its own path underneath that wrapper. Measured on 2026-09-06
+    with a counting sentinel over `litellm.completion`: a client-object call went through
+    it zero times, so the SDK saw no usage, estimated input tokens from the question text
+    (the same 16.9 tokens whether the prompt carried no schema or the whole one), and
+    reported every configuration at $0.00. Through the module attribute the same two
+    configurations reported 363 and 410 input tokens and $0.0022 and $0.0041.
     """
     # The names that hold a value. The template ships every key present and empty, and a
     # key that has not been filled in is a key this agent does not have.
@@ -373,9 +378,9 @@ def call_model(model, prompt, temperature):
             "being compared, and changing it quietly changes the comparison."
         )
 
-    from litellm import LiteLLM
+    import litellm
 
-    answer = LiteLLM().chat.completions.create(
+    answer = litellm.completion(
         model=model,
         temperature=temperature,
         max_tokens=512,
