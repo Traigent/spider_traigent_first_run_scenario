@@ -369,7 +369,7 @@ def contract_mismatch(scripts: Path) -> tuple[list[str], list[str]]:
             )
 
     for document in sorted(KNOBS.glob("*.json")):
-        read = json.loads(document.read_text(encoding="utf-8"))
+        read = ours(document, "an --agent-knobs document this sweep hands to the guide")
         top = contracts.get("document")
         if isinstance(top, list):
             unknown = sorted(set(read) - set(top))
@@ -422,6 +422,22 @@ def contract_mismatch(scripts: Path) -> tuple[list[str], list[str]]:
                     f"cites {REQUIRED_BUILD_FIELD!r}, which this revision refuses"
                 )
     return complaints, unchecked
+
+
+def ours(path: Path, what: str) -> Any:
+    """One of our own JSON files, read as ours.
+
+    The same conflation the exception split removed, thirty lines from where it was
+    removed: an unreadable file of *ours* used to leave through the bare decoder, which
+    exits on the status this script documents as "the guide refused one or more runs".
+    Whose fault it was is known here too, so it is said here too.
+    """
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise HarnessFault(
+            f"{what} could not be read ({path.name}): {error}"
+        ) from error
 
 
 def decoded(
@@ -513,7 +529,7 @@ def score_one(
         )
 
     project = out / "project"
-    components = json.loads((out / "demo.json").read_text(encoding="utf-8"))[
+    components = ours(out / "demo.json", f"the record build.py wrote for {tag!r}")[
         "components"
     ]
     agent = present(components.get("agent"))

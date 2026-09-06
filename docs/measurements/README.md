@@ -107,7 +107,7 @@ answered when it could.
 
 | | |
 |---|---|
-| `score_bank.py` | the whole measurement. Its docstring states every choice it makes and why |
+| `score_bank.py` | the whole measurement. Its docstring states every choice it makes and why. It is in CI's `black`/`ruff`/`mypy --strict` targets and its behaviour is held by [`tests/test_score_bank.py`](../../tests/test_score_bank.py): it has twice destroyed the evidence in `cards/` while reporting that it could not measure anything, and a repair nothing tests is a repair the next edit can quietly undo |
 | `agent-knobs/ready.json` | the read of the tunable agent's source that the opening score requires |
 | `agent-knobs/no-knobs.json` | the same read of the fixed agent: a completed read that found no knobs |
 | `cards/<run>/01-build.txt` | the `build.py demo` invocation and its output |

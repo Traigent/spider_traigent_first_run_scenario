@@ -682,9 +682,12 @@ environment of their own:
 python3 -m venv .venv-dev
 .venv-dev/bin/python -m pip install -r requirements-dev.txt
 
-.venv-dev/bin/black --check build.py spider tests components
-.venv-dev/bin/ruff check build.py spider tests components
-.venv-dev/bin/mypy --strict build.py spider/build_slice.py
+.venv-dev/bin/black --check build.py spider tests components \
+    docs/measurements/score_bank.py
+.venv-dev/bin/ruff check build.py spider tests components \
+    docs/measurements/score_bank.py
+.venv-dev/bin/mypy --strict build.py spider/build_slice.py \
+    docs/measurements/score_bank.py
 .venv-dev/bin/mypy --check-untyped-defs --ignore-missing-imports \
     --explicit-package-bases --disable-error-code=var-annotated components
 python3 build.py check
@@ -703,12 +706,17 @@ something they open and edit, and `--strict` there would mean annotating the ver
 customer is meant to read.
 
 `check` validates the components and the committed data. The tests re-run all 300 recorded
-queries, so they take a moment; that is the point of them.
+queries, so they take a moment; that is the point of them. `docs/measurements/score_bank.py` is
+in the static targets and `tests/test_score_bank.py` holds its behaviour, for a specific reason:
+it is the program that produces every published readiness figure, it has twice destroyed the
+committed evidence under `docs/measurements/cards/` on its way to reporting that it could not
+measure anything, and while it sat outside every check here those repairs could have been
+reverted with CI still green.
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) is authoritative for exactly what runs
 -- skipping any of it here is what turns a pull request red there.
 
-The score table is not in that list, because it needs a checkout of somebody else's repository
--- but no network, and no install. Re-measure it separately whenever the guide moves. The run
+The score table itself is not in that list, because *measuring* it needs a checkout of somebody
+else's repository -- but no network, and no install. Re-measure it separately whenever the guide moves. The run
 leaves the committed cards alone unless `--publish` is passed, and it must be told which
 revision it is measuring at while the pin and the agent-source documents disagree
 ([why](docs/measurements/README.md#reproducing-it)):

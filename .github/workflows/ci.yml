@@ -54,15 +54,20 @@ jobs:
       # The static checks run before the tests: they take seconds, they read the
       # same files, and a formatting, lint or typing error used to sit invisible
       # behind a test failure.
+      # docs/measurements/score_bank.py is in these three targets deliberately. It is
+      # not a document: it is the program that produces every published readiness figure,
+      # it has twice destroyed the committed evidence under docs/measurements/cards/, and
+      # while it sat outside every target here those repairs could be reverted with CI
+      # still green. tests/test_score_bank.py holds its behaviour; these hold its shape.
       - name: Format
-        run: black --check build.py spider tests components
+        run: black --check build.py spider tests components docs/measurements/score_bank.py
 
       - name: Lint
-        run: ruff check build.py spider tests components
+        run: ruff check build.py spider tests components docs/measurements/score_bank.py
 
       - name: Types
         run: |
-          mypy --strict build.py spider/build_slice.py
+          mypy --strict build.py spider/build_slice.py docs/measurements/score_bank.py
           # components/ ships to customers as files they open and edit, deliberately
           # untyped. --strict there reports 138 errors that could only be answered by
           # annotating the very files a customer is meant to read, so components gets
