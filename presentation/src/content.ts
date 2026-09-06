@@ -435,7 +435,7 @@ const rawPresentation = {
         {
           startingPoint: "More than about 100 usable rows",
           safestNextStep:
-            "Readiness reads all of it; the paid comparison runs on a recorded, difficulty-spread subset.",
+            "Readiness reads all of it; the paid comparison runs on 18 tuning questions plus 10 held-out rows.",
         },
         {
           startingPoint: "One fixed model, one fixed prompt",
@@ -455,7 +455,8 @@ const rawPresentation = {
       ],
       notes: [
         "An existing baseline is preserved exactly; one row is correct if that is what the customer defined.",
-        "Over about 100 usable rows, the paid comparison uses a small subset spread from easy to hard, with the chosen row ids recorded, and the report names the subset size beside the full count. Readiness is never scored on that subset.",
+        "Over about 100 usable rows, every trial would pay for every row, so the paid comparison is bounded to 18 tuning questions by default, at least four from each of the four difficulty bands, plus the 10 held-out rows: 28 by default. The subset is drawn inside each split so it cannot invent a tune/holdout overlap, the chosen row ids and any seed are written to traigent-runs/run-plan.md, and the report names the subset beside the full count, for example '18 tuning questions in 36 rows, and 10 held-out rows, of your 4,812'. Questions are counted and rows are drawn: a question with several accepted answers brings every one of its rows, so 28 caps the questions, and the rows can be more.",
+        "The subset bounds the run, never the dataset: readiness is scored on the whole dataset, before and after, and the run's own sample-size limitation is reported separately in the run report.",
         "The fixed-agent row is the most common surprise: a search needs something to search over, or it would compare one configuration with itself. The readiness card names the missing dimension.",
         "The code-or-SQL row is the only place the guide stops rather than routes. A task whose answer is code stays in scope; what is out of scope is grading by executing that answer.",
       ],
@@ -1226,7 +1227,6 @@ const rawPresentation = {
           items: [
             "Only settings your agent actually uses",
             "Up to 12 configurations to test",
-            "Over ~100 rows: a recorded, difficulty-spread subset",
             "A new model only as a disclosed experiment",
           ],
         },
@@ -1238,7 +1238,7 @@ const rawPresentation = {
       ],
       notes: [
         "The search keeps every baseline value and model and adds only settings the agent actually uses. Any new model would be a separately disclosed experiment.",
-        "On more than about 100 usable rows the paid comparison uses a small subset spread across difficulty, with the chosen row ids recorded; the report names the subset size beside the full count. Readiness is never scored on that subset.",
+        "Same rows on both sides: the baseline and the search are compared on the same tuning rows. On more than about 100 usable rows those rows are the bounded subset chosen before the baseline (18 tuning questions plus 10 held-out by default), which scopes the whole paid comparison; it is not something the search adds, and readiness is never scored on it.",
       ],
     },
     {
