@@ -397,7 +397,7 @@ There are exactly two ways across that boundary and the guide bars both at the o
 calibrating a scorer that executes model-written SQL, and declaring a trial budget. Each was
 measured rather than assumed --
 [`best-case`](#what-best-case-really-opens-at) and
-[the trial-budget question](#what-the-source-reader-sees-and-what-the-agent-actually-has).
+[the trial-budget question](#the-trial-budget-and-the-fourth-credit).
 
 The band boundaries, for reading the column: NOT READY 0-29, PARTIAL 30-54, WORKABLE 55-74,
 STRONG 75-89, EXCELLENT 90-100.
@@ -497,6 +497,8 @@ pillar at 70, 1 trial drops it to 0, 2 to 3 trials reach 35, 4 to 11 reach 70, a
 the guide's "complete search" threshold -- reaches 100. Same for both spaces. Size of space:
 irrelevant. Twelve trials: the whole of it.
 
+### The trial budget, and the fourth credit
+
 **And no, that is not a way to reach EXCELLENT at the opening.** It looks like one: agent 100
 with `checked`'s dataset 98 and evaluation 83 is `0.40x98 + 0.35x83 + 0.25x100 = 93.25`, which
 is inside the band. But a trial budget can only enter `readiness.py` through a
@@ -513,11 +515,12 @@ so the budget cannot exist as current-run evidence until money has already been 
 score it feeds is one the guide says to "never show ... beside the opening one"
 (`SKILL.md:993`). 93 is a closing number.
 
-The refusal, the single entry point and the governing quotes are all above, in full. What is
-*not* published here is a card for that check: `docs/measurements/cards/` holds the score bank,
-and the bank scores projects rather than the guide's handling of a config-space document. So a
-reader checks this the way it is written -- the quoted text against the guide at `6ec2b9c1`,
-and `readiness.py --agent-knobs` against a document carrying `max_trials` -- and not against a
+The refusal and the single entry point are above, verbatim, and so are the three governing
+quotes -- the last of them elided at the ellipsis you can see in it. What is *not* published
+here is a card for that check: `docs/measurements/cards/` holds the score bank, and the bank
+scores projects rather than the guide's handling of a config-space document. So a reader checks
+this the way it is written -- the quoted text against the guide at `6ec2b9c1`, and
+`readiness.py --agent-knobs` against a document carrying `max_trials` -- and not against a
 measurement of ours.
 
 So nothing here is written to win the fourth credit. The obvious way to do it -- an identity
