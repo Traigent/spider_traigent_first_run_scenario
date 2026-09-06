@@ -510,7 +510,7 @@ describe("customer bundle", () => {
     expect(manifest.deck.described_files).toEqual(
       [...presentation.source.files].sort(),
     );
-    expect(manifest.deck.schema_version).toBe(3);
+    expect(manifest.deck.schema_version).toBe(4);
     expect(manifest.deck).not.toHaveProperty("evidence_states");
     expect(manifest.deck).not.toHaveProperty("guide_sha");
     expect(manifest.deck).not.toHaveProperty("slide_ids");

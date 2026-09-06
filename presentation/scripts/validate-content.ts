@@ -65,9 +65,9 @@ function uniqueIssues(values: readonly string[], label: string): string[] {
  * Collect every string the content model carries, at any depth.
  *
  * The honesty rule has to hold on every surface a reader sees, and the deck
- * renders more than a slide's body: the footer prints `sources`, the
- * speaker-note pane and the PowerPoint notes page print `notes`, and the deck
- * subtitle becomes the PowerPoint subject. The scan walks the parsed model, so
+ * renders more than a slide's body: the speaker-note pane and the PowerPoint
+ * notes page print `notes` and then `sources`, and the deck subtitle becomes
+ * the PowerPoint subject. The scan walks the parsed model, so
  * a field added to the schema is covered the day it is added.
  */
 function collectRenderedStrings(value: unknown, collected: string[]): void {
@@ -132,13 +132,154 @@ const RUN_CLAIM_ISSUE =
 // to the internal tooling that tests the guide, and a slide that uses one is
 // talking about that tooling, which the customer never sees.
 const FOREIGN_TOPICS =
-  /\b(?:fixture bank|fixture skills?|captain|spider|companion repo(?:sitory)?|worked case|verification layers?|evidence states?|coverage targets?|recorded run|run record|build\.py|text-to-sql|measurement cards?|preset bank|scenario (?:bank|contract|catalog))\b/i;
+  /\b(?:fixture bank|fixture skills?|captain|spider|companion repo(?:sitory)?|worked case|verification layers?|evidence states?|coverage targets?|recorded run|run record|build\.py|text-to-sql|measurement cards?|preset bank|scenario (?:bank|contract|catalog)|pre-?sales?)\b/i;
 
 function foreignTopicIssues(claimText: string): string[] {
   const match = FOREIGN_TOPICS.exec(claimText);
   return match === null
     ? []
     : [`names internal tooling the deck does not describe: "${match[0]}"`];
+}
+
+// The deck is read aloud in front of a customer, so every visible line is a
+// phrase, not a paragraph. A word is a whitespace-separated token that carries
+// a letter or a digit, so "40 · 35 · 25" is three words and "$5.00" is one.
+export const WORD_BUDGETS = {
+  title: 14,
+  body: 32,
+  bullet: 9,
+  callout: 14,
+  tileLabel: 4,
+  tileDetail: 12,
+  columnHeading: 5,
+  columnItem: 9,
+  stepLabel: 4,
+  stepDetail: 14,
+  metricDetail: 12,
+  matrixStartingPoint: 10,
+  matrixNextStep: 18,
+  scaleBandLabel: 3,
+  scaleMarkerLabel: 6,
+} as const;
+
+// Text-bearing blocks a slide may carry beside its heading. Each visual kind
+// carries exactly its own block, so a slide never stacks two visuals.
+const VISUAL_KINDS = new Set<SlideSpec["kind"]>([
+  "journey",
+  "evidence",
+  "matrix",
+  "tiles",
+  "columns",
+  "scale",
+]);
+
+const BULLET_LIMITS: Partial<Record<SlideSpec["kind"], number>> = {
+  hero: 0,
+  callout: 4,
+  handoff: 4,
+};
+
+export function countWords(text: string): number {
+  return text.split(/\s+/).filter((token) => /[\p{L}\p{N}]/u.test(token))
+    .length;
+}
+
+function wordBudgetIssue(
+  label: string,
+  text: string,
+  budget: number,
+): string[] {
+  const words = countWords(text);
+  return words > budget
+    ? [`${label} runs to ${words} words; the budget is ${budget}: "${text}"`]
+    : [];
+}
+
+function validateWordBudgets(slide: SlideSpec): string[] {
+  const issues = [
+    ...wordBudgetIssue("title", slide.title, WORD_BUDGETS.title),
+    ...wordBudgetIssue("body", slide.body, WORD_BUDGETS.body),
+    ...slide.bullets.flatMap((bullet, index) =>
+      wordBudgetIssue(`bullet ${index + 1}`, bullet, WORD_BUDGETS.bullet),
+    ),
+    ...slide.tiles.flatMap((tile, index) => [
+      ...wordBudgetIssue(
+        `tile ${index + 1} label`,
+        tile.label,
+        WORD_BUDGETS.tileLabel,
+      ),
+      ...wordBudgetIssue(
+        `tile ${index + 1} detail`,
+        tile.detail,
+        WORD_BUDGETS.tileDetail,
+      ),
+    ]),
+    ...(slide.columns ?? []).flatMap((column, index) => [
+      ...wordBudgetIssue(
+        `column ${index + 1} heading`,
+        column.heading,
+        WORD_BUDGETS.columnHeading,
+      ),
+      ...column.items.flatMap((item, itemIndex) =>
+        wordBudgetIssue(
+          `column ${index + 1} item ${itemIndex + 1}`,
+          item,
+          WORD_BUDGETS.columnItem,
+        ),
+      ),
+    ]),
+    ...slide.steps.flatMap((step, index) => [
+      ...wordBudgetIssue(
+        `step ${index + 1} label`,
+        step.label,
+        WORD_BUDGETS.stepLabel,
+      ),
+      ...wordBudgetIssue(
+        `step ${index + 1} detail`,
+        step.detail,
+        WORD_BUDGETS.stepDetail,
+      ),
+    ]),
+    ...slide.metrics.flatMap((metric, index) =>
+      wordBudgetIssue(
+        `metric ${index + 1} detail`,
+        metric.detail,
+        WORD_BUDGETS.metricDetail,
+      ),
+    ),
+    ...(slide.matrix ?? []).flatMap((row, index) => [
+      ...wordBudgetIssue(
+        `matrix row ${index + 1} starting point`,
+        row.startingPoint,
+        WORD_BUDGETS.matrixStartingPoint,
+      ),
+      ...wordBudgetIssue(
+        `matrix row ${index + 1} next step`,
+        row.safestNextStep,
+        WORD_BUDGETS.matrixNextStep,
+      ),
+    ]),
+    ...(slide.scale?.bands ?? []).flatMap((band, index) =>
+      wordBudgetIssue(
+        `scale band ${index + 1} label`,
+        band.label,
+        WORD_BUDGETS.scaleBandLabel,
+      ),
+    ),
+    ...(slide.scale?.markers ?? []).flatMap((marker, index) =>
+      wordBudgetIssue(
+        `scale marker ${index + 1} label`,
+        marker.label,
+        WORD_BUDGETS.scaleMarkerLabel,
+      ),
+    ),
+  ];
+  if (slide.callout !== undefined) {
+    issues.push(
+      ...wordBudgetIssue("callout", slide.callout, WORD_BUDGETS.callout),
+    );
+  }
+  return issues;
 }
 
 function validateTemplateContract(slide: SlideSpec): string[] {
@@ -150,17 +291,56 @@ function validateTemplateContract(slide: SlideSpec): string[] {
   if (slide.kind !== "handoff" && slide.quote !== undefined) {
     issues.push("only handoff slides may define a quote");
   }
+  if (slide.kind === "callout" && slide.callout === undefined) {
+    issues.push("callout slides require a callout");
+  }
+  if (slide.kind !== "callout" && slide.callout !== undefined) {
+    issues.push("only callout slides may define a callout");
+  }
   if (slide.kind === "journey" && slide.steps.length === 0) {
     issues.push("journey slides require at least one step");
   }
+  if (slide.kind !== "journey" && slide.steps.length > 0) {
+    issues.push("only journey slides may define steps");
+  }
   if (slide.kind === "evidence" && slide.metrics.length === 0) {
     issues.push("evidence slides require at least one metric");
+  }
+  if (slide.kind !== "evidence" && slide.metrics.length > 0) {
+    issues.push("only evidence slides may define metrics");
   }
   if (slide.kind === "matrix" && slide.matrix === undefined) {
     issues.push("matrix slides require matrix rows");
   }
   if (slide.kind !== "matrix" && slide.matrix !== undefined) {
     issues.push("only matrix slides may define matrix rows");
+  }
+  if (slide.kind === "tiles" && slide.tiles.length === 0) {
+    issues.push("tiles slides require at least one tile");
+  }
+  if (slide.kind !== "tiles" && slide.tiles.length > 0) {
+    issues.push("only tiles slides may define tiles");
+  }
+  if (slide.kind === "columns" && slide.columns === undefined) {
+    issues.push("columns slides require columns");
+  }
+  if (slide.kind !== "columns" && slide.columns !== undefined) {
+    issues.push("only columns slides may define columns");
+  }
+  if (slide.kind === "scale" && slide.scale === undefined) {
+    issues.push("scale slides require a scale");
+  }
+  if (slide.kind !== "scale" && slide.scale !== undefined) {
+    issues.push("only scale slides may define a scale");
+  }
+  if (VISUAL_KINDS.has(slide.kind) && slide.bullets.length > 0) {
+    issues.push(`${slide.kind} slides carry their visual instead of bullets`);
+  }
+  const bulletLimit = BULLET_LIMITS[slide.kind];
+  if (bulletLimit !== undefined && slide.bullets.length > bulletLimit) {
+    issues.push(
+      `${slide.kind} slides carry at most ${bulletLimit} bullets, not ${slide.bullets.length}`,
+    );
   }
   if (slide.accent !== undefined) {
     const title = slide.title.toLocaleLowerCase("en");
@@ -176,6 +356,7 @@ function validateTemplateContract(slide: SlideSpec): string[] {
 function validateSlide(slide: SlideSpec): string[] {
   const issues = [
     ...validateTemplateContract(slide),
+    ...validateWordBudgets(slide),
     ...(hasPositiveRunClaim(visibleClaimText(slide)) ? [RUN_CLAIM_ISSUE] : []),
     ...foreignTopicIssues(visibleClaimText(slide)),
     ...uniqueIssues(slide.bullets, "bullets"),
@@ -188,6 +369,14 @@ function validateSlide(slide: SlideSpec): string[] {
     ...uniqueIssues(
       slide.steps.map((step) => step.label),
       "step labels",
+    ),
+    ...uniqueIssues(
+      slide.tiles.map((tile) => tile.label),
+      "tile labels",
+    ),
+    ...uniqueIssues(
+      (slide.columns ?? []).map((column) => column.heading),
+      "column headings",
     ),
   ];
 

@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -9,7 +10,38 @@ import {
 
 import { brandName, traigentLogoPngDataUri } from "./brand";
 import { coreSlideCount, presentation } from "./content";
-import { displayEyebrow, sourceFooter, type SlideSpec } from "./model";
+import {
+  displayEyebrow,
+  type JourneyStep,
+  type ScaleMarker,
+  sourceFooter,
+  type SlideSpec,
+} from "./model";
+
+/** Column count for a grid that keeps rows balanced: 1-4 in one row, 5-6 in two rows of three, 7-8 in two rows of four. */
+function balancedColumns(count: number): number {
+  if (count <= 4) {
+    return Math.max(1, count);
+  }
+  return count <= 6 ? 3 : 4;
+}
+
+/** Column count for the journey flow: one row up to five steps, then two rows of three. */
+function journeyColumns(count: number): number {
+  return count <= 5 ? Math.max(1, count) : 3;
+}
+
+function gridColumns(columns: number): CSSProperties {
+  return { "--columns": columns } as CSSProperties;
+}
+
+function executorClass(executor: JourneyStep["executor"]): string {
+  return executor === "Coding assistant"
+    ? "agent"
+    : executor === "Customer"
+      ? "human"
+      : "service";
+}
 
 function initialSlideIndex(): number {
   const slideId = window.location.hash.replace(/^#\/?/, "");
@@ -58,37 +90,192 @@ function Journey({ slide }: { slide: SlideSpec }) {
   if (slide.steps.length === 0) {
     return null;
   }
+  const columns = journeyColumns(slide.steps.length);
   return (
     <ol
-      className={`journey journey-${slide.steps.length}`}
+      className="journey"
+      style={gridColumns(columns)}
       aria-label="First-run journey"
     >
-      {slide.steps.map((step, index) => (
-        <li key={`${step.executor}-${step.label}`}>
-          <div className="step-number" aria-hidden="true">
-            {String(index + 1).padStart(2, "0")}
-          </div>
-          <div>
-            <span
-              className={`owner owner-${
-                step.executor === "Coding assistant"
-                  ? "agent"
-                  : step.executor === "Customer"
-                    ? "human"
-                    : "service"
-              }`}
-            >
-              {step.executor} executes
-            </span>
-            {step.humanGate === undefined ? null : (
-              <span className="human-gate">{step.humanGate}</span>
-            )}
+      {slide.steps.map((step, index) => {
+        const column = index % columns;
+        const position = [
+          column === 0 ? "journey-row-start" : "",
+          column === columns - 1 || index === slide.steps.length - 1
+            ? "journey-row-end"
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" ");
+        return (
+          <li
+            className={`journey-step${position === "" ? "" : ` ${position}`}`}
+            key={`${step.executor}-${step.label}`}
+          >
+            <div className="step-node">
+              <span className="step-number">
+                <span className="visually-hidden">Step </span>
+                {index + 1}
+              </span>
+            </div>
+            <div className="step-badges">
+              <span className={`owner owner-${executorClass(step.executor)}`}>
+                {step.executor} executes
+              </span>
+              {step.humanGate === undefined ? null : (
+                <span className="human-gate">{step.humanGate}</span>
+              )}
+            </div>
             <h2>{step.label}</h2>
             <p>{step.detail}</p>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function Tiles({ slide }: { slide: SlideSpec }) {
+  if (slide.tiles.length === 0) {
+    return null;
+  }
+  // Seven or eight tiles sit two-by-four, denser than the deck's common cases.
+  const dense = slide.tiles.length > 6;
+  return (
+    <ul
+      className={dense ? "tile-grid tile-grid-dense" : "tile-grid"}
+      style={gridColumns(balancedColumns(slide.tiles.length))}
+    >
+      {slide.tiles.map((tile) => (
+        <li className="tile" key={tile.label}>
+          <span className="tile-icon" aria-hidden="true">
+            {tile.icon}
+          </span>
+          <div>
+            <h2>{tile.label}</h2>
+            <p>{tile.detail}</p>
           </div>
         </li>
       ))}
-    </ol>
+    </ul>
+  );
+}
+
+function Columns({ slide }: { slide: SlideSpec }) {
+  if (slide.columns === undefined) {
+    return null;
+  }
+  return (
+    <div
+      className={
+        slide.columns.length > 3
+          ? "column-grid column-grid-dense"
+          : "column-grid"
+      }
+      style={gridColumns(slide.columns.length)}
+    >
+      {slide.columns.map((column) => (
+        <section
+          className={`column-card tone-${column.tone}`}
+          aria-labelledby={`${slide.id}-column-${slugify(column.heading)}`}
+          key={column.heading}
+        >
+          <h2 id={`${slide.id}-column-${slugify(column.heading)}`}>
+            {column.heading}
+          </h2>
+          <ul>
+            {column.items.map((item) => (
+              <li key={item}>
+                <span aria-hidden="true" />
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function slugify(text: string): string {
+  return text
+    .toLocaleLowerCase("en")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+// A marker label is centred on its tick unless the tick sits near an end of
+// the bar, where centring would push the label past the figure.
+function markerAnchor(marker: ScaleMarker): string {
+  return marker.value <= 8
+    ? "scale-marker-start"
+    : marker.value >= 92
+      ? "scale-marker-end"
+      : "";
+}
+
+function ReadinessScale({ slide }: { slide: SlideSpec }) {
+  if (slide.scale === undefined) {
+    return null;
+  }
+  const { bands, markers } = slide.scale;
+  const summary = [
+    `Scale from 0 to 100 in ${bands.length} bands: ${bands
+      .map((band) => `${band.label} ${band.from} to ${band.to}`)
+      .join(", ")}.`,
+    markers.length === 0
+      ? ""
+      : `Markers: ${markers
+          .map((marker) => `${marker.label} at ${marker.value}`)
+          .join(", ")}.`,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <figure className="scale-figure">
+      <figcaption className="visually-hidden">{summary}</figcaption>
+      {markers.length === 0 ? null : (
+        <ul className="scale-markers" aria-hidden="true">
+          {markers.map((marker, index) => (
+            <li
+              className={[
+                "scale-marker",
+                index % 2 === 0 ? "scale-marker-low" : "scale-marker-high",
+                markerAnchor(marker),
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              style={{ left: `${marker.value}%` }}
+              key={`${marker.value}-${marker.label}`}
+            >
+              <span className="scale-marker-label">
+                {marker.label}
+                <small>{marker.value}</small>
+              </span>
+              <span className="scale-tick" />
+            </li>
+          ))}
+        </ul>
+      )}
+      <ol className="scale-bar" aria-hidden="true">
+        {bands.map((band) => (
+          <li
+            className={`scale-band tone-${band.tone}`}
+            style={{ width: `${((band.to - band.from + 1) / 101) * 100}%` }}
+            key={`${band.from}-${band.to}`}
+          >
+            <strong>{band.label}</strong>
+            <span>
+              {band.from}–{band.to}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <div className="scale-ends" aria-hidden="true">
+        <span>0</span>
+        <span>100</span>
+      </div>
+    </figure>
   );
 }
 
@@ -144,7 +331,11 @@ function Slide({ slide }: { slide: SlideSpec }) {
       ".metric-grid",
       ".journey",
       ".matrix-wrap",
-      ".slide-footer",
+      ".tile-grid",
+      ".column-grid",
+      ".scale-figure",
+      ".scale-marker-label",
+      ".callout-card",
       ".slide-brand",
     ].join(",");
     const clipped = Array.from(element.querySelectorAll<HTMLElement>(selectors))
@@ -210,31 +401,40 @@ function Slide({ slide }: { slide: SlideSpec }) {
         <p className="slide-body">{slide.body}</p>
       </header>
 
-      {slide.quote !== undefined ? (
-        <blockquote className="prompt-card">
-          <span className="prompt-label">Paste into your coding assistant</span>
-          <code>{slide.quote}</code>
-        </blockquote>
-      ) : null}
+      {isHero ? null : (
+        <div className="slide-visual">
+          {slide.quote !== undefined ? (
+            <blockquote className="prompt-card">
+              <span className="prompt-label">
+                Paste into your coding assistant
+              </span>
+              <code>{slide.quote}</code>
+            </blockquote>
+          ) : null}
 
-      {slide.bullets.length > 0 ? (
-        <ul className="bullet-grid">
-          {slide.bullets.map((bullet) => (
-            <li key={bullet}>
-              <span aria-hidden="true" />
-              {bullet}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+          {slide.callout !== undefined ? (
+            <p className="callout-card">{slide.callout}</p>
+          ) : null}
 
-      <Metrics slide={slide} />
-      <Journey slide={slide} />
-      <StartingPointMatrix slide={slide} />
+          {slide.bullets.length > 0 ? (
+            <ul className="bullet-grid">
+              {slide.bullets.map((bullet) => (
+                <li key={bullet}>
+                  <span aria-hidden="true" />
+                  {bullet}
+                </li>
+              ))}
+            </ul>
+          ) : null}
 
-      <footer className="slide-footer">
-        <span>{sourceFooter(presentation, slide)}</span>
-      </footer>
+          <Metrics slide={slide} />
+          <Journey slide={slide} />
+          <StartingPointMatrix slide={slide} />
+          <Tiles slide={slide} />
+          <Columns slide={slide} />
+          <ReadinessScale slide={slide} />
+        </div>
+      )}
     </article>
   );
 }
@@ -323,9 +523,7 @@ export function App() {
           <span>Guided First Run</span>
           <span className="context-divider" aria-hidden="true" />
           <span>
-            {slide.section === "appendix"
-              ? "Technical appendix"
-              : "Presales core"}
+            {slide.section === "appendix" ? "Technical appendix" : "Overview"}
           </span>
         </div>
       </header>
@@ -383,6 +581,7 @@ export function App() {
               <li key={note}>{note}</li>
             ))}
           </ul>
+          <p className="speaker-sources">{sourceFooter(presentation, slide)}</p>
         </aside>
       ) : null}
     </div>

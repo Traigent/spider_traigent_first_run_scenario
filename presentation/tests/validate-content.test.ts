@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   ContentValidationError,
+  countWords,
   validatePresentationContent,
+  WORD_BUDGETS,
 } from "../scripts/validate-content";
 import { presentation } from "../src/content";
 import { SOURCE_SEPARATOR, type PresentationSpec } from "../src/model";
@@ -18,27 +20,46 @@ const GUIDE_REVISION = "75d338c31c97643c6a6d28a6aeef582d7b938db8";
 
 const CORE_SLIDE_IDS = [
   "ready-to-optimize",
+  "what-the-guide-does",
+  "the-words-your-project",
+  "the-words-of-the-run",
   "one-customer-prompt",
+  "four-asks",
   "shared-control",
-  "works-from-whatever-you-have",
+  "free-first-paid-later",
+  "your-starting-point",
+  "when-material-is-weak",
+  "special-cases",
   "readiness-at-a-glance",
+  "readiness-bands",
   "caps-blockers-and-asks",
-  "spend-and-safety-boundaries",
+  "the-opening-score",
+  "secrets-and-safety",
+  "the-preview-before-paying",
   "what-leaves-your-machine",
-  "what-the-customer-gets",
-  "how-presales-runs-it",
+  "what-you-get",
+  "two-honest-outcomes",
+  "how-to-start",
+  "no-project-yet",
 ];
 
 const APPENDIX_SLIDE_IDS = [
   "stage-inspect",
+  "status-marks",
   "stage-readiness",
+  "readiness-confidence",
   "readiness-scoring",
   "readiness-ceilings",
+  "ceiling-rules",
   "stage-baseline",
+  "baseline-grid",
   "stage-optimize",
+  "what-the-search-may-change",
   "selection-and-heldout",
   "stage-results",
-  "requirements-and-licensing",
+  "what-you-keep",
+  "requirements",
+  "licensing",
   "repository-layout",
 ];
 
@@ -48,7 +69,7 @@ const CUSTOMER_PROMPT =
 // Phrases from the internal tooling that tests the guide. The deck is about
 // the guide alone, so none of them may appear on any rendered surface.
 const FOREIGN_TOPICS =
-  /\b(?:fixture bank|fixture skills?|captain|spider|companion repo(?:sitory)?|worked case|verification layers?|evidence states?|coverage targets?|recorded run|run record|build\.py|text-to-sql|measurement cards?|preset bank|scenario (?:bank|contract|catalog)|phase [ab])\b/i;
+  /\b(?:fixture bank|fixture skills?|captain|spider|companion repo(?:sitory)?|worked case|verification layers?|evidence states?|coverage targets?|recorded run|run record|build\.py|text-to-sql|measurement cards?|preset bank|scenario (?:bank|contract|catalog)|phase [ab]|pre-?sales?)\b/i;
 
 function copyPresentation(): PresentationSpec {
   return structuredClone(presentation);
@@ -165,6 +186,138 @@ describe("presentation content validation", () => {
     for (const ceiling of ["25", "45", "65", "74"]) {
       expect(ceilings).toContain(ceiling);
     }
+  });
+
+  it("keeps every slide to one visual and every visible line inside its word budget", () => {
+    const validated = validatePresentationContent(presentation);
+    expect(validated.schemaVersion).toBe(4);
+
+    for (const slide of validated.slides) {
+      const blocks = [
+        slide.bullets.length > 0,
+        slide.tiles.length > 0,
+        slide.columns !== undefined,
+        slide.scale !== undefined,
+        slide.matrix !== undefined,
+        slide.steps.length > 0,
+        slide.metrics.length > 0,
+      ].filter(Boolean).length;
+      // Bullets count as the block on statement, callout and handoff slides,
+      // so no slide ever stacks two.
+      expect(blocks).toBeLessThanOrEqual(1);
+      expect(slide.bullets.length).toBeLessThanOrEqual(8);
+      expect(countWords(slide.title)).toBeLessThanOrEqual(WORD_BUDGETS.title);
+      expect(countWords(slide.body)).toBeLessThanOrEqual(WORD_BUDGETS.body);
+      for (const bullet of slide.bullets) {
+        expect(countWords(bullet)).toBeLessThanOrEqual(WORD_BUDGETS.bullet);
+      }
+    }
+  });
+
+  it("counts words as tokens that carry a letter or a digit", () => {
+    expect(countWords("40 · 35 · 25")).toBe(3);
+    expect(countWords("$5.00 default stop target")).toBe(4);
+    expect(countWords("✅ real, ❗ thin")).toBe(2);
+    expect(countWords("  spaced   out  ")).toBe(2);
+  });
+
+  it("rejects a bullet, a body and a callout that run past their budgets", () => {
+    const longBullet = copyPresentation();
+    slideById(longBullet, "stage-inspect").bullets[0] =
+      "one two three four five six seven eight nine ten";
+    expectValidationIssue(longBullet, "bullet 1 runs to 10 words");
+
+    const longBody = copyPresentation();
+    slideById(longBody, "stage-inspect").body = Array.from(
+      { length: WORD_BUDGETS.body + 1 },
+      (_, index) => `word${index}`,
+    ).join(" ");
+    expectValidationIssue(longBody, "body runs to");
+
+    const longCallout = copyPresentation();
+    slideById(longCallout, "the-opening-score").callout = Array.from(
+      { length: WORD_BUDGETS.callout + 1 },
+      (_, index) => `word${index}`,
+    ).join(" ");
+    expectValidationIssue(longCallout, "callout runs to");
+  });
+
+  it("rejects a callout slide without a callout, and a callout elsewhere", () => {
+    const missing = copyPresentation();
+    delete slideById(missing, "the-opening-score").callout;
+    expectValidationIssue(missing, "callout slides require a callout");
+
+    const stray = copyPresentation();
+    slideById(stray, "stage-inspect").callout = "stray";
+    expectValidationIssue(stray, "only callout slides may define a callout");
+  });
+
+  it("rejects tiles, columns and a scale outside their own kinds, and their kinds without them", () => {
+    const strayTiles = copyPresentation();
+    slideById(strayTiles, "stage-inspect").tiles = [
+      { icon: "x", label: "a", detail: "b" },
+    ];
+    expectValidationIssue(strayTiles, "only tiles slides may define tiles");
+
+    const emptyTiles = copyPresentation();
+    slideById(emptyTiles, "four-asks").tiles = [];
+    expectValidationIssue(emptyTiles, "tiles slides require at least one tile");
+
+    const strayColumns = copyPresentation();
+    slideById(strayColumns, "stage-inspect").columns = [
+      { heading: "a", tone: "blue", items: ["b"] },
+      { heading: "c", tone: "blue", items: ["d"] },
+    ];
+    expectValidationIssue(
+      strayColumns,
+      "only columns slides may define columns",
+    );
+
+    const emptyColumns = copyPresentation();
+    delete slideById(emptyColumns, "licensing").columns;
+    expectValidationIssue(emptyColumns, "columns slides require columns");
+
+    const strayScale = copyPresentation();
+    slideById(strayScale, "stage-inspect").scale = slideById(
+      copyPresentation(),
+      "readiness-bands",
+    ).scale;
+    expectValidationIssue(strayScale, "only scale slides may define a scale");
+
+    const emptyScale = copyPresentation();
+    delete slideById(emptyScale, "readiness-bands").scale;
+    expectValidationIssue(emptyScale, "scale slides require a scale");
+  });
+
+  it("rejects bullets stacked on a visual kind", () => {
+    const candidate = copyPresentation();
+    slideById(candidate, "four-asks").bullets = ["a stray bullet"];
+    expectValidationIssue(
+      candidate,
+      "tiles slides carry their visual instead of bullets",
+    );
+
+    const crowded = copyPresentation();
+    slideById(crowded, "the-opening-score").bullets = [
+      "one",
+      "two",
+      "three",
+      "four",
+      "five",
+    ];
+    expectValidationIssue(crowded, "callout slides carry at most 4 bullets");
+  });
+
+  it("rejects a scale whose bands leave a gap or stop short of 100", () => {
+    const gapped = copyPresentation();
+    const scale = slideById(gapped, "readiness-bands").scale!;
+    scale.bands[1]!.from = 31;
+    expectValidationIssue(gapped, "scale bands must be contiguous from 0");
+
+    const short = copyPresentation();
+    const shortScale = slideById(short, "readiness-bands").scale!;
+    shortScale.bands[shortScale.bands.length - 1]!.to = 99;
+    expectValidationIssue(short, "scale bands must end at 100");
   });
 
   it("rejects a duplicate slide id", () => {
