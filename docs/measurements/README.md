@@ -63,19 +63,45 @@ python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
     --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
 ```
 
-It builds each project, scores it, deletes it, and rewrites everything under `cards/`. It needs
-nothing installed, reaches no network, and never uses `--venv ready`. On this machine the whole
-sweep takes about two minutes. **It does not reproduce the table below** -- see the drift note
-above; it reproduces today's reading, which is what a reader checking this directory should
-expect to see until the regeneration lands and re-pins both.
+It builds each project, scores it, deletes it, and writes a card for each. It needs nothing
+installed, reaches no network, and never uses `--venv ready`. On this machine the whole sweep
+takes about two minutes. **It does not reproduce the table below** -- see the drift note above;
+it reproduces today's reading, which is what a reader checking this directory should expect to
+see until the regeneration lands and re-pins both.
 
-Point it at `6ec2b9c1` instead and it stops before it builds anything, naming the checks and the
-field the two disagree about, and leaves `cards/` untouched. That guard is the point: the two
-facts -- which revision is pinned, and which contract the documents are written for -- are
-independently editable, and this directory has now broken in both directions by letting them
-drift apart silently. The sweep reads `readiness.py`'s own `BUILD_CHECK_FIELDS` from whichever
-checkout it is handed, so the disagreement is settled by the guide rather than by a copy of its
-rules kept here.
+**It leaves `cards/` alone.** The cards are committed evidence, and the usual reason to run this
+script is to check them, so the run writes into its workspace and prints where. Replacing them
+is a separate, explicit act:
+
+```bash
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c --publish
+```
+
+`--publish` replaces the committed directory of every run that produced a card, and leaves alone
+the directory of any run that did not: a refused run reaches two or three files before the
+refusal, and moving those over its committed card would delete the rendered card and the `argv`
+record with it -- four files that this revision cannot produce again, because the refusal is now
+the guide's settled answer for that run.
+
+Point the sweep at `6ec2b9c1` instead and it stops before it builds anything, naming the checks
+and the field the two disagree about, and leaves `cards/` untouched. That guard is the point:
+the two facts -- which revision is pinned, and which contract the documents are written for --
+are independently editable, and this directory has now broken in both directions by letting them
+drift apart silently. The check reads `readiness.py`'s own field lists
+(`AGENT_KNOBS_DOCUMENT_FIELDS`, `DISCOVERED_KNOB_FIELDS`, `BUILD_CHECK_FIELDS`) from whichever
+checkout it is handed, so *which fields a document may carry* is settled by the guide rather than
+by a copy of its rules kept here. One thing it cannot read that way: **which fields are
+required**, because the guide expresses that in its control flow rather than as data. So
+`source_lines` is named in `score_bank.py`, next to a comment saying it is the one hardcoded
+coordinate in the check -- and if a revision renames a field list, the run says on stderr that
+that half of every document went unchecked rather than passing in silence.
+
+**Exit status:** 0 when every run scored, 1 when the guide refused one or more, 2 when the
+documents and the guide disagree, 3 when something of ours broke -- our builder, our probe. The
+last never records a row and never publishes: `build.py` failing says nothing about the guide,
+and a sweep that cannot measure has no business rewriting the evidence of what the guide
+answered when it could.
 
 ## What is here
 

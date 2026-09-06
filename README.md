@@ -372,7 +372,9 @@ Rebuild the table with one command. It runs at `6e18086e`, not at the pinned rev
 agent-source documents the sweep hands to `readiness.py` were repaired for the contract that
 revision reads, and `6ec2b9c1` refuses them -- so the sweep stops there before building
 anything, and says which field the two disagree about. What comes back is today's reading, not
-the table below.
+the table below. **It does not overwrite the committed cards**: the run writes into its own
+workspace and prints where, and only `--publish` replaces what is under
+`docs/measurements/cards/`.
 
 ```bash
 python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
@@ -706,10 +708,14 @@ queries, so they take a moment; that is the point of them.
 -- skipping any of it here is what turns a pull request red there.
 
 The score table is not in that list, because it needs a checkout of somebody else's repository
--- but no network, and no install. Re-measure it separately whenever the guide moves:
+-- but no network, and no install. Re-measure it separately whenever the guide moves. The run
+leaves the committed cards alone unless `--publish` is passed, and it must be told which
+revision it is measuring at while the pin and the agent-source documents disagree
+([why](docs/measurements/README.md#reproducing-it)):
 
 ```bash
-python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
 ```
 
 To rebuild the data slice itself -- rarely needed, and it requires the source Spider pool:

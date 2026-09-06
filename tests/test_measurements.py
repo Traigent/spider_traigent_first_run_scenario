@@ -20,6 +20,7 @@ gates every change to the agents.
 from __future__ import annotations
 
 import ast
+import difflib
 import io
 import json
 import tokenize
@@ -121,6 +122,11 @@ class TheAgentReadsCiteTheAgents(unittest.TestCase):
                             lines, f"{owner} carries an empty 'source_lines'"
                         )
                         for line in lines:
+                            # `bool` is an `int` in Python and not one to the guide,
+                            # which rejects `True` as a line number outright.
+                            self.assertNotIsInstance(
+                                line, bool, f"{owner} cites {line!r}"
+                            )
                             self.assertIsInstance(line, int, f"{owner} cites {line!r}")
                             self.assertGreaterEqual(line, 1, f"{owner} cites {line}")
                             self.assertLessEqual(
@@ -150,22 +156,42 @@ class TheAgentReadsCiteTheAgents(unittest.TestCase):
                         )
 
     def test_the_agents_line_up_between_providers(self) -> None:
-        """One set of citations for two files, so the files have to agree line for line."""
+        """One set of citations for two files, so no line may move between them.
+
+        Counting lines was not enough: the likely edit here is a swapped model id, which
+        changes what a line says without changing how many there are, and a citation's
+        prose can then be true of one provider and false of the other. So the two files
+        are aligned line by line, and the only difference allowed is a line replaced by
+        another line -- never one inserted or deleted, which is what shifts a citation.
+        """
         for agent in DOCUMENTS.values():
-            lengths = {
-                provider: len(
-                    (AGENT_DIR / provider / agent)
-                    .read_text(encoding="utf-8")
-                    .splitlines()
-                )
+            left, right = (
+                (AGENT_DIR / provider / agent).read_text(encoding="utf-8").splitlines()
                 for provider in PROVIDERS
-            }
+            )
+            moved = []
+            for (
+                kind,
+                left_from,
+                left_to,
+                right_from,
+                right_to,
+            ) in difflib.SequenceMatcher(
+                None, left, right, autojunk=False
+            ).get_opcodes():
+                shifts = kind in ("insert", "delete") or (left_to - left_from) != (
+                    right_to - right_from
+                )
+                if shifts:
+                    moved.append((kind, left_from + 1, left_to))
             with self.subTest(agent=agent):
                 self.assertEqual(
-                    len(set(lengths.values())),
-                    1,
-                    f"{agent} differs in length between providers {lengths}; the "
-                    "agent-knobs documents cite one set of line numbers for both",
+                    moved,
+                    [],
+                    f"{agent} does not line up between {PROVIDERS[0]} and "
+                    f"{PROVIDERS[1]}: {moved}. The agent-knobs documents cite one set of "
+                    "line numbers for both, so a line added or removed in one of them "
+                    "moves every citation below it",
                 )
 
 
