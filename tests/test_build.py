@@ -241,6 +241,7 @@ class DemoLayout(unittest.TestCase):
             "catalog.json",
             "README.md",
             ".env.example",
+            ".gitignore",
             # The data's terms travel with the data under this name. It used to be
             # `LICENSE-DATA`, which is what the repository calls its own copy of the
             # licence text; the project ships the attribution notice instead.

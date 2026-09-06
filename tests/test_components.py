@@ -1033,5 +1033,49 @@ class Agents(unittest.TestCase):
             )
 
 
+class TheScorerReadsTheRowTheSdkActuallyHandsIt(unittest.TestCase):
+    """The execution scorer resolves db_id from both shapes a row can arrive in.
+
+    Traigent SDK 0.26.0 builds a row's metadata as every key that is not the input or the
+    output, so a row written with its fields under a `metadata` object reaches the scorer with
+    that object nested one level deeper than it was written. Measured on 2026-09-06: a
+    connected run on the `exec-match` scorer failed on trial 1 with `no db_id on this row`
+    while every row on disk carried one.
+    """
+
+    def test_db_id_is_found_flat_and_one_level_down(self) -> None:
+        module = load(EVALUATOR_DIR / "exec_match.py", "exec_match_db_id_probe")
+        flat = {"db_id": "concert_singer", "difficulty": "easy"}
+        wrapped = {"metadata": dict(flat)}
+        self.assertEqual(module.resolve_db_id(flat, None), "concert_singer")
+        self.assertEqual(module.resolve_db_id(wrapped, None), "concert_singer")
+        self.assertEqual(module.resolve_db_id({}, wrapped), "concert_singer")
+
+    def test_a_row_with_no_db_id_anywhere_still_refuses(self) -> None:
+        module = load(EVALUATOR_DIR / "exec_match.py", "exec_match_db_id_refuse")
+        with self.assertRaises(KeyError):
+            module.resolve_db_id({"metadata": {"difficulty": "easy"}}, {"x": 1})
+
+
+class TheAgentCallsThroughTheDoorTraigentWatches(unittest.TestCase):
+    """Every agent template sends its request through `litellm.completion`.
+
+    Traigent's usage capture wraps that module attribute. `LiteLLM().chat.completions.create`
+    reaches the provider underneath the wrapper: measured on 2026-09-06 with a counting
+    sentinel over `litellm.completion`, a client-object call went through it zero times, so
+    every configuration reported the same estimated input tokens and $0.00.
+    """
+
+    def test_every_template_resolves_litellm_completion_at_call_time(self) -> None:
+        templates = sorted(AGENT_DIR.glob("*/agent_*.py"))
+        self.assertTrue(templates)
+        for path in templates:
+            with self.subTest(template=path.relative_to(REPO_ROOT)):
+                text = path.read_text(encoding="utf-8")
+                self.assertIn("litellm.completion(", text)
+                self.assertNotIn("completions.create(", text)
+                self.assertNotIn("from litellm import LiteLLM", text)
+
+
 if __name__ == "__main__":
     unittest.main()

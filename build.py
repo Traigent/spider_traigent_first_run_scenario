@@ -141,6 +141,23 @@ def env_file(provider: str) -> Path:
     return COMPONENTS / "env" / f"{provider}.env.example"
 
 
+# `.env.example` asks for `.env` to stay out of version control once it holds a value, and
+# nothing made that hold: a project initialised as a repository committed its keys on the
+# first `git add .`. The environments and run artifacts are excluded for the plainer reason
+# that neither is source.
+GITIGNORE_TEXT = """# Keys live here once filled in. Never commit them.
+.env
+
+# Environments -- the project's own and the one a first run creates beside it.
+.venv/
+.venv-traigent/
+
+# Run artifacts: results, logs and the SDK's own output folder.
+traigent-runs/
+__pycache__/
+"""
+
+
 EVALUATOR_FILES = {
     "exact-match": COMPONENTS / "evaluator" / "exact_match.py",
     "exec-match": COMPONENTS / "evaluator" / "exec_match.py",
@@ -925,6 +942,7 @@ FILE_DESCRIPTIONS = {
     ),
     "README.md": "this file.",
     ".env.example": "the keys this project would need, with no values in it.",
+    ".gitignore": "keeps `.env`, the environments and the run artifacts out of a repository.",
     ATTRIBUTION_NAME: (
         "where the questions come from, the licence they are under, and that they were "
         "modified. It travels with them."
@@ -1172,6 +1190,7 @@ class Plan:
             # a project holding no data has nothing to attribute.
             names += ["dataset.jsonl", "catalog.json", "databases/", ATTRIBUTION_NAME]
         names.append(".env.example")
+        names.append(".gitignore")
         if self.ships_calibration:
             names.append(f"{RUNS_DIRECTORY}/{CALIBRATION_FILE}")
         names.append("README.md")
@@ -1327,6 +1346,7 @@ def write_demo(plan: Plan) -> dict[str, Any]:
         shutil.copy2(ATTRIBUTION_SOURCE, project / ATTRIBUTION_NAME)
 
     shutil.copy2(env_file(plan.provider), project / ".env.example")
+    (project / ".gitignore").write_text(GITIGNORE_TEXT, encoding="utf-8")
 
     calibration_record = (
         copy_calibration(plan.evaluator, project) if plan.ships_calibration else None

@@ -272,9 +272,18 @@ def as_multiset(rows):
 
 
 def resolve_db_id(metadata, input_data):
+    # The Traigent SDK (0.26.0, `evaluators/base.py`) builds a row's metadata as every key
+    # that is not the input or the output, so a row that keeps its own fields under a
+    # `metadata` object arrives here one level deeper than it was written: the db_id sits at
+    # `metadata["metadata"]["db_id"]`. Both shapes are read, the flat one first, so the scorer
+    # does not depend on which loader handed it the row.
     for source in (metadata, input_data):
-        if isinstance(source, dict) and source.get("db_id"):
-            return source["db_id"]
+        if isinstance(source, dict):
+            if source.get("db_id"):
+                return source["db_id"]
+            nested = source.get("metadata")
+            if isinstance(nested, dict) and nested.get("db_id"):
+                return nested["db_id"]
     raise KeyError(
         "no db_id on this row, so there is no database to run the query against -- "
         "running it against a different one would produce a confident wrong score"
