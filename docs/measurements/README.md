@@ -9,24 +9,105 @@ the captured invocation and full output of every run.
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
 
+## These figures have drifted, and a regeneration is pending
+
+> **Read this before quoting any number in this repository.** The tool moved. The same sweep,
+> unchanged, was re-run on 2026-09-06 against the guide's `first-run-guide` trunk at `6e18086e`
+> and did not return this table. What changed there, measured rather than guessed:
+>
+> - the **agent pillar reads 0** on every run instead of 70. The guide's static read no longer
+>   follows any of the four declared settings from the agent's source to the request, so
+>   `agent-no-varying-knobs` 45 now appears on almost every card. The citations in
+>   `agent-knobs/` are accepted and quoted back onto the card; it is the route check behind
+>   them that changed.
+> - **`checked` and the four `grid-*` runs open at 45 PARTIAL**, not 86 STRONG and 92 EXCELLENT.
+>   `hand-written` opens at 45, not 74. `wrong-answers--calibrated` at 45, not 83.
+> - several runs that read `proceed` now read `complete-calibration`, and several that read
+>   PARTIAL now read NOT READY: `no-labels` 30 PARTIAL is 19 NOT READY, and `logs-only`'s
+>   action moves from `label-data` to `connect-agent`.
+> - **two of this repository's own criticisms of the guide have been answered, and both are
+>   listed here rather than only the flattering ones.** `no-agent` -- the project with no agent
+>   at all, quoted below and in the README as opening 45 PARTIAL `proceed` -- now opens **25 NOT
+>   READY `connect-agent`**, with an `agent-absent` cap. `ready--without-agent-knobs`, the run
+>   whose point was that withholding the agent read changes nothing, likewise opens **25 NOT
+>   READY `connect-agent`** rather than the same 45 as `ready`.
+> - **`best-case--off-method-calibration` cannot be measured at all.** The guide now refuses to
+>   calibrate a scorer that reaches a SQL engine, which is the finding that run existed to
+>   make, made better by the tool itself.
+>
+> The drift is in the tool being measured. Nothing about the projects in this repository
+> changed, and the sweep still completes -- at `6e18086e`, which is not the revision this
+> directory pins; see [Reproducing it](#reproducing-it) for what that costs a reader today.
+>
+> **Nothing has been re-measured here on purpose.** Several changes to the guide are in flight
+> and about to land; a table regenerated ahead of them would be stale the day it merged. The
+> regeneration is a separate, deliberate step -- re-pin `PINNED_REVISION`, run the sweep, and
+> rewrite this table and the prose keyed to it from `cards/results.json`. Until it lands, every
+> score, band, action, pillar and cap quoted anywhere in this repository is a reading of
+> `6ec2b9c1` on 2026-09-02 and is not what today's guide returns.
+
 ## Reproducing it
+
+**The pin and the documents beside it currently describe two different guides, and this is where
+that shows.** The `--agent-knobs` documents under `agent-knobs/` carry `source_lines` on every
+settled `build` check. `6ec2b9c1`, the revision every figure below was measured at, does not
+read that field and refuses a document carrying it; `6e18086e` reads it and requires it. So the
+sweep runs at `6e18086e` and is refused at the pin, and the command below names the revision it
+actually runs at:
 
 ```bash
 git clone https://github.com/Traigent/traigent-first-run ~/code/traigent-first-run
-git -C ~/code/traigent-first-run checkout 6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9
+git -C ~/code/traigent-first-run checkout 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
 
-python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
 ```
 
-It builds each project, scores it, deletes it, and rewrites everything under `cards/`. It needs
-nothing installed, reaches no network, and never uses `--venv ready`. On this machine the whole
-sweep takes about two minutes.
+It builds each project, scores it, deletes it, and writes a card for each. It needs nothing
+installed, reaches no network, and never uses `--venv ready`. On this machine the whole sweep
+takes about two minutes. **It does not reproduce the table below** -- see the drift note above;
+it reproduces today's reading, which is what a reader checking this directory should expect to
+see until the regeneration lands and re-pins both.
+
+**It leaves `cards/` alone.** The cards are committed evidence, and the usual reason to run this
+script is to check them, so the run writes into its workspace and prints where. Replacing them
+is a separate, explicit act:
+
+```bash
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c --publish
+```
+
+`--publish` replaces the committed directory of every run that produced a card, and leaves alone
+the directory of any run that did not: a refused run reaches two or three files before the
+refusal, and moving those over its committed card would delete the rendered card and the `argv`
+record with it -- four files that this revision cannot produce again, because the refusal is now
+the guide's settled answer for that run.
+
+Point the sweep at `6ec2b9c1` instead and it stops before it builds anything, naming the checks
+and the field the two disagree about, and leaves `cards/` untouched. That guard is the point:
+the two facts -- which revision is pinned, and which contract the documents are written for --
+are independently editable, and this directory has now broken in both directions by letting them
+drift apart silently. The check reads `readiness.py`'s own field lists
+(`AGENT_KNOBS_DOCUMENT_FIELDS`, `DISCOVERED_KNOB_FIELDS`, `BUILD_CHECK_FIELDS`) from whichever
+checkout it is handed, so *which fields a document may carry* is settled by the guide rather than
+by a copy of its rules kept here. One thing it cannot read that way: **which fields are
+required**, because the guide expresses that in its control flow rather than as data. So
+`source_lines` is named in `score_bank.py`, next to a comment saying it is the one hardcoded
+coordinate in the check -- and if a revision renames a field list, the run says on stderr that
+that half of every document went unchecked rather than passing in silence.
+
+**Exit status:** 0 when every run scored, 1 when the guide refused one or more, 2 when the
+documents and the guide disagree, 3 when something of ours broke -- our builder, our probe. The
+last never records a row and never publishes: `build.py` failing says nothing about the guide,
+and a sweep that cannot measure has no business rewriting the evidence of what the guide
+answered when it could.
 
 ## What is here
 
 | | |
 |---|---|
-| `score_bank.py` | the whole measurement. Its docstring states every choice it makes and why |
+| `score_bank.py` | the whole measurement. Its docstring states every choice it makes and why. It is in CI's `black`/`ruff`/`mypy --strict` targets and its behaviour is held by [`tests/test_score_bank.py`](../../tests/test_score_bank.py): it has twice destroyed the evidence in `cards/` while reporting that it could not measure anything, and a repair nothing tests is a repair the next edit can quietly undo |
 | `agent-knobs/ready.json` | the read of the tunable agent's source that the opening score requires |
 | `agent-knobs/no-knobs.json` | the same read of the fixed agent: a completed read that found no knobs |
 | `cards/<run>/01-build.txt` | the `build.py demo` invocation and its output |
@@ -35,7 +116,7 @@ sweep takes about two minutes.
 | `cards/<run>/04-readiness-card.txt` | **the rendered card** -- the thing the documentation quotes |
 | `cards/<run>/05-readiness.json` | the same score machine-readable: pillars, sub-scores, caps |
 | `cards/<run>/argv.json` | every invocation, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE` |
-| `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared |
+| `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
 
 ## The `--agent-knobs` document, and why it is here
 
@@ -79,6 +160,10 @@ Seventeen presets, then the comparisons the documentation makes:
 | `grid-*` | the four declared-method x declared-task-kind combinations, all on the same unchanged text comparator |
 
 ## Results
+
+**Every row below is the 2026-09-02 reading at `6ec2b9c1`, and many of them no longer
+reproduce** -- see [the drift note above](#these-figures-have-drifted-and-a-regeneration-is-pending)
+before quoting one.
 
 Pillar weights are the default 40 dataset / 35 evaluation / 25 agent. `*` marks a cap that
 blocks (the card prints `FIX BEFORE PAID RUN`); the others are ceilings only.

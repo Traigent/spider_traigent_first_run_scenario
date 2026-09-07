@@ -353,10 +353,32 @@ the number a finished run reports is not the one in this table, and should not b
 
 **Measured with the guide's own `preflight.py`, `calibrate_evaluator.py` and `readiness.py`, at
 guide revision `6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9` (`6ec2b9c1`), on 2026-09-02.**
-Rebuild the whole table with one command:
+
+> **These numbers have drifted and are not being republished as current.** Re-running the same
+> sweep on 2026-09-06 against the guide's trunk at `6e18086e` returned a materially different
+> table -- the agent pillar reads 0 rather than 70 throughout, `checked` opens at 45 rather than
+> 86, `hand-written` at 45 rather than 74, several `proceed` actions have become
+> `complete-calibration`, and two runs this file argues from have been answered by the guide:
+> `no-agent` ("**The card says proceed**") and `ready--without-agent-knobs` both open at
+> **25 NOT READY `connect-agent`** now, under an `agent-absent` cap. The projects here are
+> unchanged; the tool being measured moved. A regeneration is pending and deliberately held
+> until the guide changes now in flight have landed, because a table re-measured ahead of them
+> would be stale the day they merged.
+> [`docs/measurements/README.md`](docs/measurements/README.md#these-figures-have-drifted-and-a-regeneration-is-pending)
+> has the run-by-run detail. **Every score, band, action and cap in this file, and every
+> sentence keyed to one, is a reading of `6ec2b9c1` on 2026-09-02 and nothing more.**
+
+Rebuild the table with one command. It runs at `6e18086e`, not at the pinned revision above: the
+agent-source documents the sweep hands to `readiness.py` were repaired for the contract that
+revision reads, and `6ec2b9c1` refuses them -- so the sweep stops there before building
+anything, and says which field the two disagree about. What comes back is today's reading, not
+the table below. **It does not overwrite the committed cards**: the run writes into its own
+workspace and prints where, and only `--publish` replaces what is under
+`docs/measurements/cards/`.
 
 ```bash
-python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
 ```
 
 Every invocation and every captured output is committed under
@@ -668,9 +690,12 @@ environment of their own:
 python3 -m venv .venv-dev
 .venv-dev/bin/python -m pip install -r requirements-dev.txt
 
-.venv-dev/bin/black --check build.py spider tests components
-.venv-dev/bin/ruff check build.py spider tests components
-.venv-dev/bin/mypy --strict build.py spider/build_slice.py
+.venv-dev/bin/black --check build.py spider tests components \
+    docs/measurements/score_bank.py
+.venv-dev/bin/ruff check build.py spider tests components \
+    docs/measurements/score_bank.py
+.venv-dev/bin/mypy --strict build.py spider/build_slice.py \
+    docs/measurements/score_bank.py
 .venv-dev/bin/mypy --check-untyped-defs --ignore-missing-imports \
     --explicit-package-bases --disable-error-code=var-annotated components
 python3 build.py check
@@ -689,15 +714,24 @@ something they open and edit, and `--strict` there would mean annotating the ver
 customer is meant to read.
 
 `check` validates the components and the committed data. The tests re-run all 300 recorded
-queries, so they take a moment; that is the point of them.
+queries, so they take a moment; that is the point of them. `docs/measurements/score_bank.py` is
+in the static targets and `tests/test_score_bank.py` holds its behaviour, for a specific reason:
+it is the program that produces every published readiness figure, it has twice destroyed the
+committed evidence under `docs/measurements/cards/` on its way to reporting that it could not
+measure anything, and while it sat outside every check here those repairs could have been
+reverted with CI still green.
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) is authoritative for exactly what runs
 -- skipping any of it here is what turns a pull request red there.
 
-The score table is not in that list, because it needs a checkout of somebody else's repository
--- but no network, and no install. Re-measure it separately whenever the guide moves:
+The score table itself is not in that list, because *measuring* it needs a checkout of somebody
+else's repository -- but no network, and no install. Re-measure it separately whenever the guide moves. The run
+leaves the committed cards alone unless `--publish` is passed, and it must be told which
+revision it is measuring at while the pin and the agent-source documents disagree
+([why](docs/measurements/README.md#reproducing-it)):
 
 ```bash
-python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
 ```
 
 To rebuild the data slice itself -- rarely needed, and it requires the source Spider pool:
