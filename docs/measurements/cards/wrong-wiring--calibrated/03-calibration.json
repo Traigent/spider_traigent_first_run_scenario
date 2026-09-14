@@ -72,7 +72,8 @@
         "equivalent_good": 0.0,
         "good": 0.0,
         "partial": 0.0
-      }
+      },
+      "seam_probes": []
     },
     {
       "checks": {
@@ -146,7 +147,8 @@
         "equivalent_good": 0.0,
         "good": 0.0,
         "partial": 0.0
-      }
+      },
+      "seam_probes": []
     },
     {
       "checks": {
@@ -220,7 +222,8 @@
         "equivalent_good": 0.0,
         "good": 0.0,
         "partial": 0.0
-      }
+      },
+      "seam_probes": []
     },
     {
       "checks": {
@@ -294,11 +297,21 @@
         "equivalent_good": 0.0,
         "good": 0.0,
         "partial": 0.0
-      }
+      },
+      "seam_probes": []
     }
   ],
   "coverage_note": "Distinct names and payloads are structural checks only; calibration relies on the coding assistant's recorded evidence-backed semantic-coverage review of materially distinct inputs, outcome classes, and rubric/schema branches, including mode/threshold rationale, gaps, and verdict.",
   "exception_probe_advisory": "This evaluator returned an ordinary 0.0 for one or more exception or malformed-output probes in: one aggregate over one table - the recorded query rewritten with different spacing, keyword case, and a trailing semicolon (value-error, type-error, syntax-error, json-decode-error, runtime-error); two columns with a quoted value - double quotes rewritten as single, and the case inside the value left alone (value-error, type-error, syntax-error, json-decode-error, runtime-error); two aggregates in a list - comma spacing folded while the quoted continent name keeps its case (value-error, type-error, syntax-error, json-decode-error, runtime-error); a not-equal filter - a rewrite returning exactly the recorded rows is different text and is rejected (value-error, type-error, syntax-error, json-decode-error, runtime-error). That is consistent with a swallowed parser or evaluator exception, but it can also be a deliberate rejection of an unsupported or malformed output with zero. This advisory does not prove the cause or change calibration PASS. Inspect the exception path and ensure genuine parser/runtime failures propagate distinctly before optimizing.",
+  "execution_scope": {
+    "files": {
+      "scorer": "$PROJECT/evaluator.py"
+    },
+    "unread": [],
+    "walk": "preflight.candidate_execution_witnesses",
+    "witnesses": [],
+    "witnesses_are_one_directional": true
+  },
   "outcome_classes_covered": [
     "a different filter value is rejected",
     "a keyword-case and quote-style respelling of the recorded query is accepted",

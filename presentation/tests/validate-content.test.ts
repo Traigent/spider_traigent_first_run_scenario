@@ -16,7 +16,7 @@ import { SOURCE_SEPARATOR, type PresentationSpec } from "../src/model";
 const presentationRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const GUIDE_REPOSITORY = "Traigent/traigent-first-run";
-const GUIDE_REVISION = "75d338c31c97643c6a6d28a6aeef582d7b938db8";
+const GUIDE_REVISION = "9eaabbb2dca51a64bfca9fcc437d9459209fc769";
 
 const CORE_SLIDE_IDS = [
   "ready-to-optimize",
@@ -65,7 +65,7 @@ const APPENDIX_SLIDE_IDS = [
 ];
 
 const CUSTOMER_PROMPT =
-  "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
+  "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run beside my project, outside its root,\nand follow the clone's GUIDE.md while keeping my project as the working directory.";
 
 // Phrases from the internal tooling that tests the guide. The deck is about
 // the guide alone, so none of them may appear on any rendered surface.

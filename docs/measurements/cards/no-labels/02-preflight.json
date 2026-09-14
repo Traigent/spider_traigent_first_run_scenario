@@ -19,9 +19,31 @@
   },
   {
     "check": "sdk-version",
-    "status": "SKIP",
-    "detail": "traigent is not installed yet; verify it in the isolated environment after installation",
-    "metrics": null
+    "status": "PASS",
+    "detail": "traigent 0.26.0",
+    "metrics": {
+      "installed": "0.26.0",
+      "tested": "0.26.0"
+    }
+  },
+  {
+    "check": "existing-traigent-use",
+    "status": "PASS",
+    "detail": "this project does not list traigent among its dependencies",
+    "metrics": {
+      "declared_in": []
+    }
+  },
+  {
+    "check": "env-shadowed-key",
+    "status": "PASS",
+    "detail": "no credential or route name is masking a different value in the shell and .env",
+    "metrics": {
+      "shadowed_variables": [],
+      "blank_process_masks": [],
+      "fingerprints": {},
+      "route_values": {}
+    }
   },
   {
     "check": "provider-credentials",
@@ -112,7 +134,54 @@
     "check": "dataset-ids",
     "status": "PASS",
     "detail": "stable ids are unique",
-    "metrics": null
+    "metrics": {
+      "duplicate_ids": 0,
+      "rows_without_id": 0,
+      "generated_rows_without_id": 0,
+      "row_id_digests": [
+        "09b1d2dd75647765",
+        "0eb4649235b89c35",
+        "10a63b5c56f50116",
+        "255ecbeac60c7196",
+        "2565cba4ab27587d",
+        "27eaefac56918b27",
+        "295a337e8498d767",
+        "32475fb0c6a45912",
+        "34944e4699313ba8",
+        "428c9bfe109fd2f4",
+        "48e9179a106729c4",
+        "4b81662378641b77",
+        "5322f2ef5216b7f9",
+        "5414f27ca28399e9",
+        "55372f8ae3cf4a91",
+        "5670717f15a34d9d",
+        "58415e6bd7407336",
+        "636053cf2fe5913e",
+        "6c4d3002a09c5893",
+        "7b8490edcf3e365c",
+        "7cb7330d585a4d1e",
+        "8558e2103dae7dc8",
+        "8cb24bf2fa86b98d",
+        "98ad6612f2a7d395",
+        "9d7f2aea05e3a763",
+        "9e171d20bca0641d",
+        "a05120cedba39951",
+        "ab46ee7b56df1312",
+        "b0a89b60434dbbc1",
+        "c0226979476e0ee3",
+        "c34f2a470da27c08",
+        "c5677801fb95218b",
+        "c66428823e572aaf",
+        "d745e6f5913d43a2",
+        "e0cb5c36dc697e38",
+        "e28ba56c08c9b85e",
+        "e397c631743decd4",
+        "e9de0e9ee1fe38c2",
+        "f7620baf579e5beb",
+        "f7e410a7cb3e1e03"
+      ],
+      "run_row_id_digests": []
+    }
   },
   {
     "check": "dataset-shape",
@@ -126,7 +195,8 @@
     "detail": "evaluator.py parses as valid Python; this proves nothing about its scoring behavior, which is not executed here",
     "metrics": {
       "exists": true,
-      "parses": true
+      "parses": true,
+      "executes": false
     }
   }
 ]

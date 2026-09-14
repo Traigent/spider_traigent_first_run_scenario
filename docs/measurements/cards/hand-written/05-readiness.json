@@ -1,7 +1,36 @@
 {
-  "band": "WORKABLE",
+  "agent_route_unverified": true,
+  "agent_source_read": true,
+  "agent_unfollowed_settings": [
+    [
+      "model",
+      3
+    ],
+    [
+      "prompt_style",
+      2
+    ],
+    [
+      "schema_context",
+      3
+    ],
+    [
+      "temperature",
+      2
+    ]
+  ],
+  "band": "PARTIAL",
   "band_limited_by_confidence": false,
+  "band_limited_by_unread_answers": false,
   "caps": [
+    {
+      "action_kind": "vary-knobs",
+      "asks": false,
+      "blocks": false,
+      "ceiling": 45,
+      "condition": "agent-no-varying-knobs",
+      "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+    },
     {
       "action_kind": "add-examples",
       "asks": true,
@@ -11,28 +40,31 @@
       "reason": "only 8 comparable example(s) - one example moves the score by about 12 points, so a configuration can look better by winning a single row. Treat any difference as a hint, not a result. This run can write generated examples up to 28 rows in total while preserving your project's existing tuning/held-out split, and stops there. It asks first, and rows it writes are scored as generated."
     }
   ],
-  "confidence": 0.87,
+  "confidence": 0.86,
   "gaps": [
+    "agent-no-varying-knobs: The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search.",
     "dataset-below-measurable-size: only 8 comparable example(s) - one example moves the score by about 12 points, so a configuration can look better by winning a single row. Treat any difference as a hint, not a result. This run can write generated examples up to 28 rows in total while preserving your project's existing tuning/held-out split, and stops there. It asks first, and rows it writes are scored as generated.",
-    "agent/search-space: static source verification established possible settings model, prompt_style, schema_context; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 18 distinct configurations; no trial budget was declared, so nothing here says how much of it this run compares; declaring `max_trials` is what lets this reach full credit - undeclared, it is held one step below; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not verify that changing this setting changes the request on the selected agent path; no source defect is inferred, and the enhanced run can settle this dimension",
+    "agent/search-space: the source read found candidate settings, but this narrow static check could not verify how they reach the selected local call: model: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; prompt_style: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; schema_context: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension. It has not established an opening search dimension; their cited options come to 36 configurations if they vary, which this read has not established either way",
     "dataset/power: 8 to tune on / 2 held back; 8 comparable examples - a wiring check, not a score",
-    "evaluation/task-fit: normalized-exact is a poor ruler for code-sql output",
+    "evaluation/task-fit: normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output",
     "dataset/diversity could not be measured - not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean",
-    "agent/output-contract could not be measured - not independently verified; excluded from this score. Assistant observation: the answer's shape is constrained (agent.py:59 and agent.py:60-63 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text.)",
-    "agent/prompt could not be measured - not independently verified; excluded from this score. Assistant observation: a prompt, no worked examples in it (agent.py:304-318 build_prompt assembles the exact text sent, and agent.py:378-383 passes it as the single user message; no worked examples ride with it.)",
-    "agent/control-flow could not be measured - not independently verified; excluded from this score. Assistant observation: one call per input, so it ends (agent.py:387-406 run() is straight-line: one call_model call per input, no loop and no retry.)"
+    "agent/output-contract could not be measured - not independently verified; excluded from this score. Assistant observation, which nothing here checks: from the checklist, the answer's shape is constrained; in its own words, 'agent.py:59 and agent.py:61-62 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text on both of its paths: agent.py:339 where the model added no fence, agent.py:346 where it did.' Read from agent.py, 59: \"direct\": \"Output the SQLite query only -- no explanation, no markdow...; 61: \"First outline the query plan (tables, joins, filters, aggregation) a... (+2 more cited line(s))",
+    "agent/prompt could not be measured - not independently verified; excluded from this score. Assistant observation, which nothing here checks: from the checklist, a prompt, no worked examples in it; in its own words, 'agent.py:310-318 build_prompt assembles the exact text sent -- agent.py:313 appends the question and agent.py:318 joins the parts -- and agent.py:387 passes it as the single user message; no worked examples ride with it.' Read from agent.py, 310: parts = [; 313: f\"\\\\nQuestion: {question}\\\\nSQL:\", (+2 more cited line(s))",
+    "agent/control-flow could not be measured - not independently verified; excluded from this score. Assistant observation (no contradicting loop in the selected function's own body, which does not establish that it ends): from the checklist, one call per input, so it ends; in its own words, 'agent.py:392-411 run() is straight-line: agent.py:405-411 is its single return, calling call_model once at agent.py:406, with no loop and no retry.' Read from agent.py, 392: def run(input_text, config):; 405: return strip_code_fence( (+1 more cited line(s))",
+    "agent/tools could not be measured - the document declares no tools, so tool wiring was not checked here. Assistant observation, which nothing here checks: agent.py declares no tools; agent.py:381 imports litellm and the agent's only outbound call is the completion at agent.py:383. Read from agent.py, 381: import litellm; 383: answer = litellm.completion("
   ],
   "knobs": [],
-  "overall": 74,
+  "open_asks": [],
+  "overall": 45,
   "pillars": [
     {
-      "confidence": 0.81,
+      "confidence": 0.77,
       "name": "agent",
-      "score": 70,
+      "score": 0,
       "subscores": [
         {
           "applicable": true,
-          "evidence": "not independently verified; excluded from this score. Assistant observation: one call per input, so it ends (agent.py:387-406 run() is straight-line: one call_model call per input, no loop and no retry.)",
+          "evidence": "not independently verified; excluded from this score. Assistant observation (no contradicting loop in the selected function's own body, which does not establish that it ends): from the checklist, one call per input, so it ends; in its own words, 'agent.py:392-411 run() is straight-line: agent.py:405-411 is its single return, calling call_model once at agent.py:406, with no loop and no retry.' Read from agent.py, 392: def run(input_text, config):; 405: return strip_code_fence( (+1 more cited line(s))",
           "maximum": 7.0,
           "measured": false,
           "name": "control-flow",
@@ -41,7 +73,7 @@
         },
         {
           "applicable": true,
-          "evidence": "not independently verified; excluded from this score. Assistant observation: the answer's shape is constrained (agent.py:59 and agent.py:60-63 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text.)",
+          "evidence": "not independently verified; excluded from this score. Assistant observation, which nothing here checks: from the checklist, the answer's shape is constrained; in its own words, 'agent.py:59 and agent.py:61-62 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text on both of its paths: agent.py:339 where the model added no fence, agent.py:346 where it did.' Read from agent.py, 59: \"direct\": \"Output the SQLite query only -- no explanation, no markdow...; 61: \"First outline the query plan (tables, joins, filters, aggregation) a... (+2 more cited line(s))",
           "maximum": 8.0,
           "measured": false,
           "name": "output-contract",
@@ -50,7 +82,7 @@
         },
         {
           "applicable": true,
-          "evidence": "not independently verified; excluded from this score. Assistant observation: a prompt, no worked examples in it (agent.py:304-318 build_prompt assembles the exact text sent, and agent.py:378-383 passes it as the single user message; no worked examples ride with it.)",
+          "evidence": "not independently verified; excluded from this score. Assistant observation, which nothing here checks: from the checklist, a prompt, no worked examples in it; in its own words, 'agent.py:310-318 build_prompt assembles the exact text sent -- agent.py:313 appends the question and agent.py:318 joins the parts -- and agent.py:387 passes it as the single user message; no worked examples ride with it.' Read from agent.py, 310: parts = [; 313: f\"\\\\nQuestion: {question}\\\\nSQL:\", (+2 more cited line(s))",
           "maximum": 8.0,
           "measured": false,
           "name": "prompt",
@@ -59,16 +91,16 @@
         },
         {
           "applicable": true,
-          "evidence": "static source verification established possible settings model, prompt_style, schema_context; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 18 distinct configurations; no trial budget was declared, so nothing here says how much of it this run compares; declaring `max_trials` is what lets this reach full credit - undeclared, it is held one step below; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not verify that changing this setting changes the request on the selected agent path; no source defect is inferred, and the enhanced run can settle this dimension",
+          "evidence": "the source read found candidate settings, but this narrow static check could not verify how they reach the selected local call: model: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; prompt_style: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; schema_context: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension. It has not established an opening search dimension; their cited options come to 36 configurations if they vary, which this read has not established either way",
           "maximum": 100.0,
           "measured": true,
           "name": "search-space",
-          "value": 70.0,
+          "value": 0.0,
           "withheld": false
         },
         {
-          "applicable": false,
-          "evidence": "the agent declares no tools, so tool wiring does not apply (agent.py declares no tools; the agent's only outbound call is the completion at agent.py:378.)",
+          "applicable": true,
+          "evidence": "the document declares no tools, so tool wiring was not checked here. Assistant observation, which nothing here checks: agent.py declares no tools; agent.py:381 imports litellm and the agent's only outbound call is the completion at agent.py:383. Read from agent.py, 381: import litellm; 383: answer = litellm.completion(",
           "maximum": 7.0,
           "measured": false,
           "name": "tools",
@@ -136,7 +168,7 @@
       "subscores": [
         {
           "applicable": true,
-          "evidence": "4 calibration case(s); every authored check passed",
+          "evidence": "4 calibration case(s); every authored check passed; this score read that result and did not take the measurement itself",
           "maximum": 40.0,
           "measured": true,
           "name": "calibration",
@@ -163,7 +195,7 @@
         },
         {
           "applicable": true,
-          "evidence": "normalized-exact is a poor ruler for code-sql output",
+          "evidence": "normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output",
           "maximum": 25.0,
           "measured": true,
           "name": "task-fit",
@@ -175,9 +207,42 @@
   ],
   "provenance_assumption": null,
   "recommended_action": "add-examples",
-  "schema_version": 2,
+  "repeated_inputs": null,
+  "schema_version": 6,
   "status": "OK",
-  "weighted_average": 77,
+  "unmeasured": [
+    {
+      "check": "control-flow",
+      "pillar": "agent",
+      "reason": "absent",
+      "weight": 7.0
+    },
+    {
+      "check": "output-contract",
+      "pillar": "agent",
+      "reason": "absent",
+      "weight": 8.0
+    },
+    {
+      "check": "prompt",
+      "pillar": "agent",
+      "reason": "absent",
+      "weight": 8.0
+    },
+    {
+      "check": "tools",
+      "pillar": "agent",
+      "reason": "absent",
+      "weight": 7.0
+    },
+    {
+      "check": "diversity",
+      "pillar": "dataset",
+      "reason": "absent",
+      "weight": 20.0
+    }
+  ],
+  "weighted_average": 59,
   "weights": {
     "agent": 25.0,
     "dataset": 40.0,

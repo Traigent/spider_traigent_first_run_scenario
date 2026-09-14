@@ -2,27 +2,41 @@ $ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --task-kin
 TRAIGENT OPTIMIZATION READINESS        0/100  NOT READY
 
   BLOCKER  0/100 NOT READY is what your evidence supports, and that stands. Whether the
-           paid run may start is a separate question: 2 things have to be cleared
-           first, each marked FIX BEFORE PAID RUN below. Fix them, run this score
-           again, and the paid comparison can start.
+           paid run may start is a separate question: 3 things have to be cleared
+           first, each marked FIX BEFORE PAID RUN below. Your assistant will explain
+           and address these items with you, then recheck readiness before any paid
+           comparison.
 
-  AGENT       --------------------  0/100  (0 of 5 checks measured)
-    ? whether it ends, and on what                     no reading of how the agent is built reached this score; reading the agent is what answers this
-    ? whether the answer's shape is pinned down        no reading of how the agent is built reached this score; reading the agent is what answers this
-    ? what the model is told, and shown                no reading of how the agent is built reached this score; reading the agent is what answers this
+Confirmed absence is a measured structural finding. The missing component's quality has not been tested.
+
+  AGENT       --------------------  0/100  (no agent source read; 0 of 5 checks measured)
+    ? no reading of how the agent is built reached this score; reading the agent is what answers this
+        ? whether it ends, and on what
+        ? whether the answer's shape is pinned down
+        ? what the model is told, and shown
+        ? tools it declares, and can reach
     ? how many settings-combinations there are to try  no settings document was provided to this score
-    ? tools it declares, and can reach                 no reading of how the agent is built reached this score; reading the agent is what answers this
     not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
 
   DATASET     --------------------  0/100  (3 of 5 checks measured)
     ? no dataset provided to this score
+        ? range of difficulty
+        ? repeated or dominant answers
+        !! answers to score against
+        !! examples to compare on
+        !! where the rows came from
 
   EVALUATION  --------------------  0/100  (1 of 4 checks measured)
     ? no evaluator
+        !! tried on answers already known right and wrong
+        ? separates good answers from bad
+        ? same answer every time
+        ? right kind of check for this output
 
   FIX BEFORE PAID RUN No dataset was provided to this score, so nothing can be measured.
+  FIX BEFORE PAID RUN No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one.
   FIX BEFORE PAID RUN No evaluation method is connected, so no result can be trusted.
-  WOULD LIMIT TO 45 No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them.
 
   Local pre-run planning estimate, not a probability or measured optimization result.
+Action: Choose existing examples or a walkthrough dataset with your assistant.
 exit=0

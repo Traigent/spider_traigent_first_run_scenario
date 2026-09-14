@@ -5,97 +5,50 @@ reproduce it is in this directory: the script, the two hand-written agent reads 
 the captured invocation and full output of every run.
 
 **Measured against the first-run guide at revision
-`6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9` (`6ec2b9c1`), on 2026-09-02, on Python 3.12.3.**
+`9eaabbb2dca51a64bfca9fcc437d9459209fc769` (`9eaabbb2`), on 2026-09-15, on Python 3.12.3.**
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
 
-## These figures have drifted, and a regeneration is pending
-
-> **Read this before quoting any number in this repository.** The tool moved. The same sweep,
-> unchanged, was re-run on 2026-09-06 against the guide's `first-run-guide` trunk at `6e18086e`
-> and did not return this table. What changed there, measured rather than guessed:
->
-> - the **agent pillar reads 0** on every run instead of 70. The guide's static read no longer
->   follows any of the four declared settings from the agent's source to the request, so
->   `agent-no-varying-knobs` 45 now appears on almost every card. The citations in
->   `agent-knobs/` are accepted and quoted back onto the card; it is the route check behind
->   them that changed.
-> - **`checked` and the four `grid-*` runs open at 45 PARTIAL**, not 86 STRONG and 92 EXCELLENT.
->   `hand-written` opens at 45, not 74. `wrong-answers--calibrated` at 45, not 83.
-> - several runs that read `proceed` now read `complete-calibration`, and several that read
->   PARTIAL now read NOT READY: `no-labels` 30 PARTIAL is 19 NOT READY, and `logs-only`'s
->   action moves from `label-data` to `connect-agent`.
-> - **two of this repository's own criticisms of the guide have been answered, and both are
->   listed here rather than only the flattering ones.** `no-agent` -- the project with no agent
->   at all, quoted below and in the README as opening 45 PARTIAL `proceed` -- now opens **25 NOT
->   READY `connect-agent`**, with an `agent-absent` cap. `ready--without-agent-knobs`, the run
->   whose point was that withholding the agent read changes nothing, likewise opens **25 NOT
->   READY `connect-agent`** rather than the same 45 as `ready`.
-> - **`best-case--off-method-calibration` cannot be measured at all.** The guide now refuses to
->   calibrate a scorer that reaches a SQL engine, which is the finding that run existed to
->   make, made better by the tool itself.
->
-> The drift is in the tool being measured. Nothing about the projects in this repository
-> changed, and the sweep still completes -- at `6e18086e`, which is not the revision this
-> directory pins; see [Reproducing it](#reproducing-it) for what that costs a reader today.
->
-> **Nothing has been re-measured here on purpose.** Several changes to the guide are in flight
-> and about to land; a table regenerated ahead of them would be stale the day it merged. The
-> regeneration is a separate, deliberate step -- re-pin `PINNED_REVISION`, run the sweep, and
-> rewrite this table and the prose keyed to it from `cards/results.json`. Until it lands, every
-> score, band, action, pillar and cap quoted anywhere in this repository is a reading of
-> `6ec2b9c1` on 2026-09-02 and is not what today's guide returns.
-
 ## Reproducing it
-
-**The pin and the documents beside it currently describe two different guides, and this is where
-that shows.** The `--agent-knobs` documents under `agent-knobs/` carry `source_lines` on every
-settled `build` check. `6ec2b9c1`, the revision every figure below was measured at, does not
-read that field and refuses a document carrying it; `6e18086e` reads it and requires it. So the
-sweep runs at `6e18086e` and is refused at the pin, and the command below names the revision it
-actually runs at:
 
 ```bash
 git clone https://github.com/Traigent/traigent-first-run ~/code/traigent-first-run
-git -C ~/code/traigent-first-run checkout 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
+git -C ~/code/traigent-first-run checkout 9eaabbb2dca51a64bfca9fcc437d9459209fc769
 
-python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
-    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
 
 It builds each project, scores it, deletes it, and writes a card for each. It needs nothing
 installed, reaches no network, and never uses `--venv ready`. On this machine the whole sweep
-takes about two minutes. **It does not reproduce the table below** -- see the drift note above;
-it reproduces today's reading, which is what a reader checking this directory should expect to
-see until the regeneration lands and re-pins both.
+takes about two minutes.
 
 **It leaves `cards/` alone.** The cards are committed evidence, and the usual reason to run this
 script is to check them, so the run writes into its workspace and prints where. Replacing them
 is a separate, explicit act:
 
 ```bash
-python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
-    --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c --publish
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run --publish
 ```
 
 `--publish` replaces the committed directory of every run that produced a card, and leaves alone
 the directory of any run that did not: a refused run reaches two or three files before the
 refusal, and moving those over its committed card would delete the rendered card and the `argv`
-record with it -- four files that this revision cannot produce again, because the refusal is now
-the guide's settled answer for that run.
+record with it.
 
-Point the sweep at `6ec2b9c1` instead and it stops before it builds anything, naming the checks
-and the field the two disagree about, and leaves `cards/` untouched. That guard is the point:
-the two facts -- which revision is pinned, and which contract the documents are written for --
-are independently editable, and this directory has now broken in both directions by letting them
-drift apart silently. The check reads `readiness.py`'s own field lists
-(`AGENT_KNOBS_DOCUMENT_FIELDS`, `DISCOVERED_KNOB_FIELDS`, `BUILD_CHECK_FIELDS`) from whichever
-checkout it is handed, so *which fields a document may carry* is settled by the guide rather than
-by a copy of its rules kept here. One thing it cannot read that way: **which fields are
-required**, because the guide expresses that in its control flow rather than as data. So
-`source_lines` is named in `score_bank.py`, next to a comment saying it is the one hardcoded
-coordinate in the check -- and if a revision renames a field list, the run says on stderr that
-that half of every document went unchecked rather than passing in silence.
+**One run cannot be measured at `9eaabbb2`.** `best-case--off-method-calibration` asks the
+calibration tool to run the execution scorer against the project's databases, and the tool now
+refuses to import a scorer whose walk reaches a SQL engine (exit 2). The sweep records the
+refusal in `results.json` and leaves `cards/best-case--off-method-calibration/` as it was: the
+`6ec2b9c1` card, 91 EXCELLENT, kept as the evidence for a number the README no longer prints
+and a run the guide no longer performs.
+
+The sweep checks one more thing before it builds anything: that the documents under
+`agent-knobs/` carry only fields the guide at the pin reads. It reads `readiness.py`'s own
+field lists from the checkout it is handed, so *which fields a document may carry* is settled
+by the guide rather than by a copy of its rules kept here; which fields are *required* the
+guide expresses in control flow rather than as data, so `source_lines` is the one hardcoded
+coordinate in the check, named in `score_bank.py` beside a comment saying so. At `9eaabbb2`
+the documents and the pin agree, which is why the command above needs no `--revision`.
 
 **Exit status:** 0 when every run scored, 1 when the guide refused one or more, 2 when the
 documents and the guide disagree, 3 when something of ours broke -- our builder, our probe. The
@@ -117,6 +70,14 @@ answered when it could.
 | `cards/<run>/05-readiness.json` | the same score machine-readable: pillars, sub-scores, caps |
 | `cards/<run>/argv.json` | every invocation, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE` |
 | `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
+
+Two things about the rows at `9eaabbb2`. A cap's `ceiling` may be `null` in `results.json`
+and on the card: such a cap discloses a finding without bounding the score
+(`evaluator-calibration-refused`, ceiling null, blocks false). And the guide now holds the top
+two bands at WORKABLE until a review of the expected answers has entered through
+`--row-review`, which this sweep never passes; no row here reaches those bands anyway, so the
+hold is inert in this table (`band_limited_by_unread_answers` is false on every card), and it
+would become the binding limit on any run that climbed past 74 without a row review.
 
 ## The `--agent-knobs` document, and why it is here
 
@@ -152,7 +113,7 @@ Seventeen presets, then the comparisons the documentation makes:
 | run | what it is for |
 |---|---|
 | the 17 presets | the score table in the README |
-| `best-case--off-method-calibration` | the number reached by calibrating an executing scorer, which the guide's opening gate bars |
+| `best-case--off-method-calibration` | the number once reached by calibrating an executing scorer; refused by the tool at `9eaabbb2`, its `6ec2b9c1` card retained |
 | `wrong-answers--calibrated` | `--preset wrong-answers --calibration present` |
 | `wrong-wiring--calibrated` | `--preset wrong-wiring --calibration present` |
 | `fake-ruler--uncalibrated` | `--preset fake-ruler --calibration none` |
@@ -161,41 +122,44 @@ Seventeen presets, then the comparisons the documentation makes:
 
 ## Results
 
-**Every row below is the 2026-09-02 reading at `6ec2b9c1`, and many of them no longer
-reproduce** -- see [the drift note above](#these-figures-have-drifted-and-a-regeneration-is-pending)
-before quoting one.
+**Every row below is the 2026-09-15 reading at `9eaabbb2`**, taken from `cards/results.json`.
+The agent pillar reads 0 throughout, for the reason the repository README gives under "What
+the source reader sees": the guide's static reader follows none of the demo agents' settings to
+the request, and every project with an agent sits under `agent-no-varying-knobs` 45.
 
 Pillar weights are the default 40 dataset / 35 evaluation / 25 agent. `*` marks a cap that
-blocks (the card prints `FIX BEFORE PAID RUN`); the others are ceilings only.
+blocks (the card prints `FIX BEFORE PAID RUN`); the others are ceilings only, and a cap whose
+ceiling reads `none` discloses something without bounding the number
+(`evaluator-calibration-refused` is the one such cap in this table).
 
 | run | score | band | action | agent | dataset | evaluation | caps |
 |---|---|---|---|---|---|---|---|
-| `empty` | 0 | NOT READY | `get-data` | 0 | 0 | 0 | `dataset-absent` 20\* · `evaluator-absent` 40\* · `agent-no-varying-knobs` 45 |
-| `logs-only` | 7 | NOT READY | `label-data` | 0 | 18 | 0 | `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* · `agent-no-varying-knobs` 45 |
-| `no-data` | 20 | NOT READY | `get-data` | 70 | 0 | 33 | `dataset-absent` 20\* · `evaluator-unvalidated` 45 |
-| `agent-and-logs` | 25 | NOT READY | `label-data` | 70 | 18 | 0 | `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* |
-| `fake-ruler` | 25 | NOT READY | `repair-evaluator` | 70 | 98 | 28 | `evaluator-invalid` 25\* |
-| `no-labels` | 30 | PARTIAL | `label-data` | 70 | 18 | 33 | `dataset-no-expected-outputs` 30\* · `evaluator-unvalidated` 45 |
-| `duplicated-data` | 35 | PARTIAL | `repair-dataset` | 70 | 86 | 33 | `dataset-integrity-fail` 35\* · `evaluator-unvalidated` 45 |
-| `no-eval` | 40 | PARTIAL | `connect-evaluator` | 70 | 98 | 0 | `evaluator-absent` 40\* |
+| `empty` | 0 | NOT READY | `get-data` | 0 | 0 | 0 | `dataset-absent` 20\* · `agent-absent` 25\* · `evaluator-absent` 40\* |
+| `logs-only` | 7 | NOT READY | `connect-agent` | 0 | 18 | 0 | `agent-absent` 25\* · `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* |
+| `agent-and-logs` | 7 | NOT READY | `label-data` | 0 | 18 | 0 | `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* · `agent-no-varying-knobs` 45 |
+| `no-data` | 12 | NOT READY | `get-data` | 0 | 0 | 33 | `dataset-absent` 20\* · `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
+| `no-labels` | 19 | NOT READY | `label-data` | 0 | 18 | 33 | `dataset-no-expected-outputs` 30\* · `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
+| `fake-ruler` | 25 | NOT READY | `repair-evaluator` | 0 | 98 | 28 | `evaluator-invalid` 25\* · `agent-no-varying-knobs` 45 |
+| `no-agent` | 25 | NOT READY | `connect-agent` | 0 | 98 | 33 | `agent-absent` 25\* · `evaluator-unvalidated` 45 |
+| `duplicated-data` | 35 | PARTIAL | `repair-dataset` | 0 | 86 | 33 | `dataset-integrity-fail` 35\* · `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 · `dataset-repeated-rows` 89 |
+| `no-eval` | 39 | PARTIAL | `connect-evaluator` | 0 | 98 | 0 | `evaluator-absent` 40\* · `agent-no-varying-knobs` 45 |
 | `no-knobs` | 45 | PARTIAL | `vary-knobs` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45\* |
-| `ready` | 45 | PARTIAL | `proceed` | 70 | 98 | 33 | `evaluator-unvalidated` 45 |
-| `sql-exec-stop` | 45 | PARTIAL | `proceed` | 70 | 98 | 51 | `evaluator-unvalidated` 45 |
-| `no-agent` | 45 | PARTIAL | `proceed` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
-| `wrong-answers` | 45 | PARTIAL | `proceed` | 70 | 91 | 33 | `evaluator-unvalidated` 45 |
-| `wrong-wiring` | 45 | PARTIAL | `proceed` | 70 | 98 | 33 | `evaluator-unvalidated` 45 |
-| `best-case` | 45 | PARTIAL | `proceed` | 70 | 98 | 51 | `evaluator-unvalidated` 45 |
-| `hand-written` | 74 | WORKABLE | `add-examples` | 70 | 75 | 83 | `dataset-below-measurable-size` 74 |
-| `checked` | 86 | STRONG | `proceed` | 70 | 98 | 83 | none |
-| `best-case--off-method-calibration` | **91** | **EXCELLENT** | `proceed` | 70 | 98 | 99 | none |
-| `wrong-answers--calibrated` | 83 | STRONG | `proceed` | 70 | 91 | 83 | none |
-| `wrong-wiring--calibrated` | 25 | NOT READY | `repair-evaluator` | 70 | 98 | 28 | `evaluator-invalid` 25\* |
-| `fake-ruler--uncalibrated` | 45 | PARTIAL | `proceed` | 70 | 98 | 33 | `evaluator-unvalidated` 45 |
-| `ready--without-agent-knobs` | 45 | PARTIAL | `proceed` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
-| `grid-exact--code-sql` | 86 | STRONG | `proceed` | 70 | 98 | 83 | none |
-| `grid-normalized-exact--code-sql` | 86 | STRONG | `proceed` | 70 | 98 | 83 | none |
-| `grid-normalized-exact--structured` | 86 | STRONG | `proceed` | 70 | 98 | 83 | none |
-| `grid-exact--structured` | **92** | **EXCELLENT** | `proceed` | 70 | 98 | 100 | none |
+| `ready` | 45 | PARTIAL | `complete-calibration` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
+| `wrong-answers` | 45 | PARTIAL | `complete-calibration` | 0 | 91 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
+| `wrong-wiring` | 45 | PARTIAL | `complete-calibration` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
+| `hand-written` | 45 | PARTIAL | `add-examples` | 0 | 75 | 83 | `agent-no-varying-knobs` 45 · `dataset-below-measurable-size` 74 |
+| `sql-exec-stop` | 45 | PARTIAL | `confirm-evaluator-connection` | 0 | 98 | 59 | `agent-no-varying-knobs` 45 · `evaluator-calibration-refused` none |
+| `best-case` | 45 | PARTIAL | `confirm-evaluator-connection` | 0 | 98 | 59 | `agent-no-varying-knobs` 45 · `evaluator-calibration-refused` none |
+| `checked` | 45 | PARTIAL | `proceed` | 0 | 98 | 83 | `agent-no-varying-knobs` 45 |
+| `best-case--off-method-calibration` | refused | -- | -- | -- | -- | -- | `calibrate_evaluator.py` exit 2: the guide refuses to import a scorer that reaches a SQL engine; the committed directory is the `6ec2b9c1` card |
+| `wrong-answers--calibrated` | 45 | PARTIAL | `proceed` | 0 | 91 | 83 | `agent-no-varying-knobs` 45 |
+| `wrong-wiring--calibrated` | 25 | NOT READY | `repair-evaluator` | 0 | 98 | 28 | `evaluator-invalid` 25\* · `agent-no-varying-knobs` 45 |
+| `fake-ruler--uncalibrated` | 45 | PARTIAL | `complete-calibration` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
+| `ready--without-agent-knobs` | 25 | NOT READY | `connect-agent` | 0 | 98 | 33 | `agent-absent` 25\* · `evaluator-unvalidated` 45 |
+| `grid-exact--code-sql` | 45 | PARTIAL | `proceed` | 0 | 98 | 83 | `agent-no-varying-knobs` 45 |
+| `grid-normalized-exact--code-sql` | 45 | PARTIAL | `proceed` | 0 | 98 | 83 | `agent-no-varying-knobs` 45 |
+| `grid-normalized-exact--structured` | 45 | PARTIAL | `proceed` | 0 | 98 | 83 | `agent-no-varying-knobs` 45 |
+| `grid-exact--structured` | 45 | PARTIAL | `proceed` | 0 | 98 | 100 | `agent-no-varying-knobs` 45 |
 
 The band boundaries the guide uses, for reading the column: NOT READY 0-29, PARTIAL 30-54,
 WORKABLE 55-74, STRONG 75-89, EXCELLENT 90-100.
@@ -213,9 +177,10 @@ diff <(tail -n +2 ready/04-readiness-card.txt) <(tail -n +2 wrong-wiring/04-read
 
 - `wrong-wiring` and `ready` -- **byte-identical**. A scorer that never reads the model's output
   is invisible to the opening gate.
-- `best-case` and `sql-exec-stop` -- **byte-identical**. Once the guide's own gate keeps
-  calibration off an executing scorer, shipping probe answers for one changes nothing at the
-  opening.
+- `best-case` and `sql-exec-stop` -- **byte-identical**. The guide will not calibrate an
+  executing scorer on the original at the opening, so shipping probe answers for one changes
+  nothing there; both cards carry the same `evaluator-calibration-refused` disclosure and the
+  same `confirm-evaluator-connection` action.
 - `wrong-answers` and `ready` -- **not** identical, and the three differences are all about
   size rather than about the damage: dataset pillar 91 against 98, `60/60 rows` against
   `300/300`, and the comparison-size check dropping from `OK` to `!!` because a 60-row draw is
@@ -223,9 +188,13 @@ diff <(tail -n +2 ready/04-readiness-card.txt) <(tail -n +2 wrong-wiring/04-read
 
 ## The arithmetic at the top of the scale
 
-At the `ready` family's dataset 98 and agent 70, the overall score is
-`0.40x98 + 0.35xE + 0.25x70 = 56.7 + 0.35E`. EXCELLENT starts at 90, so it needs an evaluation
-pillar of **94** or better. The text comparator's calibrated evaluation pillar is **83**, which
-is 86 overall; the execution scorer's is 99, which is 91. That is the whole of the gap, and it
-is why no honest configuration in this bank opens EXCELLENT: see the README's section on
-`best-case`.
+At `6ec2b9c1`, with the `ready` family's dataset 98 and agent 70, the overall score was
+`0.40x98 + 0.35xE + 0.25x70 = 56.7 + 0.35E`; EXCELLENT starts at 90, so it needed an evaluation
+pillar of 94, the text comparator's calibrated pillar was 83 (86 overall) and the execution
+scorer's was 99 (91). At `9eaabbb2` the agent pillar is 0, so the average before any ceiling
+(`weighted_average` in each `05-readiness.json`) is `39.2 + 0.35E`: 68 for `checked` (E = 83)
+and 74 for the `exact` + `structured` declaration (E = 100), and every one of them is then held
+at 45 by the agent ceiling. The execution
+scorer no longer reaches 99 either: uncalibrated, and with task fit credited at 8/25 for a
+scorer that runs the answer, `best-case`'s evaluation pillar reads 59 with two of four checks
+measured. The README's sections on `best-case` and on the source reader have the two halves.

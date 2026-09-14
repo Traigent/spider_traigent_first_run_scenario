@@ -1,6 +1,10 @@
 {
+  "agent_route_unverified": false,
+  "agent_source_read": false,
+  "agent_unfollowed_settings": [],
   "band": "NOT READY",
   "band_limited_by_confidence": false,
+  "band_limited_by_unread_answers": false,
   "caps": [
     {
       "action_kind": "get-data",
@@ -11,27 +15,27 @@
       "reason": "No dataset was provided to this score, so nothing can be measured."
     },
     {
+      "action_kind": "connect-agent",
+      "asks": false,
+      "blocks": true,
+      "ceiling": 25,
+      "condition": "agent-absent",
+      "reason": "No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one."
+    },
+    {
       "action_kind": "connect-evaluator",
       "asks": false,
       "blocks": true,
       "ceiling": 40,
       "condition": "evaluator-absent",
       "reason": "No evaluation method is connected, so no result can be trusted."
-    },
-    {
-      "action_kind": "vary-knobs",
-      "asks": false,
-      "blocks": false,
-      "ceiling": 45,
-      "condition": "agent-no-varying-knobs",
-      "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
     }
   ],
   "confidence": 0.4,
   "gaps": [
     "dataset-absent: No dataset was provided to this score, so nothing can be measured.",
+    "agent-absent: No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one.",
     "evaluator-absent: No evaluation method is connected, so no result can be trusted.",
-    "agent-no-varying-knobs: No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them.",
     "agent/search-space could not be measured - no settings document was provided to this score",
     "evaluation/calibration: no evaluator",
     "dataset/labels: no dataset provided to this score",
@@ -42,6 +46,7 @@
     "agent/control-flow, output-contract, prompt, tools could not be measured - no reading of how the agent is built reached this score; reading the agent is what answers this"
   ],
   "knobs": [],
+  "open_asks": [],
   "overall": 0,
   "pillars": [
     {
@@ -194,8 +199,41 @@
   ],
   "provenance_assumption": null,
   "recommended_action": "get-data",
-  "schema_version": 2,
+  "repeated_inputs": null,
+  "schema_version": 6,
   "status": "BLOCKED",
+  "unmeasured": [
+    {
+      "check": "difficulty",
+      "pillar": "dataset",
+      "reason": "absent",
+      "weight": 15.0
+    },
+    {
+      "check": "diversity",
+      "pillar": "dataset",
+      "reason": "absent",
+      "weight": 20.0
+    },
+    {
+      "check": "probe-spread",
+      "pillar": "evaluation",
+      "reason": "absent",
+      "weight": 15.0
+    },
+    {
+      "check": "reproducibility",
+      "pillar": "evaluation",
+      "reason": "absent",
+      "weight": 20.0
+    },
+    {
+      "check": "task-fit",
+      "pillar": "evaluation",
+      "reason": "absent",
+      "weight": 25.0
+    }
+  ],
   "weighted_average": 0,
   "weights": {
     "agent": 25.0,
