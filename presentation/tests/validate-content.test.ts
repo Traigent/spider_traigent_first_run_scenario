@@ -24,7 +24,7 @@ const CORE_SLIDE_IDS = [
   "the-words-your-project",
   "the-words-of-the-run",
   "one-customer-prompt",
-  "four-asks",
+  "five-asks",
   "shared-control",
   "free-first-paid-later",
   "your-starting-point",
@@ -261,7 +261,7 @@ describe("presentation content validation", () => {
     expectValidationIssue(strayTiles, "only tiles slides may define tiles");
 
     const emptyTiles = copyPresentation();
-    slideById(emptyTiles, "four-asks").tiles = [];
+    slideById(emptyTiles, "five-asks").tiles = [];
     expectValidationIssue(emptyTiles, "tiles slides require at least one tile");
 
     const strayColumns = copyPresentation();
@@ -292,7 +292,7 @@ describe("presentation content validation", () => {
 
   it("rejects bullets stacked on a visual kind", () => {
     const candidate = copyPresentation();
-    slideById(candidate, "four-asks").bullets = ["a stray bullet"];
+    slideById(candidate, "five-asks").bullets = ["a stray bullet"];
     expectValidationIssue(
       candidate,
       "tiles slides carry their visual instead of bullets",

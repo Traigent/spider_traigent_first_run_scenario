@@ -223,7 +223,7 @@ const rawPresentation = {
       ],
     },
     {
-      id: "four-asks",
+      id: "five-asks",
       kind: "tiles",
       eyebrow: "WHAT IT ASKS YOU",
       title: "The assistant asks you five things. Nothing else.",
@@ -1591,7 +1591,7 @@ const coreSlideIds = [
   "the-words-your-project",
   "the-words-of-the-run",
   "one-customer-prompt",
-  "four-asks",
+  "five-asks",
   "shared-control",
   "free-first-paid-later",
   "your-starting-point",
