@@ -1,17 +1,20 @@
 $ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --task-kind code-sql --color never --ascii
-TRAIGENT OPTIMIZATION READINESS        40/100  PARTIAL
+TRAIGENT OPTIMIZATION READINESS        39/100  PARTIAL
 
-  BLOCKER  40/100 PARTIAL is what your evidence supports, and that stands. Whether the
+  BLOCKER  39/100 PARTIAL is what your evidence supports, and that stands. Whether the
            paid run may start is a separate question: one thing has to be cleared
-           first, marked FIX BEFORE PAID RUN below. Fix it, run this score again, and
-           the paid comparison can start.
+           first, marked FIX BEFORE PAID RUN below. Your assistant will explain and
+           address these items with you, then recheck readiness before any paid
+           comparison.
 
-  AGENT       ##############------  70/100  (1 of 4 checks measured)
-    ? whether it ends, and on what                     not independently verified; excluded from this score. Assistant observation: one call per input, so it ends (agent.py:387-406 run() is straight-line: one call_model call per input, no loop and no retry.)
-    ? whether the answer's shape is pinned down        not independently verified; excluded from this score. Assistant observation: the answer's shape is constrained (agent.py:59 and agent.py:60-63 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text.)
-    ? what the model is told, and shown                not independently verified; excluded from this score. Assistant observation: a prompt, no worked examples in it (agent.py:304-318 build_prompt assembles the exact text sent, and agent.py:378-383 passes it as the single user message; no worked examples ride with it.)
-    !! how many settings-combinations there are to try  static source verification established possible settings model, prompt_style, schema_context; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 18 distinct configurations; no trial budget was declared, so nothing here says how much of it this run compares; declaring `max_trials` is what lets this reach full credit - undeclared, it is held one step below; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not verify that changing this setting changes the request on the selected agent path; no source defect is inferred, and the enhanced run can settle this dimension
-    ? tools it declares, and can reach                 the agent declares no tools, so tool wiring does not apply (agent.py declares no tools; the agent's only outbound call is the completion at agent.py:378.)
+Confirmed absence is a measured structural finding. The missing component's quality has not been tested.
+
+  AGENT       --------------------  0/100  (agent source read; 1 of 5 checks measured)
+    ? whether it ends, and on what                     not independently verified: one call per input, so it ends
+    ? whether the answer's shape is pinned down        not independently verified: the answer's shape is constrained
+    ? what the model is told, and shown                not independently verified: a prompt, no worked examples in it
+    !! how many settings-combinations there are to try  no varying setting verified by this opening check
+    ? tools it declares, and can reach                 the document declares no tools, so tool wiring was not checked here.
     not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
 
   DATASET     ####################  98/100  (4 of 5 checks measured)
@@ -23,8 +26,16 @@ TRAIGENT OPTIMIZATION READINESS        40/100  PARTIAL
 
   EVALUATION  --------------------  0/100  (1 of 4 checks measured)
     ? no evaluator
+        !! tried on answers already known right and wrong
+        ? separates good answers from bad
+        ? same answer every time
+        ? right kind of check for this output
 
   FIX BEFORE PAID RUN No evaluation method is connected, so no result can be trusted.
+  WOULD LIMIT TO 45 The opening check has not established which settings change the request. This limits the planning score; it does not show that the agent has no settings. The request check before paid work is separate and does not raise this score.
+
+  The detailed readiness report carries the source observations and settings-check guidance.
 
   Local pre-run planning estimate, not a probability or measured optimization result.
+Action: Connect or prepare an evaluation method for this task.
 exit=0

@@ -19,9 +19,31 @@
   },
   {
     "check": "sdk-version",
-    "status": "SKIP",
-    "detail": "traigent is not installed yet; verify it in the isolated environment after installation",
-    "metrics": null
+    "status": "PASS",
+    "detail": "traigent 0.26.0",
+    "metrics": {
+      "installed": "0.26.0",
+      "tested": "0.26.0"
+    }
+  },
+  {
+    "check": "existing-traigent-use",
+    "status": "PASS",
+    "detail": "this project does not list traigent among its dependencies",
+    "metrics": {
+      "declared_in": []
+    }
+  },
+  {
+    "check": "env-shadowed-key",
+    "status": "PASS",
+    "detail": "no credential or route name is masking a different value in the shell and .env",
+    "metrics": {
+      "shadowed_variables": [],
+      "blank_process_masks": [],
+      "fingerprints": {},
+      "route_values": {}
+    }
   },
   {
     "check": "provider-credentials",
@@ -83,7 +105,8 @@
     "detail": "evaluator.py parses as valid Python; this proves nothing about its scoring behavior, which is not executed here",
     "metrics": {
       "exists": true,
-      "parses": true
+      "parses": true,
+      "executes": false
     }
   }
 ]

@@ -5,11 +5,11 @@ import {
   type SlideInput,
 } from "./model";
 
-// The two-line prompt from README.md "Start with one prompt", verbatim.
+// The three-line prompt from README.md "Start with one prompt", verbatim.
 const customerPrompt =
-  "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
+  "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run beside my project, outside its root,\nand follow the clone's GUIDE.md while keeping my project as the working directory.";
 
-const guideRevision = "75d338c31c97643c6a6d28a6aeef582d7b938db8";
+const guideRevision = "9eaabbb2dca51a64bfca9fcc437d9459209fc769";
 
 // Repository-relative paths of every guide file a slide may cite.
 const README = "README.md";
@@ -23,6 +23,16 @@ const EVALUATION =
 const READINESS = "skills/traigent-first-run/scripts/readiness.py";
 const REQUIREMENTS =
   "skills/traigent-first-run/assets/requirements-first-run.txt";
+const COMPONENT_CREATION =
+  "skills/traigent-first-run/references/component-creation.md";
+const ENVIRONMENT_INSTALL =
+  "skills/traigent-first-run/scripts/environment_install.py";
+const FIND_ENVIRONMENTS =
+  "skills/traigent-first-run/scripts/find_environments.py";
+const CALIBRATE_EVALUATOR =
+  "skills/traigent-first-run/scripts/calibrate_evaluator.py";
+const VALIDATE_RUN_LOG =
+  "skills/traigent-first-run/scripts/validate_run_log.py";
 
 // The five readiness bands, from readiness.py BAND_THRESHOLDS. Drawn on two
 // slides: once on their own, once with the cap ceilings pinned to them.
@@ -57,6 +67,11 @@ const rawPresentation = {
       EVALUATION,
       READINESS,
       REQUIREMENTS,
+      COMPONENT_CREATION,
+      ENVIRONMENT_INSTALL,
+      FIND_ENVIRONMENTS,
+      CALIBRATE_EVALUATOR,
+      VALIDATE_RUN_LOG,
     ],
   },
   slides: [
@@ -189,36 +204,36 @@ const rawPresentation = {
       kind: "handoff",
       eyebrow: "ONE PROMPT",
       title: "One prompt starts everything.",
-      body: "Paste it into your coding assistant. It clones the guide, reads your project and works in its own separate environment.",
+      body: "Paste it into your coding assistant. It clones the guide beside your project, reads your project, and installs Traigent only where you approve.",
       quote: customerPrompt,
       bullets: [
         "Clones the guide, not into your project",
         "Reads your project before proposing anything",
-        "Installs into its own .venv-traigent, never yours",
-        "Stops and says so if that environment exists",
+        "Installs only where you approve",
+        "Leaves your files and environments as they are",
       ],
       sources: [
         `${README} · Start with one prompt`,
         `${GUIDE} · Keep the guide source separate from the project being optimized`,
       ],
       notes: [
-        "The quote is the exact two-line prompt from the guide's README. It is pasted as written.",
-        "The guide clone is not the project being optimized; the assistant resolves the customer's project root and agent at run time. If .venv-traigent already exists or cannot be created, the assistant stops and says so rather than working around it.",
+        "The quote is the exact three-line prompt from the guide's README. It is pasted as written.",
+        "The guide clone is not the project being optimized; the assistant resolves the customer's project root and agent at run time. The throwaway .venv-traigent is used only when the customer declines, refuses a version change, or .venv is occupied. An existing usable environment is an install candidate. An unfinished run resumes its verified setup without reinstalling.",
         "Prefer an install? 'npx skills add Traigent/traigent-first-run', then ask 'Use $traigent-first-run to run my first Traigent optimization.' Node.js is needed only for that command, not for the run. The installed skill keeps the customer's project as the working directory; nothing is cloned into it.",
       ],
     },
     {
-      id: "four-asks",
+      id: "five-asks",
       kind: "tiles",
       eyebrow: "WHAT IT ASKS YOU",
-      title: "The assistant asks you four things. Nothing else.",
+      title: "The assistant asks you five things. Nothing else.",
       body: "Everything else it works out from your project or the guide.",
       tiles: [
         {
           icon: "🎯",
           label: "Which agent",
           detail:
-            "Confirm the one candidate, or choose between several. Asked once.",
+            "One candidate is named, not confirmed separately; several, you choose. Asked once.",
         },
         {
           icon: "🔑",
@@ -236,13 +251,18 @@ const rawPresentation = {
           detail:
             "Before touching your real answers, grading rules, or anything destructive.",
         },
+        {
+          icon: "📍",
+          label: "Where to install",
+          detail: "Which environment, after seeing exactly what changes.",
+        },
       ],
       sources: [
         `${README} · Start with one prompt`,
         `${SKILL} · Action authorization`,
       ],
       notes: [
-        "Those four asks are the whole list. With one credible agent the assistant names it and asks for confirmation; with several it asks the customer to choose. Once chosen, it never asks again.",
+        "Those five asks are the whole list. With exactly one credible agent the run names it inside the one gap question instead of halting for a separate confirmation; where nothing is missing, the identity line shown before the readiness card names it. With several it asks the customer to choose. Once chosen, it never asks again.",
         "The provider key goes into a local .env file that only the customer can read and that Git ignores. The assistant never asks for a secret in chat.",
         "Approval is asked before it happens for any paid model call and for any step that sends data outside the machine; separately, before any change to real examples, expected answers or grading rules, and before anything destructive or production-affecting.",
         "One more question can come up, and only when nothing in the project explains the task: what should the agent do? That is covered on the starting-point slide.",
@@ -294,7 +314,8 @@ const rawPresentation = {
       notes: [
         "Stages 1 and 2 make no provider or Traigent calls and spend nothing. Stage 3 is the first paid stage, on the customer's own key and stop target. Only after that result does the assistant ask for a Traigent key.",
         "Stage 4 is a separate approval on purpose: the baseline stays inside the customer's own settings, the search explores a broader space, and Traigent's service enters only here.",
-        "The assistant stops only for a real choice between agents, one question about the task when nothing in the project explains it, a key, a paid or data-sending step, a change to real answers or grading rules, or a destructive change. Do not present Readiness as something the customer approves.",
+        "Before the baseline's key ask there is one free approval: where Traigent installs, with the resolved plan shown - an environment found in the project, a new project .venv, or the throwaway fallback.",
+        "The assistant stops only for a real choice between agents, one question about the task when nothing in the project explains it, a key, the environment choice and install approval below, a paid or data-sending step, a change to real answers or grading rules, or a destructive change. Do not present Readiness as something the customer approves.",
         "Stage 5 also hands over the Traigent optimization skills, so the customer can continue on their full dataset without the guide.",
       ],
     },
@@ -310,7 +331,7 @@ const rawPresentation = {
           tone: "blue",
           items: [
             "Inspect and readiness",
-            "Environment setup and validation",
+            "Environment install, after you approve the plan",
             "No provider or Traigent calls",
             "No account needed",
           ],
@@ -357,7 +378,7 @@ const rawPresentation = {
         {
           startingPoint: "Agent, dataset and evaluator all present",
           safestNextStep:
-            "All three validated and preserved; the run goes straight to the baseline approval.",
+            "All three validated and preserved; after you approve where Traigent installs, the run goes to the baseline approval.",
         },
         {
           startingPoint: "Agent, but no examples or expected answers",
@@ -430,7 +451,7 @@ const rawPresentation = {
         {
           startingPoint: "You already have a baseline",
           safestNextStep:
-            "Kept exactly: same rows, same models. Never padded to look bigger.",
+            "Kept exactly: same configurations, same models. Never padded to look bigger.",
         },
         {
           startingPoint: "More than about 100 usable rows",
@@ -445,7 +466,7 @@ const rawPresentation = {
         {
           startingPoint: "Evaluator runs the answer as code or SQL",
           safestNextStep:
-            "The guide stops before executing it: no sandbox is shipped or improvised.",
+            "Not run by the guide: it says what was not checked and continues. No sandbox is improvised.",
         },
       ],
       sources: [
@@ -454,11 +475,11 @@ const rawPresentation = {
         `${RUN_SAFETY} · Execution evaluators are out of scope`,
       ],
       notes: [
-        "An existing baseline is preserved exactly; one row is correct if that is what the customer defined.",
+        "An existing baseline is preserved exactly; one configuration is correct if that is what the customer defined.",
         "Over about 100 usable rows, every trial would pay for every row, so the paid comparison is bounded to 18 tuning questions by default, at least four from each of the four difficulty bands, plus the 10 held-out rows: 28 by default. The subset is drawn inside each split so it cannot invent a tune/holdout overlap, the chosen row ids and any seed are written to traigent-runs/run-plan.md, and the report names the subset beside the full count, for example '18 tuning questions in 36 rows, and 10 held-out rows, of your 4,812'. Questions are counted and rows are drawn: a question with several accepted answers brings every one of its rows, so 28 caps the questions, and the rows can be more.",
         "The subset bounds the run, never the dataset: readiness is scored on the whole dataset, before and after, and the run's own sample-size limitation is reported separately in the run report.",
         "The fixed-agent row is the most common surprise: a search needs something to search over, or it would compare one configuration with itself. The readiness card names the missing dimension.",
-        "The code-or-SQL row is the only place the guide stops rather than routes. A task whose answer is code stays in scope; what is out of scope is grading by executing that answer.",
+        "The code-or-SQL row is the one place the guide declines a check on its own initiative; it discloses and continues, or calibrates a copy against a target you bound. A task whose answer is code stays in scope; what is out of scope is grading by executing that answer.",
       ],
     },
     {
@@ -527,6 +548,7 @@ const rawPresentation = {
         "Bands: NOT READY 0-29, PARTIAL 30-54, WORKABLE 55-74, STRONG 75-89, EXCELLENT 90-100.",
         "Confidence here means the share of the score the scorer could actually measure, not statistical confidence. Below 0.75 overall or in any pillar, a number that lands Strong or Excellent is held at Workable; the guide's own example is 89/100 WORKABLE, held there by an evaluation confidence of 0.55.",
         "The confidence rule is a ceiling on the band, never a floor: it never lifts Not ready or Partial to Workable.",
+        "A second hold: Strong and Excellent are withheld until someone has read the expected answers; it moves no number and is put to you as an open ask, with continue recommended.",
         "The BLOCKER line under the score says whether the paid comparison may start and how many things must clear first. The band grades the evidence; the blocker gates the spend.",
       ],
     },
@@ -568,7 +590,8 @@ const rawPresentation = {
         "The label is the whole message: FIX BEFORE PAID RUN holds the run, LIMITED TO bounds the claim, and the question is the only label that needs something from the customer.",
         "FIX BEFORE PAID RUN causes: no dataset, no expected answers, an evaluator that grades a wrong answer as well as a right one, or tuning rows that overlap the held-out rows.",
         "LIMITED TO causes: generated examples, or too few rows for a stable comparison. Two conditions can carry the same ceiling and both read LIMITED TO 45; fixing one leaves the number where it is until the other is fixed too.",
-        "The three questions only a person can judge: an answer key a model wrote, rows whose answer does not match their own question, or data with no stated origin.",
+        "The two questions only a person can judge: an answer key a model wrote end to end, or rows whose answer does not match their own question. Data with no stated origin is read as generated and that assumption is stated on the approval, not asked.",
+        "One more label, an open ask: the unread-answer-key hold caps nothing and asks you to read the key; the card lists it beside the caps and recommends continuing.",
         "89/100 WORKABLE example: an evaluation pillar with only 2 of 4 checks observed. The card says which pillar and what fills it in.",
         "Band and blocker are separate questions, and at this revision they line up: every condition that holds the paid run carries a ceiling of 50 or below, and the score is the minimum of the average and every ceiling, so a card with a FIX BEFORE PAID RUN line always reads NOT READY or PARTIAL, and a WORKABLE card always has a clear blocker line. A generated walkthrough dataset caps at 65 and does not block.",
       ],
@@ -610,18 +633,20 @@ const rawPresentation = {
         },
         {
           icon: "📦",
-          label: "Own environment",
-          detail: "Installs into .venv-traigent, never a shared environment.",
+          label: "Your environment",
+          detail:
+            "Installs only where you approve; never a shared environment.",
         },
         {
           icon: "📌",
           label: "Pinned install",
-          detail: "Exact pins only; never an unversioned pip install traigent.",
+          detail: "Tested versions; never an unversioned pip install traigent.",
         },
         {
           icon: "🚫",
           label: "No code execution",
-          detail: "An evaluator that runs answers as code ends the guide.",
+          detail:
+            "The guide never runs an evaluator that executes answers as code.",
         },
         {
           icon: "✍️",
@@ -642,9 +667,9 @@ const rawPresentation = {
         `${RUN_SAFETY} · Execution evaluators are out of scope`,
       ],
       notes: [
-        "Keys live in a local .env that only the customer can read and that Git ignores. The run installs into its own .venv-traigent, never into a shared environment, and never edits the project's own dependency files.",
-        "The install uses the exact pins in the guide's requirements file, and never an unversioned 'pip install traigent'. The guide's reason: on an unsupported interpreter, package resolution can select the unrelated, obsolete 0.0.1 release, which carries none of the optimizer and which the preflight refuses by name.",
-        "An evaluator that executes the agent's answer as code or SQL ends the guide before it runs; no sandbox is shipped or improvised.",
+        "Keys live in a local .env that only the customer can read and that Git ignores. The run installs into your environment or a new persistent .venv after approval, or the throwaway .venv-traigent as fallback. Never a shared, dependent, external, or assistant-owned environment. Never edits your dependency files.",
+        "Tested pins traigent==0.26.0, litellm==1.93.0, python-dotenv==1.2.2 are the exact install on the throwaway route and the recommendation elsewhere; a traigent or litellm you already have at or above the pin is kept and named. Never an unversioned pip install traigent.",
+        "An evaluator that executes the agent's answer as code or SQL is not run on the guide's initiative. The guide skips that check, tells you plainly what was not checked, and continues; it can calibrate a copy against a read-only or duplicate target you supply. No sandbox is shipped or improvised.",
         "Changes to real answers or grading rules, and anything destructive or production-affecting, each need their own explicit approval. Approving one step never pre-approves another.",
       ],
     },
@@ -691,6 +716,7 @@ const rawPresentation = {
         "The runtime is an estimate, never a promised duration: before the paid probe the assistant estimates it conservatively from dataset size, planned trials and calls per example, and after the probe replaces it with observed latency. If the estimate exceeds $5.00 or 30 minutes, the guide first recommends a smaller representative slice. Do not quote a duration per stage; the guide gives none.",
         "If the run had to write the dataset or grading method, the same preview shows exactly what it wrote and asks the customer to proceed or fix before anything is charged.",
         "The stop target is a conservative control the run stops at and a re-approval trigger, not a billing guarantee. Provider errors, missing credentials or a breached stop target stop the run loudly; nothing is mocked or invented to fill the gap.",
+        "If your evaluator executes answers, the same card says what was not checked and asks, optionally, whether it connects read-only; it also states any provenance the run assumed and whether Traigent was already set up here.",
       ],
     },
     {
@@ -835,9 +861,9 @@ const rawPresentation = {
       body: "The first two stages need no key and cost nothing, so the first thing you see is an honest readiness card.",
       quote: customerPrompt,
       bullets: [
-        "You do: paste, answer four questions, approve twice",
+        "You do: paste, answer five asks, approve three steps",
         "You see: readiness, preview, baseline, then comparison",
-        "You keep: artifacts, run log, portal links, skills",
+        "You keep: SDK, artifacts, run log, portal links, skills",
       ],
       sources: [
         `${README} · Start with one prompt`,
@@ -847,7 +873,7 @@ const rawPresentation = {
       notes: [
         "Presenter: quote no duration and no price beyond the guide's own $5.00 stop target. This deck describes the guide and promises no result.",
         "You see: a readiness card before anything is written, a preview before anything is paid, the baseline result before any Traigent key, and the comparison at the end.",
-        "You keep: the artifacts under traigent-runs/ in the project, the run log, portal links for recorded runs, and the skills to continue. Installing the skills authorizes nothing; every paid step still needs its own approval on the customer's key.",
+        "You keep: Traigent installed in your environment, the artifacts under traigent-runs/ (including the readiness evidence directory traigent-runs/readiness/<timestamp>/), the run log, portal links for recorded runs, and the skills to continue. Installing the skills authorizes nothing; every paid step still needs its own approval on the customer's key.",
       ],
     },
     {
@@ -886,10 +912,10 @@ const rawPresentation = {
       title: "Preserve your useful work before proposing anything new.",
       body: "Stage 1 is read-only: language, environments, the agent, its examples and grading material, and the settings it already varies.",
       bullets: [
-        "Does not import or run your code",
+        "Runs nothing of yours but a proven-safe evaluator",
         "Needs no approval to read",
         "States one identity line: project path and agent",
-        "One credible agent: named and confirmed",
+        "One agent: named, never a separate confirmation",
         "Several agents: you choose, once",
         "No task evidence at all: one question, then waits",
         "A placeholder returning a constant counts as nothing",
@@ -909,7 +935,7 @@ const rawPresentation = {
       id: "status-marks",
       kind: "tiles",
       eyebrow: "STAGE 1 OF 5 · STATUS MARKS",
-      title: "Three marks, and what each one means.",
+      title: "Two marks, and a heading for substitutes.",
       body: "The assistant never reports 3/3 ready when any component is a substitute.",
       tiles: [
         {
@@ -924,28 +950,29 @@ const rawPresentation = {
             "Absent, failed validation, or too thin for a credible claim.",
         },
         {
-          icon: "📝",
-          label: "Substitute",
+          icon: "📋",
+          label: "Walkthrough setup",
           detail:
-            "Written by the run for the walkthrough; never counted as yours.",
+            "Named in words, no mark: made for this walkthrough, not your product.",
         },
       ],
       sources: [
+        `${GUIDE} · Result interpretation`,
         `${SKILL} · Status language`,
-        `${README} · What the run does`,
         `${READINESS} · render_text`,
       ],
       notes: [
         "The readiness script prints these lines itself (render_text in readiness.py): '✅ Dataset: real', '❗ Evaluator: validation failed', and a 'Walkthrough setup:' section with 'Agent: generated walkthrough substitute' for anything the run created.",
         "Substitutes the assistant creates carry no mark and are listed under walkthrough setup, so a reader can never mistake written material for the customer's own.",
-        "The same three marks appear on every result, so provenance travels with the number.",
+        "Both marks and the Walkthrough setup heading appear on every result, so provenance travels with the number.",
       ],
     },
     {
       id: "stage-readiness",
       kind: "statement",
       eyebrow: "STAGE 2 OF 5 · READINESS",
-      title: "Reading the card: score, band, coverage, blocker, ceilings.",
+      title:
+        "Reading the card: score, band, coverage, blocker, ceilings, asks.",
       body: "Shown once. The guide's own example reads EVALUATION 53/100 (2 of 4 checks measured).",
       bullets: [
         "Unmeasured checks are left out, not scored zero",
@@ -954,6 +981,7 @@ const rawPresentation = {
         "Band grades evidence; blocker gates spend",
         "LIMITED TO 45: the ceiling holding you now",
         "WOULD LIMIT TO 89: the ceiling you hit next",
+        "An ask that caps nothing sits beside the caps",
         "Readiness reads the whole dataset, never the subset",
       ],
       sources: [
@@ -962,7 +990,7 @@ const rawPresentation = {
         `${READINESS} · band_for`,
       ],
       notes: [
-        "A check the scorer could not compute is marked unmeasured and left out rather than scored zero. A check the run asked the customer for and did not get is unmeasured too, but keeps its weight and earns nothing, so withholding never pays.",
+        "A check the scorer could not compute is marked unmeasured and left out rather than scored zero. A check the run asked the customer for and did not get is unmeasured too, but keeps its weight and earns nothing, so withholding never pays. An absent required component is a completed structural check recorded at zero, not an unmeasured one.",
         "For each pillar the card shows how much was actually measured. The BLOCKER line under the score says whether the paid comparison may start and how many things must clear first.",
         "The tense is the whole difference between the two ceiling labels. LIMITED TO 89 is the number you are at. WOULD LIMIT TO 89 is a limit you have not reached: either something stricter is holding the score down, or the average has not climbed that high yet. It is still worth reading, because it is what you run into next, but it is not why the score is what it is today.",
         "Two conditions can share one ceiling and both stay in force. After a repair the score is run again only to confirm the repair cleared what it failed on.",
@@ -978,12 +1006,13 @@ const rawPresentation = {
         "Below 0.75 overall or in any pillar, Strong and Excellent are held at Workable.",
       bullets: [
         "The guide's example: 89/100 WORKABLE",
-        "Held there by an evaluation confidence of 0.55",
+        "Held there by confidence 0.55, or an unread key",
         "Never lifts Not ready or Partial upward",
         "The card says which pillar, and what fills it",
       ],
       sources: [
         `${READINESS} · MIN_CONFIDENCE_FOR_TOP_BANDS`,
+        `${READINESS} · ANSWER_KEY_BAND_CEILING`,
         `${README} · The readiness score`,
       ],
       notes: [
@@ -1038,7 +1067,7 @@ const rawPresentation = {
       ],
       notes: [
         "Each check is named on the card as the question it answers. Five dataset checks, four evaluation checks, five agent checks: fourteen in all, weighted 40, 35 and 25.",
-        "The agent pillar is read from the agent's own code: which settings it can already vary, each traced to a source line. Comments, docstrings and example-only values do not count. A source read that finds no setting to vary blocks the paid run.",
+        "The agent pillar is read from the agent's own code: which settings it can already vary, each traced to a source line. Comments, docstrings and example-only values do not count. A source read that finds no setting to vary blocks the paid run. The four build observations are cited on the card but earn points only once an independent check verifies them.",
         "Two things the scorer refuses to guess are named on the card instead: whether the dataset and the evaluator are actually wired into the agent. The run builds and checks that later.",
       ],
     },
@@ -1093,7 +1122,7 @@ const rawPresentation = {
         {
           startingPoint: "Generated dataset · ceiling 65",
           safestNextStep:
-            "Not blocking, nothing asked. Add rows from your product before a production claim.",
+            "Not blocking, nothing asked; an undeclared origin is read as generated and stated on the approval.",
         },
         {
           startingPoint: "Model-written key or small set · ceiling 74",
@@ -1109,8 +1138,9 @@ const rawPresentation = {
       notes: [
         "Evaluator invalid means it scores a known-wrong answer as well as a known-right one: a broken ruler measures nothing, so this is the lowest ceiling any evaluator condition carries and it holds the paid run.",
         "Evaluator unvalidated means it has not yet been tried on known-right and known-wrong answers; until it is, the card shows the pillar as thinly measured.",
-        "Generated dataset means every row was written by a model, or the dataset says nothing about where its rows came from. Label the walkthrough honestly; add rows collected from the product before making a production claim.",
+        "Generated dataset means every row was written by a model, or the dataset says nothing about where its rows came from. For a declared-generated set, nothing is asked. For the undeclared twin, the scorer's Cap carries asks=False and the question rides on the approval that already halts before the first billed call: that assumption is stated on the approval rather than asked. Add rows collected from the product before making a production claim.",
         "A small set is called a wiring check and may get a bounded top-up offer; the model-written answer key is put to the customer once with two choices.",
+        "Two conditions not drawn on the scale: no agent at all is a ceiling of 25 that holds the paid run until an agent is chosen or created; an evaluator that executes code or SQL is not calibrated on the customer's engine and carries a refusal condition that never blocks - a ceiling of 45 while only the declaration is known, none once the engine is witnessed - with the run continuing on full disclosure or calibrating a copy against a read-only target the customer supplies.",
       ],
     },
     {
@@ -1122,7 +1152,7 @@ const rawPresentation = {
       body: "The first paid step, on your own provider key. No Traigent account is involved yet.",
       bullets: [
         "Your own baseline runs exactly as defined",
-        "Never padded; one row is fine if defined",
+        "Never padded; one configuration is fine if defined",
         "No baseline? A twelve-configuration local grid",
         "Result on screen before any Traigent key",
         "Uploaded to the portal only without re-running",
@@ -1308,7 +1338,7 @@ const rawPresentation = {
       kind: "journey",
       eyebrow: "STAGES 4 TO 5 · THE HONEST COMPARISON",
       title: "Choose on tuning evidence. Check once on held-out rows.",
-      body: "Picking the best of several on the same rows picks partly on luck, so the winner's score is inflated by the choosing.",
+      body: "Picking the best of several on the same rows picks partly on luck, so the winner's score can be inflated by the choosing.",
       steps: [
         {
           label: "Reserve ten rows",
@@ -1319,7 +1349,7 @@ const rawPresentation = {
         {
           label: "Select on tuning",
           detail:
-            "One recommendation from baseline grid and search; at a tie, the cheaper wins.",
+            "One recommendation from grid and search; ties break on cost only when costs compare.",
           executor: "Coding assistant",
         },
         {
@@ -1344,7 +1374,7 @@ const rawPresentation = {
       notes: [
         "The held-out rows exist to check the selection risk, not to remove it, and never to choose. A project with its own held-out split keeps it as it is; the walkthrough split goes into its own file before any design, calibration or tuning touches the data.",
         "Wording matters: a held-out set is a sealed holdout only when its split and labels stayed hidden until the candidate was locked. Because the assistant creates and can inspect the walkthrough split, the guide calls it held-back and non-blind.",
-        "Counts, not percentages: on ten rows one standard error is about 15 points near 50%. A gap between the tuning and held-out score is expected and is not called overfitting; it is the ordinary result of picking the best of several configurations on a small sample. Never say that Traigent prevents it.",
+        "Counts, not percentages: on ten rows one outcome moves the figure by ten points, so no interval is quoted. A gap between tuning and held-out can arise without a bug and establishes neither overfitting nor its absence. Never say that Traigent prevents it.",
         "A set used to select is no longer held out. A flat result on demonstration data says nothing about production.",
       ],
     },
@@ -1370,7 +1400,7 @@ const rawPresentation = {
       ],
       notes: [
         "The end goal is an explainable decision. A result without its baseline, evidence boundary and limitations is not a valid first-run outcome.",
-        "The report leads with the outcome, what the evidence establishes, the current state and its limits, and one next action; then the details: configurations, objectives, trials, failures, cost, stop reason, artifacts and verified links. Each run's accuracy-cost frontier is in the details.",
+        "The report leads with the outcome, what the evidence establishes, the current state and its limits, and one next action; then the details: configurations, objectives, trials, failures, cost, stop reason, artifacts and verified links. A frontier over your objective and cost appears in the details only when cost was measured comparably; otherwise the primary result and the telemetry limitation.",
         "Cost is reported as configurations tested out of the space's total, failures and stop reason, the approved total, what was spent, and what is left.",
         "No configuration is promoted from a fully synthetic run; for real components, promotion still needs explicit approval and a later validation check. Learning links and lifecycle suggestions come only after the customer has seen the result.",
       ],
@@ -1402,6 +1432,12 @@ const rawPresentation = {
           label: "Local-only label",
           detail: "For a baseline that was not uploaded.",
         },
+        {
+          icon: "🐍",
+          label: "Environment",
+          detail:
+            "The SDK stays where you approved it: your venv or the fallback.",
+        },
       ],
       sources: [
         `${README} · Repository layout`,
@@ -1410,7 +1446,7 @@ const rawPresentation = {
       ],
       notes: [
         "Artifacts live under traigent-runs/ in the customer's project, never in the guide clone, and are ignored when the project uses Git. Each readiness scoring gets its own readiness/<timestamp>/ directory.",
-        "An unsynced baseline is labelled local-only; nothing is deleted as cleanup. The run log is not sent anywhere; it is the customer's to read or delete.",
+        "An unsynced baseline is labelled local-only; nothing is deleted as cleanup. The run log is not sent anywhere; it is the customer's to read or delete. The run also leaves a /traigent-runs/ and /.venv/ or /.venv-traigent/ rule in .gitignore, and appends the provider key line to .env.",
       ],
     },
     {
@@ -1423,12 +1459,13 @@ const rawPresentation = {
         {
           icon: "🐍",
           label: "Python 3.11 to 3.13",
-          detail: "In an isolated environment the run creates itself.",
+          detail: "In your venv, a new project .venv, or a throwaway fallback.",
         },
         {
           icon: "📌",
           label: "Pinned SDK stack",
-          detail: "traigent 0.26.0, litellm 1.93.0, python-dotenv 1.2.2.",
+          detail:
+            "traigent 0.26.0, litellm 1.93.0, python-dotenv 1.2.2; newer ones kept.",
         },
         {
           icon: "🔑",
@@ -1445,6 +1482,11 @@ const rawPresentation = {
           label: "Node.js, optional",
           detail: "Only for the npx skills add install, not the run.",
         },
+        {
+          icon: "🔌",
+          label: "A Python callable",
+          detail: "A non-Python agent needs a thin Python adapter around it.",
+        },
       ],
       sources: [
         `${README} · Requirements`,
@@ -1452,7 +1494,7 @@ const rawPresentation = {
         `${README} · Install as an Agent Skill`,
       ],
       notes: [
-        "Python 3.11 to 3.13 in an isolated environment, the tested SDK stack pinned in the guide's requirements file (traigent==0.26.0, litellm==1.93.0, python-dotenv==1.2.2), installed into the dedicated environment whatever the project declares for itself. Never an unversioned pip install traigent.",
+        "Python 3.11 to 3.13 in your own venv, a normal project .venv the run creates for you to keep, or the approved throwaway fallback: one approval either way. The tested SDK stack pinned in the guide's requirements file (traigent==0.26.0, litellm==1.93.0, python-dotenv==1.2.2) is the exact install on the throwaway route and the recommendation elsewhere; a traigent or litellm you already have at or above the pin is kept, a lower one is replaced only after you say yes to the exact change. Never an unversioned pip install traigent.",
         "One supported LLM-provider key with a small amount of credit for the paid steps goes first, into a local .env. A Traigent portal key that can write experiments is activated after the first result is on screen, not before; if none is present, the assistant asks for one then.",
       ],
     },
@@ -1494,7 +1536,7 @@ const rawPresentation = {
       kind: "tiles",
       eyebrow: "REPOSITORY LAYOUT",
       title: "What is in the repository.",
-      body: "Small on purpose. During a run, the assistant writes only under traigent-runs/ in your project.",
+      body: "Small on purpose. During a run the assistant writes under traigent-runs/, adds its .gitignore rules, adds the missing key to .env, and installs the SDK only where you approved.",
       tiles: [
         {
           icon: "📄",
@@ -1535,7 +1577,7 @@ const rawPresentation = {
         `${SKILL} · Bundled guidance index`,
       ],
       notes: [
-        "GUIDE.md hands over to skills/traigent-first-run/SKILL.md, which loads each reference at the stage that needs it: glossary, run-safety, sdk-execution, evaluation-and-dataset, component-creation; scripts preflight.py, readiness.py, validate_run_log.py; assets run-plan.md and requirements-first-run.txt.",
+        "GUIDE.md hands over to skills/traigent-first-run/SKILL.md, which loads each reference at the stage that needs it: glossary, run-safety, sdk-execution, evaluation-and-dataset, component-creation; scripts preflight.py, readiness.py, calibrate_evaluator.py, find_environments.py, environment_install.py and validate_run_log.py; assets run-plan.md, requirements-first-run.txt and sql_structure.py.",
         "The skill directory is exactly what the Agent Skill installer copies, so the clone path and the installed-skill path follow one workflow. traigent-runs/ belongs to the customer's project, never to the guide clone.",
         "tests/ and tools/ are the guide's own quality gates and CI guards. The customer never needs to run them.",
       ],
@@ -1549,7 +1591,7 @@ const coreSlideIds = [
   "the-words-your-project",
   "the-words-of-the-run",
   "one-customer-prompt",
-  "four-asks",
+  "five-asks",
   "shared-control",
   "free-first-paid-later",
   "your-starting-point",

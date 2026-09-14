@@ -8,8 +8,7 @@ every invocation and every output as a card. Nothing under `cards/` is named `.l
 repository's `.gitignore` excludes that suffix, and evidence that is not committed is not
 evidence.
 
-    python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
-        --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
+    python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 
 **It does not touch `cards/` unless asked.** The cards are committed evidence, and the
 commonest reason to run this script is to check them rather than to replace them, so a plain
@@ -21,30 +20,18 @@ the refusal, and moving that over a committed card deletes the card itself.
 Standard library only, like `build.py`. It needs a checkout of the guide, because the
 scripts it runs are the guide's, and it never reaches the network.
 
-**It pins the revision, and the pin and the documents currently disagree.**
-`PINNED_REVISION` below is the commit every figure under `cards/` was measured at, and the run
-refuses a checkout sitting on anything else rather than quietly scoring against a moved target.
-The guide is under active development and its input contracts change, and a `build` check's
-`source_lines` is the field that keeps moving: `6ec2b9c1`, the pin, does not read it and
-refuses a document that carries it; `6e18086e` reads it and requires it of a settled check.
-The documents under `agent-knobs/` were repaired to the second contract -- they cite executable
-lines and every settled `build` check names them -- so **the sweep runs at `6e18086e` and is
-refused at the pin**, which is why the invocation above passes `--revision` and why
-`contract_mismatch` below stops the run with one sentence rather than 26 refused rows.
-
-That is a known, deliberate state and not a loose end: the pin says what `cards/` was measured
-at, and re-pinning it is part of the pending regeneration, which re-measures the whole table in
-the same commit. Until then, `--revision` is how a reader reproduces the sweep, and
-`../README.md` and `README.md` say so where they hand out the command. A table that silently
-re-measures against whatever HEAD happens to be is not reproducible, which is the whole point
-of this directory; the revision used is recorded in `cards/results.json`.
+**It pins the revision.** `PINNED_REVISION` below is the commit every figure under `cards/`
+was measured at, and the run refuses a checkout sitting on anything else rather than quietly
+scoring against a moved target. The revision used is recorded in `cards/results.json`.
+A table that silently re-measures against whatever HEAD happens to be is not reproducible,
+which is the whole point of this directory.
 
 **Exit status.** 0 when every run scored; 1 when the guide refused one or more of them;
 2 when the documents and the guide disagree before anything is built; 3 when something of
 *ours* broke -- our builder, our probe -- which is never a row and never publishes.
-At `6e18086e` one run cannot score: the guide refuses to calibrate an executing scorer, which
-is exactly what `best-case--off-method-calibration` asks it to do, so a complete and correct
-sweep there ends 1 with that one run refused. Nothing should key on exit 0 alone; read the
+At HEAD one run cannot score: the guide refuses to calibrate an executing scorer, which is
+exactly what `best-case--off-method-calibration` asks it to do, so a complete and correct
+sweep ends 1 with that one run refused. Nothing should key on exit 0 alone; read the
 refused list the run prints and `results.json` beside it.
 
 What it decides, and why each decision is here rather than in the reader's head:
@@ -61,17 +48,25 @@ by hand against the two agent components and they cite real lines on the real ca
 which is why the figures are faithful, and also why another honest read could move them.
 
 `--calibration` runs only where the demo ships probe answers AND the guide's opening gate
-allows it: "if the verdict is sufficient and the complete path does not execute
-candidate-generated code or SQL". A scorer that runs model-written SQL fails that gate, so
-`best-case` is scored without calibration. The `best-case--off-method-calibration` run in
-VARIANTS scores it the other way instead, which is the off-method number and is labelled as one
-everywhere it appears.
+allows it: `references/component-creation.md` opens calibration "if the verdict is sufficient
+and the complete path does not execute candidate-generated code or SQL". A scorer that runs
+model-written SQL fails that gate, so `best-case` is scored without calibration, and the
+`--evaluator-method execution` declaration alone makes `readiness.py` raise
+`evaluator-calibration-refused` -- a cap with no ceiling and no block, a disclosure rather
+than a bound -- without any `--calibration-scope-refused` flag. The
+`best-case--off-method-calibration` run in VARIANTS asks the calibration tool to score that
+evaluator anyway; at the pinned revision the tool refuses (exit 2) to import a scorer whose
+walk reaches a SQL engine, so that run is recorded as refused and its committed card is the
+older reading.
 
 `--row-review` is not passed. The guide asks for one at the opening gate and it is the
 assistant's own read of every row; a hand-written stand-in for it would be this script
 deciding, row by row, whether each answer answers its question -- which is exactly the
 judgement the `wrong-answers` preset exists to test. Leaving it off keeps the table
-mechanical, and the omission is a property of this table rather than of the guide.
+mechanical, and the omission is a property of this table rather than of the guide. The guide
+also holds the top two bands at WORKABLE until a row review has entered; no run in this bank
+reaches them, so that hold is inert here (`band_limited_by_unread_answers` is false on every
+card) and would bind first on any run that climbed past 74 without one.
 """
 
 from __future__ import annotations
@@ -86,14 +81,12 @@ from pathlib import Path
 from typing import Any
 
 # The guide commit every figure under cards/ was measured at. Changing this is a deliberate
-# re-measurement, never a side effect of somebody's checkout having moved -- which is why it
-# still names 6ec2b9c1 while the documents under agent-knobs/ only validate at 6e18086e. The
-# two are re-joined by the pending regeneration, in the commit that re-measures the table.
-# Until then the sweep runs with
-#     --revision 6e18086e1499baa3c66a7c0ebeedebdc887d4f0c
-# and refuses at the pin, before building anything, with the contract it could not satisfy.
-PINNED_REVISION = "6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9"
-WORKING_REVISION = "6e18086e1499baa3c66a7c0ebeedebdc887d4f0c"
+# re-measurement, never a side effect of somebody's checkout having moved. WORKING_REVISION is
+# the revision the documents under agent-knobs/ validate at; the two name the same commit
+# since the 2026-09-15 regeneration, so no --revision override is needed, and they are kept
+# separate for the next time the guide's document contract moves ahead of the pin.
+PINNED_REVISION = "9eaabbb2dca51a64bfca9fcc437d9459209fc769"
+WORKING_REVISION = "9eaabbb2dca51a64bfca9fcc437d9459209fc769"
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
@@ -310,22 +303,17 @@ REQUIRED_BUILD_FIELD = "source_lines"
 def contract_mismatch(scripts: Path) -> tuple[list[str], list[str]]:
     """Where the guide in front of us and the documents beside us disagree, in its terms.
 
-    The pin and the documents' schema are two independently editable facts, and letting
-    them drift apart is how this directory has now broken twice in opposite directions:
-    once with documents too old for the guide, once with documents too new for the pin.
-    Both times the reader found out by running 26 builds and reading 26 refusals. So the
-    disagreement is settled here, before anything is built, against `readiness.py`'s own
-    field constants rather than against a copy of them kept in this file.
+    The pin and the documents' schema are two independently editable facts. This check
+    detects disagreement before anything is built, against `readiness.py`'s own field
+    constants rather than against a copy of them kept in this file.
 
     Returns the disagreements and, beside them, what could not be checked at all -- a
     revision that renames or reshapes one of those constants makes this gate a no-op for
     that half, and a gate that has quietly stopped gating has to say so on the way past.
 
-    What it does *not* claim to derive: requiredness. `source_lines` is required of a
-    settled `build` check at `6e18086e` and refused on an undetermined one, and neither
-    fact is expressible from the constants -- so the settled/undetermined distinction is
-    read from the document exactly as the guide reads it, and the field name is written
-    down above.
+    What it does *not* claim to derive: requiredness. Requiredness is not expressible from
+    field constants alone, so the settled/undetermined distinction is read from the document
+    exactly as the guide reads it, and the field name is written down above.
     """
     probe = subprocess.run(
         [sys.executable, "-c", CONTRACT_PROBE, str(scripts / "readiness.py")],

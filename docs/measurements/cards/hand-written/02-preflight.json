@@ -19,9 +19,31 @@
   },
   {
     "check": "sdk-version",
-    "status": "SKIP",
-    "detail": "traigent is not installed yet; verify it in the isolated environment after installation",
-    "metrics": null
+    "status": "PASS",
+    "detail": "traigent 0.26.0",
+    "metrics": {
+      "installed": "0.26.0",
+      "tested": "0.26.0"
+    }
+  },
+  {
+    "check": "existing-traigent-use",
+    "status": "PASS",
+    "detail": "this project does not list traigent among its dependencies",
+    "metrics": {
+      "declared_in": []
+    }
+  },
+  {
+    "check": "env-shadowed-key",
+    "status": "PASS",
+    "detail": "no credential or route name is masking a different value in the shell and .env",
+    "metrics": {
+      "shadowed_variables": [],
+      "blank_process_masks": [],
+      "fingerprints": {},
+      "route_values": {}
+    }
   },
   {
     "check": "provider-credentials",
@@ -89,10 +111,14 @@
   {
     "check": "dataset-first-run-rows",
     "status": "PASS",
-    "detail": "proposed first-run subset cap: 10 usable rows per configuration from 10 usable rows; select and record the actual row ids before baseline approval",
+    "detail": "proposed first-run subset cap: 8 questions, which bring 8 scoreable rows per configuration, from 10 usable rows (8 different inputs in the tuning split); select and record the actual row ids before baseline approval",
     "metrics": {
-      "first_run_rows": 10,
-      "usable_rows": 10
+      "first_run_questions": 8,
+      "first_run_rows_fewest": 8,
+      "first_run_rows_most": 8,
+      "usable_rows": 10,
+      "first_run_distinct_rows": 8,
+      "first_run_distinct_scope": "the tuning split"
     }
   },
   {
@@ -125,7 +151,35 @@
     "check": "dataset-ids",
     "status": "PASS",
     "detail": "stable ids are unique",
-    "metrics": null
+    "metrics": {
+      "duplicate_ids": 0,
+      "rows_without_id": 0,
+      "generated_rows_without_id": 0,
+      "row_id_digests": [
+        "255ecbeac60c7196",
+        "55372f8ae3cf4a91",
+        "58415e6bd7407336",
+        "7b8490edcf3e365c",
+        "7cb7330d585a4d1e",
+        "9d7f2aea05e3a763",
+        "ab46ee7b56df1312",
+        "c34f2a470da27c08",
+        "c5677801fb95218b",
+        "f7620baf579e5beb"
+      ],
+      "run_row_id_digests": [
+        "255ecbeac60c7196",
+        "55372f8ae3cf4a91",
+        "58415e6bd7407336",
+        "7b8490edcf3e365c",
+        "7cb7330d585a4d1e",
+        "9d7f2aea05e3a763",
+        "ab46ee7b56df1312",
+        "c34f2a470da27c08",
+        "c5677801fb95218b",
+        "f7620baf579e5beb"
+      ]
+    }
   },
   {
     "check": "dataset-duplicates",
@@ -140,7 +194,10 @@
     "check": "dataset-near-duplicates",
     "status": "PASS",
     "detail": "no input pair reaches 70% similarity",
-    "metrics": null
+    "metrics": {
+      "near_duplicate_pairs": 0,
+      "near_duplicate_scan_complete": true
+    }
   },
   {
     "check": "dataset-outputs",
@@ -159,7 +216,8 @@
     "status": "PASS",
     "detail": "tuning and held-out inputs are disjoint",
     "metrics": {
-      "kind": "tuning-and-holdout"
+      "kind": "tuning-and-holdout",
+      "overlapping_inputs": 0
     }
   },
   {
@@ -177,7 +235,8 @@
     "metrics": {
       "tuning_rows": 8,
       "tuning_labelled_rows": 8,
-      "tuning_distinct_rows": 8
+      "tuning_distinct_rows": 8,
+      "tuning_distinct_scoreable_rows": 8
     }
   },
   {
@@ -218,7 +277,8 @@
     "detail": "evaluator.py parses as valid Python; this proves nothing about its scoring behavior, which is not executed here",
     "metrics": {
       "exists": true,
-      "parses": true
+      "parses": true,
+      "executes": false
     }
   }
 ]

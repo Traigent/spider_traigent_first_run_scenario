@@ -27,22 +27,14 @@ sys.path.insert(0, str(REPO_ROOT))
 
 import build  # noqa: E402
 
-# The prompt a customer is given to start a run. The same two lines are copied byte for byte
-# into six other product files: traigent-first-run/README.md; the scenarios repo's README.md,
-# GUIDE.md and skills/traigent-first-run-scenarios/SKILL.md; its presentation/src/content.ts;
-# and traigent-web/public/agent-setup/prompt.md. traigent-web/src/components/LeadFunnel.jsx
-# builds the same two lines with the repository URL interpolated.
-#
-# Only traigent-web pins any of them, and not in separate files: its
-# scripts/tests/customer_journey.test.mjs asserts both public/agent-setup/prompt.md and
-# LeadFunnel.jsx against one shared literal in that one file, and its
-# scripts/funnel_component.test.mjs asserts the rendered copy button against a second literal
-# of its own. The five copies in traigent-first-run and traigent-first-run-scenarios, the
-# customer-facing README among them, are pinned nowhere. So this is not the fifth of five
-# independent pins: it covers what build.py prints and records, and nothing else.
+# The prompt a customer is given to start a run, byte for byte as the guide's README states it.
+# The guide's README moved to this three-line form on 2026-09-11; other copies of the prompt
+# outside this repository were not all updated with it. This test pins what build.py prints
+# and records, and nothing else.
 EXPECTED_HANDOFF = (
     "Help me run my first Traigent optimization.\n"
-    "Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md."
+    "Clone https://github.com/Traigent/traigent-first-run beside my project, outside its root,\n"
+    "and follow the clone's GUIDE.md while keeping my project as the working directory."
 )
 
 # How many rows the two smaller draws ship. Written out here rather than read back from
@@ -941,12 +933,11 @@ class AProjectCanShipAWorkingEnvironment(unittest.TestCase):
         self.assertEqual(self.record["installed"], [EXPECTED_AGENT_REQUIREMENT])
 
     def test_no_dedicated_environment_is_left_behind(self) -> None:
-        """The guide creates .venv-traigent itself, and stops if it already exists.
+        """The guide reserves .venv-traigent as its fallback and stops that route if one already exists.
 
-        A demo that ships one cannot be run at all, so no combination of flags may make
-        one. Asserted on a `--venv ready` build: it used to be asserted on a `--venv none`
-        one, where no code path could have created an environment under any name, so it
-        could not have failed.
+        A demo must not pre-empt it, so no combination of flags may make one. Asserted on a
+        `--venv ready` build: it used to be asserted on a `--venv none` one, where no code path
+        could have created an environment under any name, so it could not have failed.
         """
         self.assertFalse(
             (self.project / build.FORBIDDEN_VENV_NAME).exists(),

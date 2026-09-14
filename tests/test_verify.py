@@ -208,9 +208,8 @@ class VerifySeesWhatTheProjectHolds(ADemoFixture):
         """Anywhere inside, not only at the top.
 
         `--guide local` copies a whole checkout into `project/traigent-first-run/`, and one
-        that brought this directory with it left a demo the guide refuses to run -- it
-        creates that directory itself and stops if it already exists -- while this check
-        said the project was clean.
+        that brought this directory with it left a demo whose fallback route the guide would
+        refuse while this check said the project was clean.
         """
         out = self.copy()
         nested = (
@@ -683,9 +682,11 @@ class WhatTheCommandsPrint(unittest.TestCase):
 class ACopiedGuideCheckout(unittest.TestCase):
     """`--guide local` copies a checkout into the project the agent is started in.
 
-    The success path had no coverage at all: `copy_guide` copying nothing would have passed,
-    while the handoff tells the agent to read `./traigent-first-run/GUIDE.md` -- a file that
-    would not be there. Only the two refusals were tested.
+    The guide now instructs clone-beside and announces an exclusion when its checkout root
+    sits inside the project; this spider layout is a known divergence. The success path had
+    no coverage at all: `copy_guide` copying nothing would have passed, while the handoff
+    tells the agent to read `./traigent-first-run/GUIDE.md` -- a file that would not be there.
+    Only the two refusals were tested.
     """
 
     @classmethod
@@ -758,7 +759,11 @@ class ACopiedGuideCheckout(unittest.TestCase):
         shutil.rmtree(cls.workspace, ignore_errors=True)
 
     def test_the_guide_lands_where_the_handoff_says_it_will(self) -> None:
-        """The handoff points at `./traigent-first-run/GUIDE.md`, relative to the project."""
+        """The handoff points at `./traigent-first-run/GUIDE.md`, relative to the project.
+
+        The guide's clone-beside instruction will announce an exclusion of this directory
+        from customer material when its root is inside the project.
+        """
         self.assertEqual(self.manifest["handoff"], build.HANDOFF_LOCAL)
         for line in build.HANDOFF_LOCAL.splitlines():
             self.assertIn(line, self.printed)

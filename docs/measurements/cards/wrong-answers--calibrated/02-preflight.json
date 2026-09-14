@@ -19,9 +19,31 @@
   },
   {
     "check": "sdk-version",
-    "status": "SKIP",
-    "detail": "traigent is not installed yet; verify it in the isolated environment after installation",
-    "metrics": null
+    "status": "PASS",
+    "detail": "traigent 0.26.0",
+    "metrics": {
+      "installed": "0.26.0",
+      "tested": "0.26.0"
+    }
+  },
+  {
+    "check": "existing-traigent-use",
+    "status": "PASS",
+    "detail": "this project does not list traigent among its dependencies",
+    "metrics": {
+      "declared_in": []
+    }
+  },
+  {
+    "check": "env-shadowed-key",
+    "status": "PASS",
+    "detail": "no credential or route name is masking a different value in the shell and .env",
+    "metrics": {
+      "shadowed_variables": [],
+      "blank_process_masks": [],
+      "fingerprints": {},
+      "route_values": {}
+    }
   },
   {
     "check": "provider-credentials",
@@ -89,10 +111,14 @@
   {
     "check": "dataset-first-run-rows",
     "status": "PASS",
-    "detail": "proposed first-run subset cap: 60 usable rows per configuration from 60 usable rows; select and record the actual row ids before baseline approval",
+    "detail": "proposed first-run subset cap: 48 questions, which bring 48 scoreable rows per configuration, from 60 usable rows (48 different inputs in the tuning split); select and record the actual row ids before baseline approval",
     "metrics": {
-      "first_run_rows": 60,
-      "usable_rows": 60
+      "first_run_questions": 48,
+      "first_run_rows_fewest": 48,
+      "first_run_rows_most": 48,
+      "usable_rows": 60,
+      "first_run_distinct_rows": 48,
+      "first_run_distinct_scope": "the tuning split"
     }
   },
   {
@@ -125,7 +151,135 @@
     "check": "dataset-ids",
     "status": "PASS",
     "detail": "stable ids are unique",
-    "metrics": null
+    "metrics": {
+      "duplicate_ids": 0,
+      "rows_without_id": 0,
+      "generated_rows_without_id": 0,
+      "row_id_digests": [
+        "0ea0bcc927f1088a",
+        "1956e78db78bb599",
+        "1a26da17bc70da73",
+        "1a587f128b9e0619",
+        "1d90eb5714638088",
+        "255ecbeac60c7196",
+        "25ee705805712ad2",
+        "26113998df5ce0f7",
+        "286afb6eea63fd46",
+        "2cbadb1ece396537",
+        "363fe4de21aa75c1",
+        "37a73aa80b97e634",
+        "42bf5765183173d4",
+        "4b34eefe9284cfd4",
+        "5291ca87269a3621",
+        "57d994d566140965",
+        "5835c5556322c9cc",
+        "5a1316e8f2fd1b46",
+        "5bb0de136e162d3c",
+        "5ed2bf2d5439749f",
+        "60b1fb986a413341",
+        "65e948bbb1c7d032",
+        "6a5ae3ffbf75c377",
+        "6bdfb637591800ad",
+        "748e66bafe0ea957",
+        "768ff1901038df55",
+        "7a4a062cd1a3e921",
+        "7e99132a66d61006",
+        "8b56e75f31dcf127",
+        "8c9dbebd8a1dbe77",
+        "9493b7f2914df855",
+        "98afbb02865ae015",
+        "9a9962728265755d",
+        "9c33617112c65e80",
+        "9d7f2aea05e3a763",
+        "a05120cedba39951",
+        "a2830bcbbcf582fc",
+        "a7b8ae739050f7cf",
+        "a94738c81b5f6e7d",
+        "afff9e666301763f",
+        "b4cbdc75ed047ccf",
+        "b9e5922b4f518a4b",
+        "ba2c07aaaff5bac5",
+        "ba6e170366729350",
+        "bbce54e77ea4ffe8",
+        "bbeeb645daf2ebfc",
+        "bd5dcb3772951214",
+        "be822378385a8306",
+        "c0226979476e0ee3",
+        "c36224a52f15cb6e",
+        "c8fe81b08c16accd",
+        "cfeed2d4b69b5a20",
+        "d5e46852726a8deb",
+        "d745e6f5913d43a2",
+        "d8bd4d62c358086b",
+        "e9de0e9ee1fe38c2",
+        "f13a1d81fdf19807",
+        "f7620baf579e5beb",
+        "fd95a91517be21b3",
+        "ffa79f7e69577ab0"
+      ],
+      "run_row_id_digests": [
+        "0ea0bcc927f1088a",
+        "1956e78db78bb599",
+        "1a26da17bc70da73",
+        "1a587f128b9e0619",
+        "1d90eb5714638088",
+        "255ecbeac60c7196",
+        "25ee705805712ad2",
+        "26113998df5ce0f7",
+        "286afb6eea63fd46",
+        "2cbadb1ece396537",
+        "363fe4de21aa75c1",
+        "37a73aa80b97e634",
+        "42bf5765183173d4",
+        "4b34eefe9284cfd4",
+        "5291ca87269a3621",
+        "57d994d566140965",
+        "5835c5556322c9cc",
+        "5a1316e8f2fd1b46",
+        "5bb0de136e162d3c",
+        "5ed2bf2d5439749f",
+        "60b1fb986a413341",
+        "65e948bbb1c7d032",
+        "6a5ae3ffbf75c377",
+        "6bdfb637591800ad",
+        "748e66bafe0ea957",
+        "768ff1901038df55",
+        "7a4a062cd1a3e921",
+        "7e99132a66d61006",
+        "8b56e75f31dcf127",
+        "8c9dbebd8a1dbe77",
+        "9493b7f2914df855",
+        "98afbb02865ae015",
+        "9a9962728265755d",
+        "9c33617112c65e80",
+        "9d7f2aea05e3a763",
+        "a05120cedba39951",
+        "a2830bcbbcf582fc",
+        "a7b8ae739050f7cf",
+        "a94738c81b5f6e7d",
+        "afff9e666301763f",
+        "b4cbdc75ed047ccf",
+        "b9e5922b4f518a4b",
+        "ba2c07aaaff5bac5",
+        "ba6e170366729350",
+        "bbce54e77ea4ffe8",
+        "bbeeb645daf2ebfc",
+        "bd5dcb3772951214",
+        "be822378385a8306",
+        "c0226979476e0ee3",
+        "c36224a52f15cb6e",
+        "c8fe81b08c16accd",
+        "cfeed2d4b69b5a20",
+        "d5e46852726a8deb",
+        "d745e6f5913d43a2",
+        "d8bd4d62c358086b",
+        "e9de0e9ee1fe38c2",
+        "f13a1d81fdf19807",
+        "f7620baf579e5beb",
+        "fd95a91517be21b3",
+        "ffa79f7e69577ab0"
+      ]
+    }
   },
   {
     "check": "dataset-duplicates",
@@ -140,7 +294,10 @@
     "check": "dataset-near-duplicates",
     "status": "PASS",
     "detail": "no input pair reaches 70% similarity",
-    "metrics": null
+    "metrics": {
+      "near_duplicate_pairs": 0,
+      "near_duplicate_scan_complete": true
+    }
   },
   {
     "check": "dataset-outputs",
@@ -159,7 +316,8 @@
     "status": "PASS",
     "detail": "tuning and held-out inputs are disjoint",
     "metrics": {
-      "kind": "tuning-and-holdout"
+      "kind": "tuning-and-holdout",
+      "overlapping_inputs": 0
     }
   },
   {
@@ -178,7 +336,8 @@
     "metrics": {
       "tuning_rows": 48,
       "tuning_labelled_rows": 48,
-      "tuning_distinct_rows": 48
+      "tuning_distinct_rows": 48,
+      "tuning_distinct_scoreable_rows": 48
     }
   },
   {
@@ -219,7 +378,8 @@
     "detail": "evaluator.py parses as valid Python; this proves nothing about its scoring behavior, which is not executed here",
     "metrics": {
       "exists": true,
-      "parses": true
+      "parses": true,
+      "executes": false
     }
   }
 ]

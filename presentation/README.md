@@ -14,7 +14,7 @@ side-by-side column comparison, a left-to-right flow, a 0-100 scale, a
 two-column table, a callout card, or a short bullet list) and a few short
 lines; the talk track and every detail cut from the slide live in the speaker
 notes, which are the presenter's half of the deck. The story: the words the
-guide uses, the one prompt, the four asks, the five stages, when money enters,
+guide uses, the one prompt, the five asks, the five stages, when money enters,
 what happens from each starting point, the readiness score and its caps, the
 secrets and safety boundaries, what leaves the customer's machine, what the
 result contains, and how to start. The deck describes the guide and

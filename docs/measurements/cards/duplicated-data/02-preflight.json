@@ -19,9 +19,31 @@
   },
   {
     "check": "sdk-version",
-    "status": "SKIP",
-    "detail": "traigent is not installed yet; verify it in the isolated environment after installation",
-    "metrics": null
+    "status": "PASS",
+    "detail": "traigent 0.26.0",
+    "metrics": {
+      "installed": "0.26.0",
+      "tested": "0.26.0"
+    }
+  },
+  {
+    "check": "existing-traigent-use",
+    "status": "PASS",
+    "detail": "this project does not list traigent among its dependencies",
+    "metrics": {
+      "declared_in": []
+    }
+  },
+  {
+    "check": "env-shadowed-key",
+    "status": "PASS",
+    "detail": "no credential or route name is masking a different value in the shell and .env",
+    "metrics": {
+      "shadowed_variables": [],
+      "blank_process_masks": [],
+      "fingerprints": {},
+      "route_values": {}
+    }
   },
   {
     "check": "provider-credentials",
@@ -89,10 +111,14 @@
   {
     "check": "dataset-first-run-rows",
     "status": "PASS",
-    "detail": "proposed first-run subset cap: 90 usable rows per configuration from 90 usable rows; select and record the actual row ids before baseline approval",
+    "detail": "proposed first-run subset cap: 48 questions, which bring 73 scoreable rows per configuration, from 90 usable rows (48 different inputs in the tuning split); select and record the actual row ids before baseline approval",
     "metrics": {
-      "first_run_rows": 90,
-      "usable_rows": 90
+      "first_run_questions": 48,
+      "first_run_rows_fewest": 73,
+      "first_run_rows_most": 73,
+      "usable_rows": 90,
+      "first_run_distinct_rows": 48,
+      "first_run_distinct_scope": "the tuning split"
     }
   },
   {
@@ -124,13 +150,141 @@
   {
     "check": "dataset-ids",
     "status": "FAIL",
-    "detail": "duplicate ids: ['spider-dev-0005', 'spider-dev-0015', 'spider-dev-0016', 'spider-dev-0020', 'spider-dev-0047', 'spider-dev-0050', 'spider-dev-0112', 'spider-dev-0133', 'spider-dev-0198', 'spider-dev-0206']",
-    "metrics": null
+    "detail": "30 duplicate ids: ['spider-dev-0005', 'spider-dev-0015', 'spider-dev-0016', 'spider-dev-0020', 'spider-dev-0047', 'spider-dev-0050', 'spider-dev-0112', 'spider-dev-0133', 'spider-dev-0198', 'spider-dev-0206'] (first 10 shown)",
+    "metrics": {
+      "duplicate_ids": 30,
+      "rows_without_id": 0,
+      "generated_rows_without_id": 0,
+      "row_id_digests": [
+        "09b1d2dd75647765",
+        "09c518eb44071ed1",
+        "0eb4649235b89c35",
+        "10a63b5c56f50116",
+        "255ecbeac60c7196",
+        "2565cba4ab27587d",
+        "26113998df5ce0f7",
+        "27eaefac56918b27",
+        "295a337e8498d767",
+        "2ecb2137e40c8789",
+        "32475fb0c6a45912",
+        "34944e4699313ba8",
+        "428c9bfe109fd2f4",
+        "42bf5765183173d4",
+        "48e9179a106729c4",
+        "4b81662378641b77",
+        "5322f2ef5216b7f9",
+        "5414f27ca28399e9",
+        "55372f8ae3cf4a91",
+        "5670717f15a34d9d",
+        "5835c5556322c9cc",
+        "58415e6bd7407336",
+        "58904b6d91f0e0b9",
+        "636053cf2fe5913e",
+        "6c4d3002a09c5893",
+        "6e92cfe80a416d31",
+        "75be1f90156297ac",
+        "78fb800d83502dbc",
+        "7ab26d52baf79bb7",
+        "7b8490edcf3e365c",
+        "7cb7330d585a4d1e",
+        "7f27e5e3f5722d8a",
+        "8558e2103dae7dc8",
+        "85f5d87dd89d2cf5",
+        "8cb24bf2fa86b98d",
+        "98ad6612f2a7d395",
+        "9d7f2aea05e3a763",
+        "9e171d20bca0641d",
+        "a05120cedba39951",
+        "a7b8ae739050f7cf",
+        "ab46ee7b56df1312",
+        "ad8fe2fbf215a48d",
+        "b0a89b60434dbbc1",
+        "b9e5922b4f518a4b",
+        "bc909b639d2bad8d",
+        "c0226979476e0ee3",
+        "c34f2a470da27c08",
+        "c5677801fb95218b",
+        "c66428823e572aaf",
+        "c8fe81b08c16accd",
+        "d0680109d6f29323",
+        "d384646234f4caf6",
+        "d745e6f5913d43a2",
+        "e0cb5c36dc697e38",
+        "e28ba56c08c9b85e",
+        "e397c631743decd4",
+        "e58016148f4f673f",
+        "e9de0e9ee1fe38c2",
+        "f7620baf579e5beb",
+        "f7e410a7cb3e1e03"
+      ],
+      "run_row_id_digests": [
+        "09b1d2dd75647765",
+        "09c518eb44071ed1",
+        "0eb4649235b89c35",
+        "10a63b5c56f50116",
+        "255ecbeac60c7196",
+        "2565cba4ab27587d",
+        "26113998df5ce0f7",
+        "27eaefac56918b27",
+        "295a337e8498d767",
+        "2ecb2137e40c8789",
+        "32475fb0c6a45912",
+        "34944e4699313ba8",
+        "428c9bfe109fd2f4",
+        "42bf5765183173d4",
+        "48e9179a106729c4",
+        "4b81662378641b77",
+        "5322f2ef5216b7f9",
+        "5414f27ca28399e9",
+        "55372f8ae3cf4a91",
+        "5670717f15a34d9d",
+        "5835c5556322c9cc",
+        "58415e6bd7407336",
+        "58904b6d91f0e0b9",
+        "636053cf2fe5913e",
+        "6c4d3002a09c5893",
+        "6e92cfe80a416d31",
+        "75be1f90156297ac",
+        "78fb800d83502dbc",
+        "7ab26d52baf79bb7",
+        "7b8490edcf3e365c",
+        "7cb7330d585a4d1e",
+        "7f27e5e3f5722d8a",
+        "8558e2103dae7dc8",
+        "85f5d87dd89d2cf5",
+        "8cb24bf2fa86b98d",
+        "98ad6612f2a7d395",
+        "9d7f2aea05e3a763",
+        "9e171d20bca0641d",
+        "a05120cedba39951",
+        "a7b8ae739050f7cf",
+        "ab46ee7b56df1312",
+        "ad8fe2fbf215a48d",
+        "b0a89b60434dbbc1",
+        "b9e5922b4f518a4b",
+        "bc909b639d2bad8d",
+        "c0226979476e0ee3",
+        "c34f2a470da27c08",
+        "c5677801fb95218b",
+        "c66428823e572aaf",
+        "c8fe81b08c16accd",
+        "d0680109d6f29323",
+        "d384646234f4caf6",
+        "d745e6f5913d43a2",
+        "e0cb5c36dc697e38",
+        "e28ba56c08c9b85e",
+        "e397c631743decd4",
+        "e58016148f4f673f",
+        "e9de0e9ee1fe38c2",
+        "f7620baf579e5beb",
+        "f7e410a7cb3e1e03"
+      ]
+    }
   },
   {
     "check": "dataset-duplicates",
     "status": "WARN",
-    "detail": "exact/normalized duplicate inputs at rows [[3, 4], [7, 8], [9, 10], [11, 12], [13, 14], [18, 19], [20, 21], [22, 23], [26, 27], [29, 30]]",
+    "detail": "30 exact/normalized duplicate inputs at rows [[3, 4], [7, 8], [9, 10], [11, 12], [13, 14], [18, 19], [20, 21], [22, 23], [26, 27], [29, 30]] (first 10 shown)",
     "metrics": {
       "distinct_rows": 60,
       "scoreable_rows": 90
@@ -139,8 +293,11 @@
   {
     "check": "dataset-near-duplicates",
     "status": "WARN",
-    "detail": "input pairs at least 70% similar (shared runs of 3 consecutive words over total runs, so the same words in a different order are not a repeat), identical rows included: [(3, 4), (7, 8), (9, 10), (11, 12), (13, 14), (18, 19), (20, 21), (22, 23), (26, 27), (29, 30)]",
-    "metrics": null
+    "detail": "30 input pairs at least 70% similar (shared runs of 3 consecutive words over total runs, so the same words in a different order are not a repeat), identical rows included: [(3, 4), (7, 8), (9, 10), (11, 12), (13, 14), (18, 19), (20, 21), (22, 23), (26, 27), (29, 30)] (first 10 shown)",
+    "metrics": {
+      "near_duplicate_pairs": 30,
+      "near_duplicate_scan_complete": true
+    }
   },
   {
     "check": "dataset-outputs",
@@ -159,7 +316,8 @@
     "status": "PASS",
     "detail": "tuning and held-out inputs are disjoint",
     "metrics": {
-      "kind": "tuning-and-holdout"
+      "kind": "tuning-and-holdout",
+      "overlapping_inputs": 0
     }
   },
   {
@@ -177,7 +335,8 @@
     "metrics": {
       "tuning_rows": 73,
       "tuning_labelled_rows": 73,
-      "tuning_distinct_rows": 48
+      "tuning_distinct_rows": 48,
+      "tuning_distinct_scoreable_rows": 48
     }
   },
   {
@@ -218,7 +377,8 @@
     "detail": "evaluator.py parses as valid Python; this proves nothing about its scoring behavior, which is not executed here",
     "metrics": {
       "exists": true,
-      "parses": true
+      "parses": true,
+      "executes": false
     }
   }
 ]

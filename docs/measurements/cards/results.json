@@ -1,5 +1,5 @@
 {
-  "guide_revision": "6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9",
+  "guide_revision": "9eaabbb2dca51a64bfca9fcc437d9459209fc769",
   "runs": [
     {
       "tag": "empty",
@@ -22,18 +22,18 @@
           "reason": "No dataset was provided to this score, so nothing can be measured."
         },
         {
+          "condition": "agent-absent",
+          "ceiling": 25,
+          "blocks": true,
+          "action_kind": "connect-agent",
+          "reason": "No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one."
+        },
+        {
           "condition": "evaluator-absent",
           "ceiling": 40,
           "blocks": true,
           "action_kind": "connect-evaluator",
           "reason": "No evaluation method is connected, so no result can be trusted."
-        },
-        {
-          "condition": "agent-no-varying-knobs",
-          "ceiling": 45,
-          "blocks": false,
-          "action_kind": "vary-knobs",
-          "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
         }
       ],
       "declared_evaluator_method": null,
@@ -45,7 +45,7 @@
       "tag": "logs-only",
       "overall": 7,
       "band": "NOT READY",
-      "recommended_action": "label-data",
+      "recommended_action": "connect-agent",
       "status": "BLOCKED",
       "confidence": 0.4,
       "pillars": {
@@ -54,6 +54,13 @@
         "evaluation": 0
       },
       "caps": [
+        {
+          "condition": "agent-absent",
+          "ceiling": 25,
+          "blocks": true,
+          "action_kind": "connect-agent",
+          "reason": "No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one."
+        },
         {
           "condition": "dataset-no-expected-outputs",
           "ceiling": 30,
@@ -67,13 +74,6 @@
           "blocks": true,
           "action_kind": "connect-evaluator",
           "reason": "No evaluation method is connected, so no result can be trusted."
-        },
-        {
-          "condition": "agent-no-varying-knobs",
-          "ceiling": 45,
-          "blocks": false,
-          "action_kind": "vary-knobs",
-          "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
         }
       ],
       "declared_evaluator_method": null,
@@ -83,13 +83,13 @@
     },
     {
       "tag": "no-data",
-      "overall": 20,
+      "overall": 12,
       "band": "NOT READY",
       "recommended_action": "get-data",
       "status": "BLOCKED",
-      "confidence": 0.62,
+      "confidence": 0.61,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 0,
         "evaluation": 33
       },
@@ -105,8 +105,15 @@
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -116,13 +123,13 @@
     },
     {
       "tag": "agent-and-logs",
-      "overall": 25,
+      "overall": 7,
       "band": "NOT READY",
       "recommended_action": "label-data",
       "status": "BLOCKED",
-      "confidence": 0.6,
+      "confidence": 0.59,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 18,
         "evaluation": 0
       },
@@ -140,6 +147,13 @@
           "blocks": true,
           "action_kind": "connect-evaluator",
           "reason": "No evaluation method is connected, so no result can be trusted."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": null,
@@ -153,9 +167,9 @@
       "band": "NOT READY",
       "recommended_action": "repair-evaluator",
       "status": "BLOCKED",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 28
       },
@@ -166,6 +180,13 @@
           "blocks": true,
           "action_kind": "repair-evaluator",
           "reason": "The completed calibration failed at least one authored behavioral check, so this evaluator has not demonstrated that it ranks the task correctly. Every number below it is unreliable."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -175,13 +196,13 @@
     },
     {
       "tag": "no-labels",
-      "overall": 30,
-      "band": "PARTIAL",
+      "overall": 19,
+      "band": "NOT READY",
       "recommended_action": "label-data",
       "status": "BLOCKED",
-      "confidence": 0.62,
+      "confidence": 0.61,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 18,
         "evaluation": 33
       },
@@ -197,8 +218,15 @@
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -212,9 +240,9 @@
       "band": "PARTIAL",
       "recommended_action": "repair-dataset",
       "status": "BLOCKED",
-      "confidence": 0.76,
+      "confidence": 0.75,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 86,
         "evaluation": 33
       },
@@ -224,14 +252,28 @@
           "ceiling": 35,
           "blocks": true,
           "action_kind": "repair-dataset",
-          "reason": "Some rows could not be read as data - malformed lines, or missing the input or expected-answer field."
+          "reason": "30 ids are used by more than one row, so a row cannot be named, excluded, or reviewed without ambiguity."
         },
         {
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        },
+        {
+          "condition": "dataset-repeated-rows",
+          "ceiling": 89,
+          "blocks": false,
+          "action_kind": "review-repeats",
+          "reason": "25 of the 73 rows this run can score on the tuning side repeat an input already counted, so this comparison resolves 48 different examples rather than 73. Nothing here is broken and the run can carry on, but every copy is a trial paid for that teaches what the first one already did. Continue on the examples that differ, or replace the repeats in your own file and this run reads it again."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -241,13 +283,13 @@
     },
     {
       "tag": "no-eval",
-      "overall": 40,
+      "overall": 39,
       "band": "PARTIAL",
       "recommended_action": "connect-evaluator",
       "status": "BLOCKED",
-      "confidence": 0.66,
+      "confidence": 0.65,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 0
       },
@@ -258,6 +300,13 @@
           "blocks": true,
           "action_kind": "connect-evaluator",
           "reason": "No evaluation method is connected, so no result can be trusted."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": null,
@@ -271,7 +320,7 @@
       "band": "PARTIAL",
       "recommended_action": "vary-knobs",
       "status": "BLOCKED",
-      "confidence": 0.68,
+      "confidence": 0.67,
       "pillars": {
         "agent": 0,
         "dataset": 98,
@@ -282,7 +331,7 @@
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
         },
         {
@@ -302,11 +351,11 @@
       "tag": "ready",
       "overall": 45,
       "band": "PARTIAL",
-      "recommended_action": "proceed",
+      "recommended_action": "complete-calibration",
       "status": "OK",
-      "confidence": 0.68,
+      "confidence": 0.67,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 33
       },
@@ -315,8 +364,15 @@
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -328,21 +384,28 @@
       "tag": "sql-exec-stop",
       "overall": 45,
       "band": "PARTIAL",
-      "recommended_action": "proceed",
+      "recommended_action": "confirm-evaluator-connection",
       "status": "OK",
-      "confidence": 0.68,
+      "confidence": 0.67,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
-        "evaluation": 51
+        "evaluation": 59
       },
       "caps": [
         {
-          "condition": "evaluator-unvalidated",
+          "condition": "agent-no-varying-knobs",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
-          "reason": "An evaluator method (execution) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        },
+        {
+          "condition": "evaluator-calibration-refused",
+          "ceiling": null,
+          "blocks": false,
+          "action_kind": "confirm-evaluator-connection",
+          "reason": "An evaluator method (execution) was declared, and this run did not run the evaluator check on it, because running it here is outside the scope this guide permits. This run did not execute your original evaluator: doing so would run candidate code or open its configured target. This guide declines that direct route. So we do not know whether your evaluator works - not because you failed anything, but because this check is outside what this guide performs on your original file. The one step in this guide that could change that is the copied-actor route: a copy of your evaluator, calibrated against a read-only or duplicate target you supply, where the run can offer it. It is a limit of this run and not a judgement of your evaluator, and THIS does not stop your run. What proceeding means: during the paid run the MODEL writes the statements and your evaluator runs them against whatever it is configured to reach, many times over - generated statements, not yours. If it reaches an engine and that connection is read-only, the engine itself refuses a destructive statement, which closes that much - pass `--evaluator-connection read-only` and this card will say so. It closes nothing for an evaluator that runs candidate code outside a connection. Not answering is fine and changes nothing. Until some run measures this evaluator against answers already known to be right and wrong, no card can claim it grades correctly - so the evaluation pillar above reports which checks were measured, and this run cannot present as STRONG. Your score is not reduced for it."
         }
       ],
       "declared_evaluator_method": "execution",
@@ -352,10 +415,10 @@
     },
     {
       "tag": "no-agent",
-      "overall": 45,
-      "band": "PARTIAL",
-      "recommended_action": "proceed",
-      "status": "OK",
+      "overall": 25,
+      "band": "NOT READY",
+      "recommended_action": "connect-agent",
+      "status": "BLOCKED",
       "confidence": 0.48,
       "pillars": {
         "agent": 0,
@@ -364,18 +427,18 @@
       },
       "caps": [
         {
+          "condition": "agent-absent",
+          "ceiling": 25,
+          "blocks": true,
+          "action_kind": "connect-agent",
+          "reason": "No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one."
+        },
+        {
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
-        },
-        {
-          "condition": "agent-no-varying-knobs",
-          "ceiling": 45,
-          "blocks": false,
-          "action_kind": "vary-knobs",
-          "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -387,11 +450,11 @@
       "tag": "wrong-answers",
       "overall": 45,
       "band": "PARTIAL",
-      "recommended_action": "proceed",
+      "recommended_action": "complete-calibration",
       "status": "OK",
-      "confidence": 0.68,
+      "confidence": 0.67,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 91,
         "evaluation": 33
       },
@@ -400,8 +463,15 @@
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -413,11 +483,11 @@
       "tag": "wrong-wiring",
       "overall": 45,
       "band": "PARTIAL",
-      "recommended_action": "proceed",
+      "recommended_action": "complete-calibration",
       "status": "OK",
-      "confidence": 0.68,
+      "confidence": 0.67,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 33
       },
@@ -426,8 +496,15 @@
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -437,17 +514,24 @@
     },
     {
       "tag": "hand-written",
-      "overall": 74,
-      "band": "WORKABLE",
+      "overall": 45,
+      "band": "PARTIAL",
       "recommended_action": "add-examples",
       "status": "OK",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 75,
         "evaluation": 83
       },
       "caps": [
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        },
         {
           "condition": "dataset-below-measurable-size",
           "ceiling": 74,
@@ -463,17 +547,25 @@
     },
     {
       "tag": "checked",
-      "overall": 86,
-      "band": "STRONG",
+      "overall": 45,
+      "band": "PARTIAL",
       "recommended_action": "proceed",
       "status": "OK",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 83
       },
-      "caps": [],
+      "caps": [
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        }
+      ],
       "declared_evaluator_method": "normalized-exact",
       "declared_task_kind": "code-sql",
       "calibration_ran": true,
@@ -483,21 +575,28 @@
       "tag": "best-case",
       "overall": 45,
       "band": "PARTIAL",
-      "recommended_action": "proceed",
+      "recommended_action": "confirm-evaluator-connection",
       "status": "OK",
-      "confidence": 0.68,
+      "confidence": 0.67,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
-        "evaluation": 51
+        "evaluation": 59
       },
       "caps": [
         {
-          "condition": "evaluator-unvalidated",
+          "condition": "agent-no-varying-knobs",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
-          "reason": "An evaluator method (execution) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        },
+        {
+          "condition": "evaluator-calibration-refused",
+          "ceiling": null,
+          "blocks": false,
+          "action_kind": "confirm-evaluator-connection",
+          "reason": "An evaluator method (execution) was declared, and this run did not run the evaluator check on it, because running it here is outside the scope this guide permits. This run did not execute your original evaluator: doing so would run candidate code or open its configured target. This guide declines that direct route. So we do not know whether your evaluator works - not because you failed anything, but because this check is outside what this guide performs on your original file. The one step in this guide that could change that is the copied-actor route: a copy of your evaluator, calibrated against a read-only or duplicate target you supply, where the run can offer it. It is a limit of this run and not a judgement of your evaluator, and THIS does not stop your run. What proceeding means: during the paid run the MODEL writes the statements and your evaluator runs them against whatever it is configured to reach, many times over - generated statements, not yours. If it reaches an engine and that connection is read-only, the engine itself refuses a destructive statement, which closes that much - pass `--evaluator-connection read-only` and this card will say so. It closes nothing for an evaluator that runs candidate code outside a connection. Not answering is fine and changes nothing. Until some run measures this evaluator against answers already known to be right and wrong, no card can claim it grades correctly - so the evaluation pillar above reports which checks were measured, and this run cannot present as STRONG. Your score is not reduced for it."
         }
       ],
       "declared_evaluator_method": "execution",
@@ -507,35 +606,44 @@
     },
     {
       "tag": "best-case--off-method-calibration",
-      "overall": 91,
-      "band": "EXCELLENT",
-      "recommended_action": "proceed",
-      "status": "OK",
-      "confidence": 0.87,
-      "pillars": {
-        "agent": 70,
-        "dataset": 98,
-        "evaluation": 99
+      "refused": {
+        "step": "calibrate_evaluator.py",
+        "exit": 2,
+        "reason": "Refusing to calibrate: the scorer this run would import reaches a code or SQL engine, and calling it runs statements against whatever that engine is pointed at. The probes are this guide's own authored pairs, so nothing the model wrote runs at this step - what is unbounded is the target, and a first run does not grade against a database it cannot bound."
       },
+      "overall": null,
+      "band": null,
+      "recommended_action": null,
+      "status": null,
+      "confidence": null,
+      "pillars": {},
       "caps": [],
-      "declared_evaluator_method": "execution",
+      "declared_evaluator_method": null,
       "declared_task_kind": "code-sql",
-      "calibration_ran": true,
-      "calibration_passed": true
+      "calibration_ran": null,
+      "calibration_passed": null
     },
     {
       "tag": "wrong-answers--calibrated",
-      "overall": 83,
-      "band": "STRONG",
+      "overall": 45,
+      "band": "PARTIAL",
       "recommended_action": "proceed",
       "status": "OK",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 91,
         "evaluation": 83
       },
-      "caps": [],
+      "caps": [
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        }
+      ],
       "declared_evaluator_method": "normalized-exact",
       "declared_task_kind": "code-sql",
       "calibration_ran": true,
@@ -547,9 +655,9 @@
       "band": "NOT READY",
       "recommended_action": "repair-evaluator",
       "status": "BLOCKED",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 28
       },
@@ -560,6 +668,13 @@
           "blocks": true,
           "action_kind": "repair-evaluator",
           "reason": "The completed calibration failed at least one authored behavioral check, so this evaluator has not demonstrated that it ranks the task correctly. Every number below it is unreliable."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -571,35 +686,9 @@
       "tag": "fake-ruler--uncalibrated",
       "overall": 45,
       "band": "PARTIAL",
-      "recommended_action": "proceed",
+      "recommended_action": "complete-calibration",
       "status": "OK",
-      "confidence": 0.68,
-      "pillars": {
-        "agent": 70,
-        "dataset": 98,
-        "evaluation": 33
-      },
-      "caps": [
-        {
-          "condition": "evaluator-unvalidated",
-          "ceiling": 45,
-          "blocks": false,
-          "action_kind": "proceed",
-          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
-        }
-      ],
-      "declared_evaluator_method": "normalized-exact",
-      "declared_task_kind": "code-sql",
-      "calibration_ran": false,
-      "calibration_passed": null
-    },
-    {
-      "tag": "ready--without-agent-knobs",
-      "overall": 45,
-      "band": "PARTIAL",
-      "recommended_action": "proceed",
-      "status": "OK",
-      "confidence": 0.48,
+      "confidence": 0.67,
       "pillars": {
         "agent": 0,
         "dataset": 98,
@@ -610,7 +699,7 @@
           "condition": "evaluator-unvalidated",
           "ceiling": 45,
           "blocks": false,
-          "action_kind": "proceed",
+          "action_kind": "complete-calibration",
           "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
         },
         {
@@ -618,7 +707,40 @@
           "ceiling": 45,
           "blocks": false,
           "action_kind": "vary-knobs",
-          "reason": "No settings document and no reading of the agent reached this score, so the settings a search would vary cannot be counted. Reading the agent is what counts them."
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "ready--without-agent-knobs",
+      "overall": 25,
+      "band": "NOT READY",
+      "recommended_action": "connect-agent",
+      "status": "BLOCKED",
+      "confidence": 0.48,
+      "pillars": {
+        "agent": 0,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "agent-absent",
+          "ceiling": 25,
+          "blocks": true,
+          "action_kind": "connect-agent",
+          "reason": "No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one."
+        },
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
         }
       ],
       "declared_evaluator_method": "normalized-exact",
@@ -628,17 +750,25 @@
     },
     {
       "tag": "grid-exact--code-sql",
-      "overall": 86,
-      "band": "STRONG",
+      "overall": 45,
+      "band": "PARTIAL",
       "recommended_action": "proceed",
       "status": "OK",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 83
       },
-      "caps": [],
+      "caps": [
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        }
+      ],
       "declared_evaluator_method": "exact",
       "declared_task_kind": "code-sql",
       "calibration_ran": true,
@@ -646,17 +776,25 @@
     },
     {
       "tag": "grid-normalized-exact--structured",
-      "overall": 86,
-      "band": "STRONG",
+      "overall": 45,
+      "band": "PARTIAL",
       "recommended_action": "proceed",
       "status": "OK",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 83
       },
-      "caps": [],
+      "caps": [
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        }
+      ],
       "declared_evaluator_method": "normalized-exact",
       "declared_task_kind": "structured",
       "calibration_ran": true,
@@ -664,17 +802,25 @@
     },
     {
       "tag": "grid-normalized-exact--code-sql",
-      "overall": 86,
-      "band": "STRONG",
+      "overall": 45,
+      "band": "PARTIAL",
       "recommended_action": "proceed",
       "status": "OK",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 83
       },
-      "caps": [],
+      "caps": [
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        }
+      ],
       "declared_evaluator_method": "normalized-exact",
       "declared_task_kind": "code-sql",
       "calibration_ran": true,
@@ -682,17 +828,25 @@
     },
     {
       "tag": "grid-exact--structured",
-      "overall": 92,
-      "band": "EXCELLENT",
+      "overall": 45,
+      "band": "PARTIAL",
       "recommended_action": "proceed",
       "status": "OK",
-      "confidence": 0.87,
+      "confidence": 0.86,
       "pillars": {
-        "agent": 70,
+        "agent": 0,
         "dataset": 98,
         "evaluation": 100
       },
-      "caps": [],
+      "caps": [
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        }
+      ],
       "declared_evaluator_method": "exact",
       "declared_task_kind": "structured",
       "calibration_ran": true,

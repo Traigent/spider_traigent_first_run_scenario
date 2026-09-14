@@ -89,28 +89,39 @@ finds nothing.
 
 ## The environment
 
-The first-run guide creates its own environment, `.venv-traigent`, inside the project. Two
-consequences:
+What the first-run guide does about an environment changed on 2026-09-14 (traigent-first-run
+#545). It looks for a virtual environment directly under the project root and proposes
+installing the SDK into it -- one candidate proposes itself, several are offered as a lettered
+choice -- after an approval card that shows what the install would add and which installed
+packages would change version; a `traigent` or `litellm` already at or above the tested pin is
+kept. With no usable environment and the `.venv` name free, it offers to create a persistent
+project `.venv` for the customer to keep. `.venv-traigent` is the throwaway fallback, taken
+only when the customer declines the install into their own environment, refuses a version
+change, or `.venv` is occupied. Three consequences for a demo:
 
-**A demo never ships one.** If `.venv-traigent` already exists the guide stops, reports the
-path, and asks for it to be inspected -- so a demo carrying one cannot be run at all. No
-combination of flags produces one, `build.py` checks before it finishes, and a test asserts
-it.
+**A demo never ships `.venv-traigent`.** The guide never adopts a throwaway environment from
+another run, and on the fallback route it stops when that path already exists without a
+verified setup of its own, reports the path, and asks for it to be inspected. A demo carrying
+one would either be passed over as a candidate or stop the fallback route -- neither is a
+starting state anyone arrives with. No combination of flags produces one, `build.py` checks
+before it finishes, and a test asserts it.
 
-**A demo ships no dependency declaration either.** The guide installs its own tested pins,
-which already cover what these projects need. Anything declared here would add nothing and
-could only disagree with what is about to be installed.
+**A demo ships no dependency declaration either.** The guide reads `requirements.txt`,
+`pyproject.toml` and `setup.py` only to see whether the project already lists `traigent`
+(preflight's `existing-traigent-use` check); it never edits them and never installs from them.
+Anything declared here would add nothing and could only disagree with what is about to be
+installed.
 
-A demo used to be able to ship a pre-existing environment of its own, on a supported
-interpreter or on one below the floor. That option is gone. Measured before removing it: all
-three of its settings produced byte-identical preflight and readiness output, because the
-guide builds its own environment regardless and never reads a project's. It was scenery that
-changed nothing, and it cost a machine prerequisite -- a second interpreter installed just so
-the option could be built -- plus a step in CI whose only job was to keep that interpreter on
-the path.
-
-If the guide ever reports which interpreter it chose, the option becomes worth having again,
-because then there would be something to observe.
+**`--venv ready` now changes the route the run takes.** A demo used to be able to ship an
+*empty* pre-existing environment as scenery; measured at `6ec2b9c1`, all of its settings
+produced byte-identical preflight and readiness output, because the guide then built its own
+environment regardless and never read a project's, so that option was removed. What
+`--venv ready` builds today is a working environment -- `.venv`, on the newest supported
+Python, with the agent's dependency installed -- and at `9eaabbb2` there is something to
+observe: the guide finds it, proposes it by absolute path, and shows an approval card for
+installing into it, where a demo without one is offered a fresh `.venv` instead. The run
+records the route it took and the environment's path and versions in
+`traigent-runs/run-plan.md`.
 
 ## Running one
 
@@ -130,7 +141,8 @@ Give it exactly this, and nothing else:
 
 ```text
 Help me run my first Traigent optimization.
-Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.
+Clone https://github.com/Traigent/traigent-first-run beside my project, outside its root,
+and follow the clone's GUIDE.md while keeping my project as the working directory.
 ```
 
 No hints, no mention of what was left out, no "check whether the evaluator is any good". The
@@ -146,6 +158,11 @@ python3 build.py demo --preset ready --guide local \
 
 The guide then lands at `project/traigent-first-run/`, the handoff points at it rather than
 at a clone, and `demo.json` records the checkout's commit.
+
+The guide now asks customers to clone beside the project and will announce an exclusion of
+`project/traigent-first-run/` on a `--guide local` demo, as it does when the guide source is
+already inside the user's project at run time. This is a documented divergence from the customer
+layout the guide now recommends.
 
 **`verify` goes red on that demo, and it is not the demo that is wrong.** Measured on
 2026-09-02 against guide revision `6ec2b9c1`: `build.py verify --demo ~/demos/pinned` exits 1
@@ -165,9 +182,10 @@ That roster -- `preset`, `fixture`, `plant`, `scenario`, `deliberate`, `is obser
 hyphenated preset and component name -- exists to catch *this repository* leaking into a
 project. The first-run guide is a document about running first-run evaluations, so it uses
 those words for their ordinary meaning: `readiness.py` has a `--preset`-shaped vocabulary,
-`run-safety.md` says "deliberate", `component-creation.md` says "fixture". None of that names a
-state, a preset or a generator. The same demo built with `--guide clone` verifies clean, which
-is the control.
+`run-safety.md` says "deliberate", `component-creation.md` says "fixture", and `hand-written`
+and `exact-match` -- two of this repository's preset and component names -- appear in the
+guide's scripts in their ordinary sense. None of that names a state, a preset or a generator.
+The same demo built with `--guide clone` verifies clean, which is the control.
 
 So, for an operator:
 
@@ -207,10 +225,13 @@ for entry in record["files"]:
 PY
 ```
 
-Anything the run added -- `.venv-traigent`, `.env`, and everything the guide writes under
-`traigent-runs/` -- will not be in the record, because it was not there when the demo was
-built. (With `--calibration present` the project already has one file under `traigent-runs/`,
-its probe answers, and that one *is* in the record.)
+Anything the run added will not be in the record, because it was not there when the demo was
+built: `.env`, a `.venv-traigent` or a `.venv` the run created, and everything the guide
+writes under `traigent-runs/` -- `run-plan.md`, `readiness/<timestamp>/`, `run-log.jsonl`, and
+on the copied-actor route a copy of the evaluator under `calibration/`. Packages the run
+installs into a `.venv` the demo shipped do not show either, because `inventory()` in
+`build.py` leaves `.venv` out of the record. (With `--calibration present` the project already
+has one file under `traigent-runs/`, its probe answers, and that one *is* in the record.)
 
 Demos are disposable. Build a new one rather than reusing one that has been run: a project
 that has already been through a run carries its notes, its environment and its results, and

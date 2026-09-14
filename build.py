@@ -52,7 +52,8 @@ GUIDE_DIRECTORY = "traigent-first-run"
 # Byte-identical to the prompt the product hands customers. Pinned by tests/test_build.py.
 HANDOFF_CLONE = (
     "Help me run my first Traigent optimization.\n"
-    f"Clone {GUIDE_URL} and follow GUIDE.md."
+    f"Clone {GUIDE_URL} beside my project, outside its root,\n"
+    "and follow the clone's GUIDE.md while keeping my project as the working directory."
 )
 HANDOFF_LOCAL = (
     "Help me run my first Traigent optimization.\n"
@@ -177,8 +178,8 @@ DATASET_STATES = (
 CALIBRATION_STATES = ("none", "present")
 GUIDE_MODES = ("clone", "local")
 VENV_STATES = ("none", "ready")
-# The name a project gives its own environment. Never `.venv-traigent`: that one belongs to
-# the guide, which creates it and stops if it is already there.
+# The name a project gives its own environment. Never `.venv-traigent`: that one is the
+# guide's fallback; on that route it stops if one is already there, so a demo must never ship one.
 PROJECT_VENV = ".venv"
 # The interpreter a project environment is built with, newest first. The guide supports
 # 3.11 to 3.13 and this repository targets the top of that range.
@@ -221,7 +222,8 @@ CALIBRATION_SOURCES = {
     # opposite reason: it marks the right answer wrong instead of the wrong answer right.
     "swapped": _TEXT_PROBES,
 }
-# The guide creates this itself and stops if it already exists, so a demo must never have one.
+# The guide reserves this as its fallback; on that route it stops if one is already there,
+# so a demo must never pre-empt it.
 FORBIDDEN_VENV_NAME = ".venv-traigent"
 
 # Which evaluator method and task kind each evaluator honestly is. Recorded in the manifest
@@ -705,10 +707,9 @@ def make_project_venv(project: Path, interpreter: str) -> dict[str, Any]:
     """A working environment for the project, the way a project that runs has one.
 
     Not scenery. The agent's dependency is installed, so the agent imports and the project
-    can actually be run before the guide builds an environment of its own. The guide never
-    reuses this one -- it preserves what it finds and creates `.venv-traigent` regardless --
-    so what this buys is a project that looks and behaves like one somebody has been working
-    in.
+    can actually be run before the guide builds an environment of its own. The guide discovers
+    this environment and proposes installing into it (existing-project route); `--venv ready`
+    changes which route the run takes and what the approval card shows.
     """
     venv_dir = project / PROJECT_VENV
     run_or_refuse(
@@ -827,8 +828,7 @@ def check_guide_source(guide_src: Path | None) -> None:
             raise BuildError(
                 f"{resolved} holds a {FORBIDDEN_VENV_NAME} at "
                 f"{path.relative_to(resolved)}, and copying it in would hand over a demo "
-                "the guide refuses to run: it creates that directory itself and stops if it "
-                "already exists."
+                "whose fallback route the guide would refuse."
             )
 
 
@@ -1706,7 +1706,7 @@ def verify_demo(root: Path) -> list[str]:
         problems.append("the build record is inside the project the agent reads")
     # Anywhere inside, not just at the top: `--guide local` copies a whole checkout into
     # `project/traigent-first-run/`, and one that brought this directory with it left a demo
-    # the guide refuses to run while this check said the project was clean.
+    # whose fallback route the guide would refuse while this check said the project was clean.
     for path in project.rglob(FORBIDDEN_VENV_NAME):
         problems.append(
             f"the project contains {FORBIDDEN_VENV_NAME} at {path.relative_to(project)}"
