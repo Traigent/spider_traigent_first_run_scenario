@@ -62,13 +62,14 @@ give it exactly this, and nothing else:
 
 ```text
 Help me run my first Traigent optimization.
-Clone https://github.com/Traigent/traigent-first-run beside my project, outside its root,
-and follow the clone's GUIDE.md while keeping my project as the working directory.
+Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.
 ```
 
 That is the same prompt a customer is given -- the guide's README, "Start with one prompt", at
-`9eaabbb2`; it changed on 2026-09-11 to say where the clone goes, beside the project and never
-inside it. `build.py` prints it when it finishes, and records it in `demo.json`.
+`e4096e3a`. For four days in September it was three lines that also said where to clone, beside
+the project and not inside it; guide #550 put it back to two, because that is the assistant's
+rule (it lives in `GUIDE.md`) and not something a customer should have to know or say.
+`build.py` prints it when it finishes, and records it in `demo.json`.
 
 ### The bank, and why its directories have unreadable names
 
@@ -326,25 +327,26 @@ reaches that by executing SQL the model wrote, inside a read-only connection wit
 allow-list, a five-second watchdog, and caps on rows, bytes, value size and column count.
 
 What the first-run guide does with a scorer that executes model-written SQL changed between the
-revision this bank was first measured at and `9eaabbb2`. Its `references/run-safety.md` still
-ships no sandbox and will not run such a scorer on its own initiative, and its opening gate
-still will not calibrate the customer's original -- but since 2026-09-10 the run continues, on
-full disclosure: the assistant says what was not checked, that the boundary is the guide's and
-not the project's, and what proceeding means (the model writes the statements and the
-customer's evaluator runs them against whatever it reaches), and asks once, at the pre-spend
-approval, whether the evaluator connects read-only. Since 2026-09-14 there is also a contained
-route: a *copy* of the evaluator under `traigent-runs/calibration/`, with its one engine-target
-argument repointed to a read-only or duplicate target the customer supplies, can be calibrated
-by `calibrate_evaluator.py --calibrated-copy-of`. Whether `exec_match.py` fits that route is
-not measured here: it opens exactly one `sqlite3.connect(...)`, which the route accepts, but
-the target is a per-row path built from the row's `db_id`, and the probe answers span three
-databases, so a single repointed target could not serve them. The calibration tool also now
-refuses, on its own, to import a scorer whose walk reaches a SQL engine outside that route --
-which this bank's sweep hits, and records.
+revision this bank was first measured at and the one it is measured at now. Its
+`references/run-safety.md` still ships no sandbox and will not run such a scorer on its own
+initiative, and its opening gate still will not calibrate the customer's original -- but since
+2026-09-10 the run continues, on full disclosure: the assistant says what was not checked, that
+the boundary is the guide's and not the project's, and what proceeding means (the model writes
+the statements and the customer's evaluator runs them against whatever it reaches), and asks
+once, at the pre-spend approval, whether the evaluator connects read-only. Since 2026-09-14
+there is also a contained route: a *copy* of the evaluator under `traigent-runs/calibration/`,
+with its one engine-target argument repointed to a read-only or duplicate target the customer
+supplies, can be calibrated by `calibrate_evaluator.py --calibrated-copy-of`. Whether
+`exec_match.py` fits that route is not measured here: it opens exactly one
+`sqlite3.connect(...)`, which the route accepts, but the target is a per-row path built from
+the row's `db_id`, and the probe answers span three databases, so a single repointed target
+could not serve them. The calibration tool also now refuses, on its own, to import a scorer
+whose walk reaches a SQL engine outside that route -- which this bank's sweep hits, and
+records.
 
 So the presets ask different questions: `checked` asks whether a first run works end to end on
 a non-executing proxy; `sql-exec-stop` and `best-case` ask what the guide does at the one
-boundary in this bank -- a scorer it will not calibrate on the original -- and at `9eaabbb2` the
+boundary in this bank -- a scorer it will not calibrate on the original -- and at `e4096e3a` the
 answer is a card that says so and a run that goes on.
 [docs/eval-methods.md](docs/eval-methods.md) has the detail, including how the two scorers
 are graded.
@@ -379,28 +381,21 @@ scores twice -- once at the opening and again after it has created or repaired a
 the number a finished run reports is not the one in this table, and should not be.
 
 **Measured with the guide's own `preflight.py`, `calibrate_evaluator.py` and `readiness.py`, at
-guide revision `9eaabbb2dca51a64bfca9fcc437d9459209fc769` (`9eaabbb2`), on 2026-09-15.**
+guide revision `e4096e3aa808d5ad67d84db916f8643bca331128` (`e4096e3a`), on 2026-09-15.**
 
-The table was first measured at `6ec2b9c1` on 2026-09-02, and a re-run at `6e18086e` on
-2026-09-06 showed it had drifted; this is the regeneration that re-run was held for. The
-projects are unchanged, the tool being measured moved, and the change that moves nearly every
-row is one fact: **the agent pillar reads 0 on every preset.** The guide's static source reader
-now credits a setting only when it can follow it from the selected callable to the request, and
-this bank's agents hand each setting to a helper that makes the call -- a route the reader
-declines to follow. Every project with an agent therefore sits under an `agent-no-varying-knobs`
-ceiling of 45. It does not block, and the cap's own text says it "does not show that the agent
-has no settings";
-[the section on the source reader](#what-the-source-reader-sees-and-what-the-agent-actually-has)
-has the mechanism and the reason this repository has not reshaped its agents to satisfy it. The
-number each project would open at without that ceiling is in its JSON record as
-`weighted_average` -- 68 for `checked`, where 86 stood at `6ec2b9c1` with the agent pillar at
-70 -- but this table prints what the guide prints.
+The table was first measured at `6ec2b9c1` on 2026-09-02 and regenerated at `9eaabbb2` on
+2026-09-15, where every project with an agent opened at 45 because the guide's static reader
+followed none of the demo agents' settings to the request. That reading lasted a day: guide
+#549 taught the reader the three shapes it was refusing -- LiteLLM's module-level request, a
+`float()` cast on the local, a mapping handed to a nested helper -- and this is the
+regeneration on the trunk that carries it. [The section on the source
+reader](#what-the-source-reader-sees-and-what-the-agent-actually-has) has the whole of that
+story. The projects are unchanged throughout; what moved is the tool.
 
 Rebuild the table with one command. **It does not overwrite the committed cards**: the run
 writes into its own workspace and prints where, and only `--publish` replaces what is under
-`docs/measurements/cards/`. The pin and the agent-read documents agree again, so the command
-needs no `--revision`; the checkout must be sitting on `9eaabbb2`, and the run says so if it is
-not.
+`docs/measurements/cards/`. The checkout must be sitting on `e4096e3a`, and the run says so if
+it is not.
 
 ```bash
 python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
@@ -415,38 +410,41 @@ by hand.
 |---|---|---|---|---|
 | `empty` | 0 | NOT READY | `get-data` | all three: an agent, examples, and a way to score them |
 | `logs-only` | 7 | NOT READY | `connect-agent` | all three, from nothing but logged questions |
-| `agent-and-logs` | 7 | NOT READY | `label-data` | answers for the questions, then a scorer |
-| `no-data` | 12 | NOT READY | `get-data` | examples to measure on |
-| `no-labels` | 19 | NOT READY | `label-data` | answers for the questions |
+| `no-data` | 20 | NOT READY | `get-data` | examples to measure on |
 | `fake-ruler` | 25 | NOT READY | `repair-evaluator` | a scorer that marks everything correct |
 | `no-agent` | 25 | NOT READY | `connect-agent` | an agent |
+| `agent-and-logs` | 30 | PARTIAL | `label-data` | answers for the questions, then a scorer |
+| `no-labels` | 30 | PARTIAL | `label-data` | answers for the questions |
 | `duplicated-data` | 35 | PARTIAL | `repair-dataset` | the data -- half of it is the same rows twice |
-| `no-eval` | 39 | PARTIAL | `connect-evaluator` | a way to score an answer |
+| `no-eval` | 40 | PARTIAL | `connect-evaluator` | a way to score an answer |
 | `no-knobs` | 45 | PARTIAL | `vary-knobs` | something for the agent to vary |
 | `ready` | 45 | PARTIAL | `complete-calibration` | check the scorer, then proceed |
 | `wrong-answers` | 45 | PARTIAL | `complete-calibration` | the pairing. **The card cannot see it.** |
 | `wrong-wiring` | 45 | PARTIAL | `complete-calibration` | the scorer. **Calibration is what finds it.** |
-| `hand-written` | 45 | PARTIAL | `add-examples` | more examples than ten |
-| `sql-exec-stop` | 45 | PARTIAL | `confirm-evaluator-connection` | nothing the run repairs -- see the note on execution below |
-| `best-case` | 45 | PARTIAL | `confirm-evaluator-connection` | the same, and its card is byte-identical to `sql-exec-stop`'s |
-| `checked` | 45 | PARTIAL | `proceed` | nothing |
+| `hand-written` | 74 | WORKABLE | `add-examples` | more examples than ten |
+| `sql-exec-stop` | 85 | WORKABLE | `confirm-evaluator-connection` | nothing the run repairs -- see the note on execution below |
+| `best-case` | 85 | WORKABLE | `confirm-evaluator-connection` | the same, and its card is byte-identical to `sql-exec-stop`'s |
+| `checked` | 93 | WORKABLE | `review-answer-key` | nothing -- read the answers it is graded on |
 
-**Two of the five bands, and nothing above 45.** The spread is measured rather than arranged --
-every combination the CLI accepts was built and scored, and these seventeen are the ones that
-describe a project somebody could actually arrive with. At `6ec2b9c1` the same bank reached
-four bands and `checked` opened at 86 STRONG, four points under EXCELLENT; at `9eaabbb2` the
-agent ceiling holds every project with an agent at 45, and the projects without one sit lower
-for their own reasons. What separates the rows now is the action the card recommends and the
-caps it carries, and those are what the sections below read.
+**Three of the five bands, and the top two are held rather than missing.** The spread is
+measured rather than arranged -- every combination the CLI accepts was built and scored, and
+these seventeen are the ones that describe a project somebody could actually arrive with. The
+agent pillar reads 100 on every project with an agent, so the numbers are what the dataset and
+evaluation pillars make them; `checked` reaches 93, inside EXCELLENT by the number. It reads
+WORKABLE because the guide holds STRONG and EXCELLENT until someone has read the expected
+answers the run is graded on, and that read is the one thing its card asks for. `best-case` and
+`sql-exec-stop` are held at WORKABLE for a different reason: their evaluation pillar was
+measured on two checks of four, and a pillar measured that thinly cannot carry the top two
+bands.
 
 At `6ec2b9c1` there were exactly two ways across the top boundary and the guide barred both at
 the opening: calibrating a scorer that executes model-written SQL, and declaring a trial budget.
 Each was measured rather than assumed -- [`best-case`](#what-best-case-really-opens-at) and
-[the trial-budget question](#the-trial-budget-and-the-fourth-credit). At `9eaabbb2` the first
-is gone altogether, because an executing scorer now earns the same task fit as a text
-comparator; the second still cannot enter the opening score; and a third hold has been added
-that no run in this bank clears: the guide keeps STRONG and EXCELLENT back until the expected
-answers have been read.
+[the trial-budget question](#the-trial-budget-and-the-fourth-credit). At `e4096e3a` the first
+is gone altogether, because an executing scorer earns the same task fit as a text comparator;
+the second is no longer needed, because the opening read credits a twelve-configuration space
+whole; and a third hold has taken their place, one that no run in this bank clears: the
+expected answers have to be read before a band above WORKABLE is awarded.
 
 The band boundaries, for reading the column: NOT READY 0-29, PARTIAL 30-54, WORKABLE 55-74,
 STRONG 75-89, EXCELLENT 90-100.
@@ -455,7 +453,7 @@ STRONG 75-89, EXCELLENT 90-100.
 
 A bank of broken projects is worth having because of what it finds, and at `6ec2b9c1` it found
 three. Two of them the guide has since answered and one it has not. Each is a `diff` over two
-committed cards, re-taken at `9eaabbb2`.
+committed cards, re-taken at `e4096e3a`.
 
 **A dataset whose every answer answers a different question is still not noticed.**
 `wrong-answers` keeps every question and every answer and pairs them wrongly, inside each
@@ -470,13 +468,15 @@ differ are about draw size, not about the damage:
 | examples to compare on | `OK 240 to tune on / 60 held back` | `!! 48 to tune on / 12 held back -- limited comparison set` |
 
 A `wrong-answers` demo ships a 60-row draw because `DAMAGED_ROWS = 60`, so the card is
-comparing a 60-row project with a 300-row one. Add probe answers and it reads **45, `proceed`**
-with one cap, the agent's -- the probes check the scorer and nothing checks whether an answer
-answers its question. At `6ec2b9c1` that same card read 83 STRONG. The tool that would catch it
-exists -- `readiness.py --row-review` asks exactly that -- and this table does not pass it, for
-the reason [docs/measurements](docs/measurements/README.md) gives. The guide has since added a
-second guard this table does not exercise either: its README says the top two bands are "held
-while nobody has read the expected answers the run is graded against".
+comparing a 60-row project with a 300-row one. Add probe answers and it reads **90, WORKABLE,
+`review-answer-key`** with no cap at all -- the probes check the scorer and nothing checks
+whether an answer answers its question. At `6ec2b9c1` that same card read 83 STRONG. The tool
+that would catch it exists -- `readiness.py --row-review` asks exactly that -- and this table
+does not pass it, for the reason [docs/measurements](docs/measurements/README.md) gives. The
+guide has since put a second guard in front of the top bands, and this card is where it shows:
+the 90 is held at WORKABLE and the one thing the card asks for is a read of the expected
+answers, which is the read that would find the rotation. The hold does what the row review
+would have done, one step later and without saying what it would find.
 
 **A mis-wired scorer is invisible without probe answers, still.** `wrong-wiring` compares the
 question with the recorded answer and never reads the model's output. It ships all 300 rows, so
@@ -489,8 +489,8 @@ entire difference between shipping that project and repairing it, in either dire
 **Duplication is now caught by the right check, and said in the right words.** At `6ec2b9c1`
 `duplicated-data` stopped at 35 with `repair-dataset` for a reason that was not true of the
 build -- "Some rows could not be read as data - malformed lines, or missing the input or
-expected-answer field" -- when what had actually fired was preflight's duplicate-*id* check. At
-`9eaabbb2` the card prints, in full:
+expected-answer field" -- when what had actually fired was preflight's duplicate-*id* check.
+Since `9eaabbb2` the card prints, in full:
 
 > **FIX BEFORE PAID RUN** 30 ids are used by more than one row, so a row cannot be named,
 > excluded, or reviewed without ambiguity.
@@ -505,7 +505,7 @@ silently.
 **An absent agent is now a stop, not a `proceed`.** At `6ec2b9c1` `no-agent` -- 300 labelled
 rows, a scorer, and no agent file at all -- read 45 `proceed`, because following the guide's own
 instruction for a missing agent (leave the agent flags off) meant the score never learned the
-agent was absent. At `9eaabbb2` it reads **25, NOT READY, `connect-agent`**, under an
+agent was absent. Since `9eaabbb2` it reads **25, NOT READY, `connect-agent`**, under an
 `agent-absent` ceiling of 25 that blocks. The same is true of scoring `ready` without
 `--agent-knobs`: no longer "45 either way" but 25 and blocked, and the sentence the card prints
 for it -- `no reading of how the agent is built reached this score; reading the agent is what
@@ -514,53 +514,59 @@ project.
 
 ### What the source reader sees, and what the agent actually has
 
-Same register as the finding above: an observation about the guide, at two revisions, not a
+Same register as the finding above: an observation about the guide, at three revisions, not a
 property of this repository, and not something a reader should expect to stay true.
 
 The tunable agent has **four** settings that change what is sent. Instrumented -- with the
 model call stubbed, so nothing leaves the process -- the full cross product of
 `model` x `schema_context` x `prompt_style` x `temperature` is **36 distinct requests out of
 36**. Every knob is load-bearing: three models, six distinct prompt texts, two temperatures.
+`tests/test_components.py::test_each_setting_changes_the_request` holds that fact in place.
 
 At `6ec2b9c1` the guide's static source reader credited **three of the four** and reported
 "your space has 18 distinct configurations"; `temperature` was the one it declined, because
 "this deliberately narrow static read could not verify that changing this setting changes the
-request on the selected agent path" -- a fair statement of what a narrow static read can
-establish, and an awkward one to read beside `agent.py:66`, which is literally
-`TEMPERATURES = (0.0, 0.7)`, checked at `agent.py:400` and handed to `call_model` at
-`agent.py:406`.
+request on the selected agent path".
 
-At `9eaabbb2` it credits **none of the four.** The reader now follows a setting only along a
-route it can prove reaches the request: a module-level literal collection indexed by the
-setting's own value on the selected call path, or the value passed straight to the request
-argument named for it. This agent checks each value against a tuple and passes it to
-`call_model`, which makes the request -- one function away, and that is a route the reader
-declines. The card prints `no varying setting verified by this opening check` against all four,
-lists them under `agent_unfollowed_settings`, and holds the score at 45 under a ceiling whose
-own text says it "does not show that the agent has no settings". So the agent pillar reads 0,
-`checked` opens at 45 instead of 86, and every row in the table above with an agent in it is
-under the same ceiling. Reshaping the agents so the reader can follow them -- indexing a literal
-table with the setting, or passing the value straight to `litellm.completion` -- would change
-nothing the agent sends and is a small edit; it is also writing code to satisfy someone else's
-static analyser, which the section below argues against. This repository has not done it, and
-says so here rather than quietly.
+At `9eaabbb2` it credited **none of the four.** Every setting was reported as one the read
+"could not follow to the request", and every project with an agent sat under an
+`agent-no-varying-knobs` ceiling of 45. This repository did not reshape its agents to satisfy
+the reader -- see the section below on why -- and instead took the four settings to the guide,
+one feature at a time, to find out which of them the reader was refusing. The helper structure
+was fine: a request placed in a helper, a result post-processed by another, both credited.
+Three narrower rules were not. `litellm.completion(...)` is a module-level function rather than
+a method on a client the file built, and the reader knew only client methods, although LiteLLM
+is the library the guide pins and the call its own wrapper makes. A `float(...)` around the
+setting was accepted at the request argument and refused on the local that held the read one
+line earlier. And a mapping handed to a helper nested inside another call --
+`call_model(model, build_prompt(text, config), temperature)` -- was read as an escape, so only
+the first setting read in the callable survived. Guide #549 (2026-09-15) fixed all three, with
+the refusals kept at their edges: a rebound `litellm`, a project file named `litellm.py`, an
+`int(...)` cast, a helper that writes to the mapping.
+
+At `e4096e3a` it credits **all four**, reports `your space has 36 distinct configurations`, and
+the agent pillar reads 100 -- with no trial budget declared, for the reason the next section
+gives. The four build observations on the card (`?` lines) are the assistant's read of how the
+agent is put together and are excluded from the score until an independent check verifies
+them; they neither add to nor subtract from the 100.
 
 **It cost nothing measurable -- at `6ec2b9c1`.** Declaring the space to `readiness.py
 --config-space` at 18 and at 36, at every trial budget from 1 to 50, gave the identical overall
 score, band and agent pillar at every point. What moved the number was the trial budget:
 undeclared held the agent pillar at 70, 1 trial dropped it to 0, 2 to 3 trials reached 35, 4 to
-11 reached 70, and **12** -- the guide's "complete search" threshold -- reached 100. Same for
-both spaces. That measurement has not been repeated at `9eaabbb2`, where the pillar starts from
-0; it is kept here as the reading it was.
+11 reached 70, and **12** -- the guide's "complete search" threshold -- reached 100. That
+measurement has not been repeated; since guide #422 the opening read no longer holds a
+budgetless space one step below, which is why the pillar now reads 100 without one.
 
 ### The trial budget, and the fourth credit
 
-**And no, that is not a way to reach EXCELLENT at the opening.** It looked like one at
-`6ec2b9c1`: agent 100 with `checked`'s dataset 98 and evaluation 83 is
-`0.40x98 + 0.35x83 + 0.25x100 = 93.25`, which is inside the band. But a trial budget can only
-enter `readiness.py` through a `--config-space` document -- there is no flag, and the
+**And no, a trial budget is not what reaches the top band at the opening -- and it is no longer
+what a full agent pillar needs.** At `6ec2b9c1` the arithmetic looked like a way in: agent 100
+with `checked`'s dataset 98 and evaluation 83 is `0.40x98 + 0.35x83 + 0.25x100 = 93.25`, inside
+EXCELLENT, and agent 100 needed a declared budget of at least 12 trials. But a trial budget can
+only enter `readiness.py` through a `--config-space` document -- there is no flag, and the
 `--agent-knobs` document refuses the key by name, exit 2, `carries unknown field(s)
-max_trials; it reads 'knobs', 'source' and 'build'`, re-checked at `9eaabbb2` -- and the
+max_trials; it reads 'knobs', 'source' and 'build'`, re-checked at `e4096e3a` -- and the
 opening gate withholds that document. The guide's `references/run-safety.md`, stated as a
 property of the score rather than as advice:
 
@@ -570,15 +576,23 @@ property of the score rather than as advice:
 The only config-space document the guide will read is one the run itself writes, and it saves
 that file "only after this search returns nonzero trials, from the exact space received" -- so
 the budget cannot exist as current-run evidence until money has already been spent, and the
-score it feeds is one the guide says to "never show ... or set it beside the opening one". 93
-is a closing number. (At `6ec2b9c1` those three sentences lived in `SKILL.md`; at `9eaabbb2`
-they are in `references/run-safety.md`, and the wording quoted is the current one.)
+score it feeds is one the guide says to "never show ... or set it beside the opening one". (At
+`6ec2b9c1` those three sentences lived in `SKILL.md`; at `e4096e3a` they are in
+`references/run-safety.md`, and the wording quoted is the current one.)
+
+What changed on the other side is that the opening read stopped holding a budgetless space one
+step below full credit (guide #422, 2026-09-03): a source read that follows at least twelve
+distinct configurations earns the agent pillar whole. So `checked` now opens at exactly the 93
+that this section once said could only be a closing number -- and the guide answers that with
+the band rather than the score: 93 reads **WORKABLE**, with the action `review-answer-key`,
+until someone has read the expected answers. The number arrived at the opening; the verdict
+did not.
 
 The refusal and the single entry point are above, verbatim, and so are the three governing
 quotes -- the last of them elided at the ellipsis you can see in it. What is *not* published
 here is a card for that check: `docs/measurements/cards/` holds the score bank, and the bank
 scores projects rather than the guide's handling of a config-space document. So a reader checks
-this the way it is written -- the quoted text against the guide at `9eaabbb2`, and
+this the way it is written -- the quoted text against the guide at `e4096e3a`, and
 `readiness.py --agent-knobs` against a document carrying `max_trials` -- and not against a
 measurement of ours.
 
@@ -586,8 +600,8 @@ So nothing here is written to win the fourth credit. The obvious way to do it --
 mapping that reads `temperature` back out of a table so the reader can follow it -- was
 considered and rejected: it is worse code, it changes nothing the agent sends, and writing code
 to move somebody else's static analyser is how a demonstration stops demonstrating anything.
-The agent has four knobs; the guide saw three of them at `6ec2b9c1` and follows none at
-`9eaabbb2`, and all three facts are written down.
+The agent has four knobs; the guide saw three of them at `6ec2b9c1`, none at `9eaabbb2`, and
+all four at `e4096e3a`, and every one of those facts is written down.
 
 ### The one that argues for checking your scorer
 
@@ -605,29 +619,30 @@ because the project got more honest, not because it got worse.
 
 ### What `best-case` really opens at
 
-**45, PARTIAL, `confirm-evaluator-connection`** -- and its card is byte-identical to
-`sql-exec-stop`'s, at `9eaabbb2` as it was at `6ec2b9c1`.
+**85, WORKABLE, `confirm-evaluator-connection`** -- and its card is byte-identical to
+`sql-exec-stop`'s, at `e4096e3a` as it was at `6ec2b9c1`.
 
 `best-case` is `checked` with the execution scorer: the same agent, the same 300 rows, marked
 the way Spider marks them, and it ships probe answers. Calibration still does not run at the
 opening, and the reason is the one the guide gives: it will not import a scorer that reaches a
-SQL engine and run it against a target it cannot bound. What changed is what the card says
-about that. At `6ec2b9c1` the refusal left the ordinary `evaluator-unvalidated` ceiling of 45 in
-place and the card read `proceed`. At `9eaabbb2` the card carries a different condition,
+SQL engine and run it against a target it cannot bound. What the card says about that has
+changed twice. At `6ec2b9c1` the refusal left the ordinary `evaluator-unvalidated` ceiling of 45
+in place and the card read `proceed`. Since `9eaabbb2` the card carries a different condition,
 `evaluator-calibration-refused`, with no ceiling and no block: a paragraph headed
 `NOT CHECKED HERE` says the check is one the guide declines to perform rather than one the
-project failed, names the copied-actor route as the one way the guide could measure a copy,
-and asks the customer to say whether the evaluator connects read-only -- which is what the
-recommended action means. The 45 is the agent ceiling every project with an agent sits under,
-and the two projects differ only in a file the gate is not allowed to run, which is why the
-cards are the same.
+project failed, names the copied-actor route as the one way the guide could measure a copy, and
+asks the customer to say whether the evaluator connects read-only -- which is what the
+recommended action means. The 85 is the plain average of dataset 98, evaluation 59 and agent
+100, and the band is held at WORKABLE because the evaluation pillar was measured on two checks
+of four; the two projects differ only in a file the gate is not allowed to run, which is why
+the cards are the same.
 
 **The 91 EXCELLENT this table used to publish was reached by running that calibration anyway,
 and the tool now refuses to.** At `6ec2b9c1` the calibration tool imported any scorer once
-`--allow-execution` was passed; at `9eaabbb2` it walks the scorer first and exits 2 on an engine
-witness: `Refusing to calibrate: the scorer this run would import reaches a code or SQL engine,
-and calling it runs statements against whatever that engine is pointed at.` The sweep records
-that run as refused, and
+`--allow-execution` was passed; since `9eaabbb2` it walks the scorer first and exits 2 on an
+engine witness: `Refusing to calibrate: the scorer this run would import reaches a code or SQL
+engine, and calling it runs statements against whatever that engine is pointed at.` The sweep
+records that run as refused, and
 [`cards/best-case--off-method-calibration/`](docs/measurements/cards/best-case--off-method-calibration/)
 is left as the `6ec2b9c1` reading -- evaluation pillar 99, 91 EXCELLENT, no caps -- because it
 is the evidence for a number this file no longer prints and a run the guide no longer performs.
@@ -635,8 +650,8 @@ is the evidence for a number this file no longer prints and a run the guide no l
 **And the execution scorer is no longer the route to the top band.** At `6ec2b9c1`, task fit
 for `execution` on `code-sql` output was 25/25, so the five points between `checked`'s 86 and
 `best-case`'s off-method 91 were the score correctly reporting that one project measures its
-answers the way the benchmark does. At `9eaabbb2` the guide credits an executing evaluator with
-the same 8/25 task fit as the text comparator; its card says the file `runs the answer, as
+answers the way the benchmark does. Since `9eaabbb2` the guide credits an executing evaluator
+with the same 8/25 task fit as the text comparator; its card says the file `runs the answer, as
 execution declares`, and that `This guide grades with an evaluator that does not run the
 answer, so a route that runs it is not credited as the right kind of check for this output`.
 The arithmetic that once made EXCELLENT reachable through execution is closed from the other
@@ -664,15 +679,16 @@ number anything in this repository could be made to produce, and the shape of it
 point: exactly what someone optimising for the number would arrive at, and exactly what a
 spot-check of either field on its own would miss.
 
-Two things have changed since, and all four combinations were re-measured at `9eaabbb2`
-([`cards/grid-*`](docs/measurements/cards/)). The guide now reads the evaluator file for the
-comparison it performs and refutes a declaration the file does not support, where it can
-resolve the file at all; on this comparator it cannot, so the card still credits the pair --
-and now says so in the same line: `exact suits structured output (declared, not established
-from the evaluator file)`. And the agent ceiling above holds every one of the four at
-**45, PARTIAL**, so the pair no longer buys a band. Its evaluation pillar reads 100 against 83
-for the honest declaration, and its `weighted_average` is 74 rather than 92, because the agent
-pillar reads 0 rather than 70.
+Re-measured at `e4096e3a` ([`cards/grid-*`](docs/measurements/cards/)), the pair still pays:
+**99** against **93** for the honest declaration, the same six points, from an evaluation
+pillar of 100 against 83. Two things changed around it. The guide now reads the evaluator file
+for the comparison it performs and refutes a declaration the file does not support, where it can
+resolve the file at all; on this comparator it cannot, so the card credits the pair and says so
+in the same line: `exact suits structured output (declared, not established from the evaluator
+file)`. And the top band is no longer reachable by declaring anything: every calibrated card in
+this bank, honest or not, reads **WORKABLE** with the action `review-answer-key`, because the
+guide holds STRONG and EXCELLENT until someone has read the expected answers the run is graded
+on. 99 is a number; the band says what a number cannot buy.
 
 This repository does not declare its scorer as anything but what it is, and no number in the
 table above depends on it. Every band here comes from an evaluator declared as what it is, on
@@ -770,7 +786,7 @@ reverted with CI still green.
 The score table itself is not in that list, because *measuring* it needs a checkout of somebody
 else's repository -- but no network, and no install. Re-measure it separately whenever the guide
 moves. The run leaves the committed cards alone unless `--publish` is passed, and it refuses a
-checkout that is not sitting on the pinned revision, `9eaabbb2`
+checkout that is not sitting on the pinned revision, `e4096e3a`
 ([why](docs/measurements/README.md#reproducing-it)):
 
 ```bash

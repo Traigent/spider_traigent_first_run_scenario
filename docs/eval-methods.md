@@ -120,12 +120,12 @@ Measured against the first-run guide at revision
 `6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9` (`6ec2b9c1`) on 2026-09-02.
 
 > **Every readiness figure in this section is that 2026-09-02 reading, and the tool has since
-> moved.** The score bank was regenerated at `9eaabbb2` on 2026-09-15 -- the current cards are
+> moved.** The score bank was regenerated at `e4096e3a` on 2026-09-15 -- the current cards are
 > under [`docs/measurements/cards/`](measurements/README.md) and the current table is in the
-> repository README -- and at that revision every one of these projects opens at 45 under the
-> agent ceiling, the run behind the 91 EXCELLENT number is refused by the calibration tool, and
-> the declared pair below reads 45. The numbers in this section are not republished as
-> current; they are the reading the guide's later changes answered.
+> repository README -- and at that revision the run behind the 91 EXCELLENT number is refused
+> by the calibration tool, `checked` reads 93 and the declared pair below 99, and both are held
+> at WORKABLE until the expected answers are read. The numbers in this section are not
+> republished as current; they are the reading the guide's later changes answered.
 
 | declared method | task kind | task-fit | evaluation pillar | calibrated |
 |---|---|---|---|---|
@@ -213,10 +213,9 @@ each case a right answer, an equivalent one, a partly-right one and a wrong one 
 guide's `calibrate_evaluator.py` measures whether the scorer separates them. That is what
 clears `evaluator-unvalidated`. At the 6ec2b9c1 reading this was worth **41 points** to the
 opening card: `--preset ready` read 45 and `--preset checked`, the identical project with the
-probes shipped, read 86. At `9eaabbb2` both cards read 45, because the agent ceiling binds
-first; the difference calibration makes is still in the cards' JSON records as `weighted_average`,
-51 against 68, and the band above WORKABLE additionally waits for a row review. The 41-point
-figure is a 6ec2b9c1 reading.
+probes shipped, read 86. At `e4096e3a` `ready` reads 45 under the `evaluator-unvalidated`
+ceiling and `checked` 93, so the same probes are worth 48 points at the opening -- and the band
+above WORKABLE additionally waits for a row review. The 41-point figure is a 6ec2b9c1 reading.
 
 The two scorers get different probes, because equivalence means different things to them.
 The text comparator gets 4 cases and is given re-spellings of a recorded query: different

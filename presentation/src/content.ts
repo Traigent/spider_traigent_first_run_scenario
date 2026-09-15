@@ -5,11 +5,11 @@ import {
   type SlideInput,
 } from "./model";
 
-// The three-line prompt from README.md "Start with one prompt", verbatim.
+// The two-line prompt from README.md "Start with one prompt", verbatim.
 const customerPrompt =
-  "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run beside my project, outside its root,\nand follow the clone's GUIDE.md while keeping my project as the working directory.";
+  "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
 
-const guideRevision = "9eaabbb2dca51a64bfca9fcc437d9459209fc769";
+const guideRevision = "e4096e3aa808d5ad67d84db916f8643bca331128";
 
 // Repository-relative paths of every guide file a slide may cite.
 const README = "README.md";
@@ -217,7 +217,7 @@ const rawPresentation = {
         `${GUIDE} · Keep the guide source separate from the project being optimized`,
       ],
       notes: [
-        "The quote is the exact three-line prompt from the guide's README. It is pasted as written.",
+        "The quote is the exact two-line prompt from the guide's README. It is pasted as written. Where the clone goes is the assistant's rule, in GUIDE.md: beside the project, never inside it.",
         "The guide clone is not the project being optimized; the assistant resolves the customer's project root and agent at run time. The throwaway .venv-traigent is used only when the customer declines, refuses a version change, or .venv is occupied. An existing usable environment is an install candidate. An unfinished run resumes its verified setup without reinstalling.",
         "Prefer an install? 'npx skills add Traigent/traigent-first-run', then ask 'Use $traigent-first-run to run my first Traigent optimization.' Node.js is needed only for that command, not for the run. The installed skill keeps the customer's project as the working directory; nothing is cloned into it.",
       ],

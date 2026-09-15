@@ -5,7 +5,7 @@ reproduce it is in this directory: the script, the two hand-written agent reads 
 the captured invocation and full output of every run.
 
 **Measured against the first-run guide at revision
-`9eaabbb2dca51a64bfca9fcc437d9459209fc769` (`9eaabbb2`), on 2026-09-15, on Python 3.12.3.**
+`e4096e3aa808d5ad67d84db916f8643bca331128` (`e4096e3a`), on 2026-09-15, on Python 3.12.3.**
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
 
@@ -13,7 +13,7 @@ somebody else's tool on one date, and the tool is under active development.
 
 ```bash
 git clone https://github.com/Traigent/traigent-first-run ~/code/traigent-first-run
-git -C ~/code/traigent-first-run checkout 9eaabbb2dca51a64bfca9fcc437d9459209fc769
+git -C ~/code/traigent-first-run checkout e4096e3aa808d5ad67d84db916f8643bca331128
 
 python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
@@ -35,7 +35,7 @@ the directory of any run that did not: a refused run reaches two or three files 
 refusal, and moving those over its committed card would delete the rendered card and the `argv`
 record with it.
 
-**One run cannot be measured at `9eaabbb2`.** `best-case--off-method-calibration` asks the
+**One run cannot be measured at `e4096e3a`.** `best-case--off-method-calibration` asks the
 calibration tool to run the execution scorer against the project's databases, and the tool now
 refuses to import a scorer whose walk reaches a SQL engine (exit 2). The sweep records the
 refusal in `results.json` and leaves `cards/best-case--off-method-calibration/` as it was: the
@@ -47,7 +47,7 @@ The sweep checks one more thing before it builds anything: that the documents un
 field lists from the checkout it is handed, so *which fields a document may carry* is settled
 by the guide rather than by a copy of its rules kept here; which fields are *required* the
 guide expresses in control flow rather than as data, so `source_lines` is the one hardcoded
-coordinate in the check, named in `score_bank.py` beside a comment saying so. At `9eaabbb2`
+coordinate in the check, named in `score_bank.py` beside a comment saying so. At `e4096e3a`
 the documents and the pin agree, which is why the command above needs no `--revision`.
 
 **Exit status:** 0 when every run scored, 1 when the guide refused one or more, 2 when the
@@ -71,13 +71,14 @@ answered when it could.
 | `cards/<run>/argv.json` | every invocation, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE` |
 | `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
 
-Two things about the rows at `9eaabbb2`. A cap's `ceiling` may be `null` in `results.json`
+Two things about the rows at `e4096e3a`. A cap's `ceiling` may be `null` in `results.json`
 and on the card: such a cap discloses a finding without bounding the score
-(`evaluator-calibration-refused`, ceiling null, blocks false). And the guide now holds the top
-two bands at WORKABLE until a review of the expected answers has entered through
-`--row-review`, which this sweep never passes; no row here reaches those bands anyway, so the
-hold is inert in this table (`band_limited_by_unread_answers` is false on every card), and it
-would become the binding limit on any run that climbed past 74 without a row review.
+(`evaluator-calibration-refused`, ceiling null, blocks false). And the guide holds the top two
+bands at WORKABLE until a review of the expected answers has entered through `--row-review`,
+which this sweep never passes -- so every calibrated card that climbs past 74 here reads
+WORKABLE with the action `review-answer-key` and `band_limited_by_unread_answers: true`.
+At `9eaabbb2`, a day earlier, that hold was inert because nothing climbed past 45; the row
+review this table does not pass is now what stands between six of its runs and their band.
 
 ## The `--agent-knobs` document, and why it is here
 
@@ -113,7 +114,7 @@ Seventeen presets, then the comparisons the documentation makes:
 | run | what it is for |
 |---|---|
 | the 17 presets | the score table in the README |
-| `best-case--off-method-calibration` | the number once reached by calibrating an executing scorer; refused by the tool at `9eaabbb2`, its `6ec2b9c1` card retained |
+| `best-case--off-method-calibration` | the number once reached by calibrating an executing scorer; refused by the tool since `9eaabbb2`, its `6ec2b9c1` card retained |
 | `wrong-answers--calibrated` | `--preset wrong-answers --calibration present` |
 | `wrong-wiring--calibrated` | `--preset wrong-wiring --calibration present` |
 | `fake-ruler--uncalibrated` | `--preset fake-ruler --calibration none` |
@@ -122,10 +123,12 @@ Seventeen presets, then the comparisons the documentation makes:
 
 ## Results
 
-**Every row below is the 2026-09-15 reading at `9eaabbb2`**, taken from `cards/results.json`.
-The agent pillar reads 0 throughout, for the reason the repository README gives under "What
-the source reader sees": the guide's static reader follows none of the demo agents' settings to
-the request, and every project with an agent sits under `agent-no-varying-knobs` 45.
+**Every row below is the 2026-09-15 reading at `e4096e3a`**, taken from `cards/results.json`.
+The agent pillar reads 100 on every project with an agent: the guide's static reader follows
+all four of the demo agent's settings to the request since guide #549, for the reason the
+repository README gives under "What the source reader sees". A regeneration at `9eaabbb2`
+earlier the same day read 0 there and 45 on every one of those rows; it is superseded, not
+republished.
 
 Pillar weights are the default 40 dataset / 35 evaluation / 25 agent. `*` marks a cap that
 blocks (the card prints `FIX BEFORE PAID RUN`); the others are ceilings only, and a cap whose
@@ -136,30 +139,30 @@ ceiling reads `none` discloses something without bounding the number
 |---|---|---|---|---|---|---|---|
 | `empty` | 0 | NOT READY | `get-data` | 0 | 0 | 0 | `dataset-absent` 20\* · `agent-absent` 25\* · `evaluator-absent` 40\* |
 | `logs-only` | 7 | NOT READY | `connect-agent` | 0 | 18 | 0 | `agent-absent` 25\* · `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* |
-| `agent-and-logs` | 7 | NOT READY | `label-data` | 0 | 18 | 0 | `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* · `agent-no-varying-knobs` 45 |
-| `no-data` | 12 | NOT READY | `get-data` | 0 | 0 | 33 | `dataset-absent` 20\* · `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
-| `no-labels` | 19 | NOT READY | `label-data` | 0 | 18 | 33 | `dataset-no-expected-outputs` 30\* · `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
-| `fake-ruler` | 25 | NOT READY | `repair-evaluator` | 0 | 98 | 28 | `evaluator-invalid` 25\* · `agent-no-varying-knobs` 45 |
+| `agent-and-logs` | 30 | PARTIAL | `label-data` | 100 | 18 | 0 | `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* |
+| `no-data` | 20 | NOT READY | `get-data` | 100 | 0 | 33 | `dataset-absent` 20\* · `evaluator-unvalidated` 45 |
+| `no-labels` | 30 | PARTIAL | `label-data` | 100 | 18 | 33 | `dataset-no-expected-outputs` 30\* · `evaluator-unvalidated` 45 |
+| `fake-ruler` | 25 | NOT READY | `repair-evaluator` | 100 | 98 | 28 | `evaluator-invalid` 25\* |
 | `no-agent` | 25 | NOT READY | `connect-agent` | 0 | 98 | 33 | `agent-absent` 25\* · `evaluator-unvalidated` 45 |
-| `duplicated-data` | 35 | PARTIAL | `repair-dataset` | 0 | 86 | 33 | `dataset-integrity-fail` 35\* · `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 · `dataset-repeated-rows` 89 |
-| `no-eval` | 39 | PARTIAL | `connect-evaluator` | 0 | 98 | 0 | `evaluator-absent` 40\* · `agent-no-varying-knobs` 45 |
+| `duplicated-data` | 35 | PARTIAL | `repair-dataset` | 100 | 86 | 33 | `dataset-integrity-fail` 35\* · `evaluator-unvalidated` 45 · `dataset-repeated-rows` 89 |
+| `no-eval` | 40 | PARTIAL | `connect-evaluator` | 100 | 98 | 0 | `evaluator-absent` 40\* |
 | `no-knobs` | 45 | PARTIAL | `vary-knobs` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45\* |
-| `ready` | 45 | PARTIAL | `complete-calibration` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
-| `wrong-answers` | 45 | PARTIAL | `complete-calibration` | 0 | 91 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
-| `wrong-wiring` | 45 | PARTIAL | `complete-calibration` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
-| `hand-written` | 45 | PARTIAL | `add-examples` | 0 | 75 | 83 | `agent-no-varying-knobs` 45 · `dataset-below-measurable-size` 74 |
-| `sql-exec-stop` | 45 | PARTIAL | `confirm-evaluator-connection` | 0 | 98 | 59 | `agent-no-varying-knobs` 45 · `evaluator-calibration-refused` none |
-| `best-case` | 45 | PARTIAL | `confirm-evaluator-connection` | 0 | 98 | 59 | `agent-no-varying-knobs` 45 · `evaluator-calibration-refused` none |
-| `checked` | 45 | PARTIAL | `proceed` | 0 | 98 | 83 | `agent-no-varying-knobs` 45 |
+| `ready` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
+| `wrong-answers` | 45 | PARTIAL | `complete-calibration` | 100 | 91 | 33 | `evaluator-unvalidated` 45 |
+| `wrong-wiring` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
+| `hand-written` | 74 | WORKABLE | `add-examples` | 100 | 75 | 83 | `dataset-below-measurable-size` 74 |
+| `sql-exec-stop` | 85 | WORKABLE | `confirm-evaluator-connection` | 100 | 98 | 59 | `evaluator-calibration-refused` none |
+| `best-case` | 85 | WORKABLE | `confirm-evaluator-connection` | 100 | 98 | 59 | `evaluator-calibration-refused` none |
+| `checked` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `best-case--off-method-calibration` | refused | -- | -- | -- | -- | -- | `calibrate_evaluator.py` exit 2: the guide refuses to import a scorer that reaches a SQL engine; the committed directory is the `6ec2b9c1` card |
-| `wrong-answers--calibrated` | 45 | PARTIAL | `proceed` | 0 | 91 | 83 | `agent-no-varying-knobs` 45 |
-| `wrong-wiring--calibrated` | 25 | NOT READY | `repair-evaluator` | 0 | 98 | 28 | `evaluator-invalid` 25\* · `agent-no-varying-knobs` 45 |
-| `fake-ruler--uncalibrated` | 45 | PARTIAL | `complete-calibration` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
+| `wrong-answers--calibrated` | 90 | WORKABLE | `review-answer-key` | 100 | 91 | 83 | none |
+| `wrong-wiring--calibrated` | 25 | NOT READY | `repair-evaluator` | 100 | 98 | 28 | `evaluator-invalid` 25\* |
+| `fake-ruler--uncalibrated` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
 | `ready--without-agent-knobs` | 25 | NOT READY | `connect-agent` | 0 | 98 | 33 | `agent-absent` 25\* · `evaluator-unvalidated` 45 |
-| `grid-exact--code-sql` | 45 | PARTIAL | `proceed` | 0 | 98 | 83 | `agent-no-varying-knobs` 45 |
-| `grid-normalized-exact--code-sql` | 45 | PARTIAL | `proceed` | 0 | 98 | 83 | `agent-no-varying-knobs` 45 |
-| `grid-normalized-exact--structured` | 45 | PARTIAL | `proceed` | 0 | 98 | 83 | `agent-no-varying-knobs` 45 |
-| `grid-exact--structured` | 45 | PARTIAL | `proceed` | 0 | 98 | 100 | `agent-no-varying-knobs` 45 |
+| `grid-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
+| `grid-normalized-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
+| `grid-normalized-exact--structured` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
+| `grid-exact--structured` | 99 | WORKABLE | `review-answer-key` | 100 | 98 | 100 | none |
 
 The band boundaries the guide uses, for reading the column: NOT READY 0-29, PARTIAL 30-54,
 WORKABLE 55-74, STRONG 75-89, EXCELLENT 90-100.
@@ -191,10 +194,11 @@ diff <(tail -n +2 ready/04-readiness-card.txt) <(tail -n +2 wrong-wiring/04-read
 At `6ec2b9c1`, with the `ready` family's dataset 98 and agent 70, the overall score was
 `0.40x98 + 0.35xE + 0.25x70 = 56.7 + 0.35E`; EXCELLENT starts at 90, so it needed an evaluation
 pillar of 94, the text comparator's calibrated pillar was 83 (86 overall) and the execution
-scorer's was 99 (91). At `9eaabbb2` the agent pillar is 0, so the average before any ceiling
-(`weighted_average` in each `05-readiness.json`) is `39.2 + 0.35E`: 68 for `checked` (E = 83)
-and 74 for the `exact` + `structured` declaration (E = 100), and every one of them is then held
-at 45 by the agent ceiling. The execution
-scorer no longer reaches 99 either: uncalibrated, and with task fit credited at 8/25 for a
-scorer that runs the answer, `best-case`'s evaluation pillar reads 59 with two of four checks
-measured. The README's sections on `best-case` and on the source reader have the two halves.
+scorer's was 99 (91). At `e4096e3a` the agent pillar is 100 with no trial budget declared, so
+the average is `64.2 + 0.35E`: 93 for `checked` (E = 83), 99 for the `exact` + `structured`
+declaration (E = 100), 85 for `best-case` (E = 59, two of four checks measured). None of them
+is capped, and none reads above WORKABLE: the two calibrated ones are held by the unread answer
+key, `best-case` by its thin evaluation pillar. The execution scorer no longer reaches 99
+either: uncalibrated, and with task fit credited at 8/25 for a scorer that runs the answer,
+its pillar reads 59. The README's sections on `best-case` and on the source reader have the two
+halves.
