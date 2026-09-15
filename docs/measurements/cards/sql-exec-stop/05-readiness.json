@@ -1,36 +1,11 @@
 {
-  "agent_route_unverified": true,
+  "agent_route_unverified": false,
   "agent_source_read": true,
-  "agent_unfollowed_settings": [
-    [
-      "model",
-      3
-    ],
-    [
-      "prompt_style",
-      2
-    ],
-    [
-      "schema_context",
-      3
-    ],
-    [
-      "temperature",
-      2
-    ]
-  ],
-  "band": "PARTIAL",
-  "band_limited_by_confidence": false,
+  "agent_unfollowed_settings": [],
+  "band": "WORKABLE",
+  "band_limited_by_confidence": true,
   "band_limited_by_unread_answers": false,
   "caps": [
-    {
-      "action_kind": "vary-knobs",
-      "asks": false,
-      "blocks": false,
-      "ceiling": 45,
-      "condition": "agent-no-varying-knobs",
-      "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
-    },
     {
       "action_kind": "confirm-evaluator-connection",
       "asks": true,
@@ -42,9 +17,7 @@
   ],
   "confidence": 0.67,
   "gaps": [
-    "agent-no-varying-knobs: The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search.",
     "evaluator-calibration-refused: An evaluator method (execution) was declared, and this run did not run the evaluator check on it, because running it here is outside the scope this guide permits. This run did not execute your original evaluator: doing so would run candidate code or open its configured target. This guide declines that direct route. So we do not know whether your evaluator works - not because you failed anything, but because this check is outside what this guide performs on your original file. The one step in this guide that could change that is the copied-actor route: a copy of your evaluator, calibrated against a read-only or duplicate target you supply, where the run can offer it. It is a limit of this run and not a judgement of your evaluator, and THIS does not stop your run. What proceeding means: during the paid run the MODEL writes the statements and your evaluator runs them against whatever it is configured to reach, many times over - generated statements, not yours. If it reaches an engine and that connection is read-only, the engine itself refuses a destructive statement, which closes that much - pass `--evaluator-connection read-only` and this card will say so. It closes nothing for an evaluator that runs candidate code outside a connection. Not answering is fine and changes nothing. Until some run measures this evaluator against answers already known to be right and wrong, no card can claim it grades correctly - so the evaluation pillar above reports which checks were measured, and this run cannot present as STRONG. Your score is not reduced for it.",
-    "agent/search-space: the source read found candidate settings, but this narrow static check could not verify how they reach the selected local call: model: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; prompt_style: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; schema_context: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension. It has not established an opening search dimension; their cited options come to 36 configurations if they vary, which this read has not established either way",
     "evaluation/calibration could not be measured - no calibration result was provided to this score; we wanted to try your evaluator on answers already known right and wrong, and nobody asked this run to make that check; no points are deducted for it - this run was not the one to make that measurement",
     "evaluation/task-fit: the evaluator file runs the answer, as execution declares: calls .execute() (line 159). This guide grades with an evaluator that does not run the answer, so a route that runs it is not credited as the right kind of check for this output",
     "dataset/diversity could not be measured - not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean",
@@ -58,12 +31,12 @@
   ],
   "knobs": [],
   "open_asks": [],
-  "overall": 45,
+  "overall": 85,
   "pillars": [
     {
       "confidence": 0.77,
       "name": "agent",
-      "score": 0,
+      "score": 100,
       "subscores": [
         {
           "applicable": true,
@@ -94,11 +67,11 @@
         },
         {
           "applicable": true,
-          "evidence": "the source read found candidate settings, but this narrow static check could not verify how they reach the selected local call: model: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; prompt_style: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; schema_context: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension; temperature: the cited executable source shows the declared options, but this deliberately narrow static read could not follow them to the request on the selected agent path: nothing on the selected call path uses this setting to index a declared table: the accepted route is a module-level literal collection indexed by the setting's own value, and for a setting with no options to index it is the value passed straight to the request argument named for it; no source defect is inferred - the setting may well change the request - and the enhanced run can settle this dimension. It has not established an opening search dimension; their cited options come to 36 configurations if they vary, which this read has not established either way",
+          "evidence": "static source verification established possible settings model, prompt_style, schema_context, temperature; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 36 distinct configurations; this read carries no trial budget, so nothing here says how much of it a run would compare",
           "maximum": 100.0,
           "measured": true,
           "name": "search-space",
-          "value": 0.0,
+          "value": 100.0,
           "withheld": false
         },
         {
@@ -257,7 +230,7 @@
       "weight": 15.0
     }
   ],
-  "weighted_average": 60,
+  "weighted_average": 85,
   "weights": {
     "agent": 25.0,
     "dataset": 40.0,

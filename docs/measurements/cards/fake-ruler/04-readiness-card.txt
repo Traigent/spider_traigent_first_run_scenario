@@ -7,11 +7,11 @@ TRAIGENT OPTIMIZATION READINESS        25/100  NOT READY
            address these items with you, then recheck readiness before any paid
            comparison.
 
-  AGENT       --------------------  0/100  (agent source read; 1 of 5 checks measured)
+  AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
     ? whether it ends, and on what                     not independently verified: one call per input, so it ends
     ? whether the answer's shape is pinned down        not independently verified: the answer's shape is constrained
     ? what the model is told, and shown                not independently verified: a prompt, no worked examples in it
-    !! how many settings-combinations there are to try  no varying setting verified by this opening check
+    OK how many settings-combinations there are to try  static source verification established possible settings model, prompt_style, schema_context, temperature; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 36 distinct configurations; this read carries no trial budget, so nothing here says how much of it a run would compare
     ? tools it declares, and can reach                 the document declares no tools, so tool wiring was not checked here.
     not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
 
@@ -29,7 +29,6 @@ TRAIGENT OPTIMIZATION READINESS        25/100  NOT READY
     !! right kind of check for this output             normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output
 
   FIX BEFORE PAID RUN The completed calibration failed at least one authored behavioral check, so this evaluator has not demonstrated that it ranks the task correctly. Every number below it is unreliable.
-  WOULD LIMIT TO 45 The opening check has not established which settings change the request. This limits the planning score; it does not show that the agent has no settings. The request check before paid work is separate and does not raise this score.
 
   The detailed readiness report carries the source observations and settings-check guidance.
 

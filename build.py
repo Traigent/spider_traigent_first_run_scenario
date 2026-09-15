@@ -52,8 +52,7 @@ GUIDE_DIRECTORY = "traigent-first-run"
 # Byte-identical to the prompt the product hands customers. Pinned by tests/test_build.py.
 HANDOFF_CLONE = (
     "Help me run my first Traigent optimization.\n"
-    f"Clone {GUIDE_URL} beside my project, outside its root,\n"
-    "and follow the clone's GUIDE.md while keeping my project as the working directory."
+    f"Clone {GUIDE_URL} and follow GUIDE.md."
 )
 HANDOFF_LOCAL = (
     "Help me run my first Traigent optimization.\n"

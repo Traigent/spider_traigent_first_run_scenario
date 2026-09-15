@@ -117,7 +117,7 @@ installed.
 produced byte-identical preflight and readiness output, because the guide then built its own
 environment regardless and never read a project's, so that option was removed. What
 `--venv ready` builds today is a working environment -- `.venv`, on the newest supported
-Python, with the agent's dependency installed -- and at `9eaabbb2` there is something to
+Python, with the agent's dependency installed -- and since `9eaabbb2` there is something to
 observe: the guide finds it, proposes it by absolute path, and shows an approval card for
 installing into it, where a demo without one is offered a fresh `.venv` instead. The run
 records the route it took and the environment's path and versions in
@@ -141,8 +141,7 @@ Give it exactly this, and nothing else:
 
 ```text
 Help me run my first Traigent optimization.
-Clone https://github.com/Traigent/traigent-first-run beside my project, outside its root,
-and follow the clone's GUIDE.md while keeping my project as the working directory.
+Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.
 ```
 
 No hints, no mention of what was left out, no "check whether the evaluator is any good". The
@@ -159,10 +158,11 @@ python3 build.py demo --preset ready --guide local \
 The guide then lands at `project/traigent-first-run/`, the handoff points at it rather than
 at a clone, and `demo.json` records the checkout's commit.
 
-The guide now asks customers to clone beside the project and will announce an exclusion of
-`project/traigent-first-run/` on a `--guide local` demo, as it does when the guide source is
-already inside the user's project at run time. This is a documented divergence from the customer
-layout the guide now recommends.
+The guide's `GUIDE.md` tells the assistant to clone beside the project, never inside it, and to
+announce an exclusion of the checkout root when the guide source is already inside the project
+-- which is what a `--guide local` demo is. That is the assistant's rule, not the customer's: the
+customer prompt says nothing about where the clone goes. A `--guide local` demo is a documented
+divergence from the layout the guide recommends to itself.
 
 **`verify` goes red on that demo, and it is not the demo that is wrong.** Measured on
 2026-09-02 against guide revision `6ec2b9c1`: `build.py verify --demo ~/demos/pinned` exits 1

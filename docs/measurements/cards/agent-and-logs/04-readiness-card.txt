@@ -1,7 +1,7 @@
 $ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --task-kind code-sql --color never --ascii
-TRAIGENT OPTIMIZATION READINESS        7/100  NOT READY
+TRAIGENT OPTIMIZATION READINESS        30/100  PARTIAL
 
-  BLOCKER  7/100 NOT READY is what your evidence supports, and that stands. Whether the
+  BLOCKER  30/100 PARTIAL is what your evidence supports, and that stands. Whether the
            paid run may start is a separate question: 2 things have to be cleared
            first, each marked FIX BEFORE PAID RUN below. Your assistant will explain
            and address these items with you, then recheck readiness before any paid
@@ -9,11 +9,11 @@ TRAIGENT OPTIMIZATION READINESS        7/100  NOT READY
 
 Confirmed absence is a measured structural finding. The missing component's quality has not been tested.
 
-  AGENT       --------------------  0/100  (agent source read; 1 of 5 checks measured)
+  AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
     ? whether it ends, and on what                     not independently verified: one call per input, so it ends
     ? whether the answer's shape is pinned down        not independently verified: the answer's shape is constrained
     ? what the model is told, and shown                not independently verified: a prompt, no worked examples in it
-    !! how many settings-combinations there are to try  no varying setting verified by this opening check
+    OK how many settings-combinations there are to try  static source verification established possible settings model, prompt_style, schema_context, temperature; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 36 distinct configurations; this read carries no trial budget, so nothing here says how much of it a run would compare
     ? tools it declares, and can reach                 the document declares no tools, so tool wiring was not checked here.
     not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
 
@@ -33,7 +33,6 @@ Confirmed absence is a measured structural finding. The missing component's qual
 
   FIX BEFORE PAID RUN Rows have inputs but no expected outputs, so there is nothing to score a configuration against.
   FIX BEFORE PAID RUN No evaluation method is connected, so no result can be trusted.
-  WOULD LIMIT TO 45 The opening check has not established which settings change the request. This limits the planning score; it does not show that the agent has no settings. The request check before paid work is separate and does not raise this score.
 
   The detailed readiness report carries the source observations and settings-check guidance.
 

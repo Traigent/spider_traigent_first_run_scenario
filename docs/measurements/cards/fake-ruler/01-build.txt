@@ -11,5 +11,6 @@ Start a fresh agent with that project as its working directory, and give it
 exactly this and nothing else:
 
     Help me run my first Traigent optimization.
-    Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.
+    Clone https://github.com/Traigent/traigent-first-run beside my project, outside its root,
+    and follow the clone's GUIDE.md while keeping my project as the working directory.
 exit=0

@@ -7,11 +7,11 @@ TRAIGENT OPTIMIZATION READINESS        35/100  PARTIAL
            address these items with you, then recheck readiness before any paid
            comparison.
 
-  AGENT       --------------------  0/100  (agent source read; 1 of 5 checks measured)
+  AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
     ? whether it ends, and on what                     not independently verified: one call per input, so it ends
     ? whether the answer's shape is pinned down        not independently verified: the answer's shape is constrained
     ? what the model is told, and shown                not independently verified: a prompt, no worked examples in it
-    !! how many settings-combinations there are to try  no varying setting verified by this opening check
+    OK how many settings-combinations there are to try  static source verification established possible settings model, prompt_style, schema_context, temperature; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 36 distinct configurations; this read carries no trial budget, so nothing here says how much of it a run would compare
     ? tools it declares, and can reach                 the document declares no tools, so tool wiring was not checked here.
     not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
 
@@ -30,7 +30,6 @@ TRAIGENT OPTIMIZATION READINESS        35/100  PARTIAL
 
   FIX BEFORE PAID RUN 30 ids are used by more than one row, so a row cannot be named, excluded, or reviewed without ambiguity.
   WOULD LIMIT TO 45 An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.
-  WOULD LIMIT TO 45 The opening check has not established which settings change the request. This limits the planning score; it does not show that the agent has no settings. The request check before paid work is separate and does not raise this score.
   WOULD LIMIT TO 89 25 of the 73 rows this run can score on the tuning side repeat an input already counted, so this comparison resolves 48 different examples rather than 73. Nothing here is broken and the run can carry on, but every copy is a trial paid for that teaches what the first one already did. Continue on the examples that differ, or replace the repeats in your own file and this run reads it again.
 
   The detailed readiness report carries the source observations and settings-check guidance.

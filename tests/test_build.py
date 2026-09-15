@@ -28,13 +28,13 @@ sys.path.insert(0, str(REPO_ROOT))
 import build  # noqa: E402
 
 # The prompt a customer is given to start a run, byte for byte as the guide's README states it.
-# The guide's README moved to this three-line form on 2026-09-11; other copies of the prompt
-# outside this repository were not all updated with it. This test pins what build.py prints
-# and records, and nothing else.
+# The guide's README carried a three-line form for four days in September 2026 that also said
+# where to clone; guide #550 put it back to these two lines, because the location rule is the
+# assistant's (GUIDE.md) and not the customer's. This test pins what build.py prints and
+# records, and nothing else.
 EXPECTED_HANDOFF = (
     "Help me run my first Traigent optimization.\n"
-    "Clone https://github.com/Traigent/traigent-first-run beside my project, outside its root,\n"
-    "and follow the clone's GUIDE.md while keeping my project as the working directory."
+    "Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md."
 )
 
 # How many rows the two smaller draws ship. Written out here rather than read back from
