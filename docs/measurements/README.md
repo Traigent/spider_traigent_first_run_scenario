@@ -5,7 +5,7 @@ reproduce it is in this directory: the script, the two hand-written agent reads 
 the captured invocation and full output of every run.
 
 **Measured against the first-run guide at revision
-`2f744d1b503ccdfec33f1be57d3e813cf042e863` (`2f744d1b`), on 2026-09-16, on Python 3.12.3, with traigent 0.26.0 installed against the guide's 0.27.0
+`289898c547a0339a8c348c1d782b1a7cba393540` (`289898c5`), on 2026-09-16, on Python 3.12.3, with traigent 0.26.0 installed against the guide's 0.27.0
 pin, which preflight records and continues past.**
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
@@ -14,7 +14,7 @@ somebody else's tool on one date, and the tool is under active development.
 
 ```bash
 git clone https://github.com/Traigent/traigent-first-run ~/code/traigent-first-run
-git -C ~/code/traigent-first-run checkout 2f744d1b503ccdfec33f1be57d3e813cf042e863
+git -C ~/code/traigent-first-run checkout 289898c547a0339a8c348c1d782b1a7cba393540
 
 python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
@@ -36,7 +36,7 @@ the directory of any run that did not: a refused run reaches two or three files 
 refusal, and moving those over its committed card would delete the rendered card and the `argv`
 record with it.
 
-**One run cannot be measured at `2f744d1b`.** `best-case--off-method-calibration` asks the
+**One run cannot be measured at `289898c5`.** `best-case--off-method-calibration` asks the
 calibration tool to run the execution scorer against the project's databases, and the tool now
 refuses to import a scorer whose walk reaches a SQL engine (exit 2). The sweep records the
 refusal in `results.json` and leaves `cards/best-case--off-method-calibration/` as it was: the
@@ -48,7 +48,7 @@ The sweep checks one more thing before it builds anything: that the documents un
 field lists from the checkout it is handed, so *which fields a document may carry* is settled
 by the guide rather than by a copy of its rules kept here; which fields are *required* the
 guide expresses in control flow rather than as data, so `source_lines` is the one hardcoded
-coordinate in the check, named in `score_bank.py` beside a comment saying so. At `2f744d1b`
+coordinate in the check, named in `score_bank.py` beside a comment saying so. At `289898c5`
 the documents and the pin agree, which is why the command above needs no `--revision`.
 
 **Exit status:** 0 when every run scored, 1 when the guide refused one or more, 2 when the
@@ -72,7 +72,7 @@ answered when it could.
 | `cards/<run>/argv.json` | every invocation, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE` |
 | `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
 
-Two things about the rows at `2f744d1b`. A cap's `ceiling` may be `null` in `results.json`
+Two things about the rows at `289898c5`. A cap's `ceiling` may be `null` in `results.json`
 and on the card: such a cap discloses a finding without bounding the score
 (`evaluator-calibration-refused`, ceiling null, blocks false). And the guide holds the top two
 bands at WORKABLE until a review of the expected answers has entered through `--row-review`,
@@ -124,7 +124,7 @@ Seventeen presets, then the comparisons the documentation makes:
 
 ## Results
 
-**Every row below is the 2026-09-16 reading at `2f744d1b`**, taken from `cards/results.json`.
+**Every row below is the 2026-09-16 reading at `289898c5`**, taken from `cards/results.json`.
 The agent pillar reads 100 on every project with an agent: the guide's static reader follows
 all four of the demo agent's settings to the request since guide #549, for the reason the
 repository README gives under "What the source reader sees". A regeneration at `9eaabbb2`
