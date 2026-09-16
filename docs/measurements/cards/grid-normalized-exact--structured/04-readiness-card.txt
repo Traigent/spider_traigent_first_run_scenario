@@ -1,5 +1,6 @@
 $ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --calibration $EVIDENCE/03-calibration.json --evaluator-origin brought --evaluator-method normalized-exact --task-kind structured --color never --ascii
 TRAIGENT OPTIMIZATION READINESS        93/100  WORKABLE
+Action: Review the expected answers that support this comparison.
 
   AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
     ? whether it ends, and on what                     not independently verified: one call per input, so it ends
@@ -26,5 +27,4 @@ TRAIGENT OPTIMIZATION READINESS        93/100  WORKABLE
 
   No read of the expected answers this run is graded against has reached this score, so no score carries this comparison above WORKABLE. This hold is not a cap and does not stop the run: what it holds is the verdict, not the work. Nothing else here is capped, and this read is the only thing being asked of you. A read of the rows the run is graded on - each input beside its expected answer, up to 28 of them where the split is settled, or all of them if there are fewer, and a small sample of what you brought where it is not - is what lifts it.
   Local pre-run planning estimate, not a probability or measured optimization result.
-Action: Review the expected answers that support this comparison.
 exit=0

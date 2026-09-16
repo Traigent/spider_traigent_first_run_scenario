@@ -20,10 +20,10 @@
   {
     "check": "sdk-version",
     "status": "PASS",
-    "detail": "traigent 0.26.0",
+    "detail": "traigent 0.26.0; this walkthrough was measured on 0.27.0, and nothing it does needs that exact release, so the run continues. Where these notes describe what the SDK stores or sends, they describe 0.27.0",
     "metrics": {
       "installed": "0.26.0",
-      "tested": "0.26.0"
+      "tested": "0.27.0"
     }
   },
   {
@@ -111,7 +111,7 @@
   {
     "check": "dataset-first-run-rows",
     "status": "PASS",
-    "detail": "proposed first-run subset cap: 8 questions, which bring 8 scoreable rows per configuration, from 10 usable rows (8 different inputs in the tuning split); select and record the actual row ids before baseline approval",
+    "detail": "proposed first-run subset cap: up to 8 questions; at that count, 8 scoreable rows per configuration within the 18-row tuning limit, from 10 usable rows (8 different inputs in the tuning split); difficulty coverage may require fewer questions; select and record the actual row ids before baseline approval",
     "metrics": {
       "first_run_questions": 8,
       "first_run_rows_fewest": 8,

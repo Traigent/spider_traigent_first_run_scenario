@@ -1,5 +1,6 @@
 $ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --task-kind code-sql --color never --ascii
 TRAIGENT OPTIMIZATION READINESS        30/100  PARTIAL
+Action: Provide expected results for a representative set of examples.
 
   BLOCKER  30/100 PARTIAL is what your evidence supports, and that stands. Whether the
            paid run may start is a separate question: 2 things have to be cleared
@@ -8,6 +9,9 @@ TRAIGENT OPTIMIZATION READINESS        30/100  PARTIAL
            comparison.
 
 Confirmed absence is a measured structural finding. The missing component's quality has not been tested.
+
+  FIX BEFORE PAID RUN Rows have inputs but no expected outputs, so there is nothing to score a configuration against.
+  FIX BEFORE PAID RUN No evaluation method is connected, so no result can be trusted.
 
   AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
     ? whether it ends, and on what                     not independently verified: one call per input, so it ends
@@ -31,11 +35,7 @@ Confirmed absence is a measured structural finding. The missing component's qual
         ? same answer every time
         ? right kind of check for this output
 
-  FIX BEFORE PAID RUN Rows have inputs but no expected outputs, so there is nothing to score a configuration against.
-  FIX BEFORE PAID RUN No evaluation method is connected, so no result can be trusted.
-
   The detailed readiness report carries the source observations and settings-check guidance.
 
   Local pre-run planning estimate, not a probability or measured optimization result.
-Action: Provide expected results for a representative set of examples.
 exit=0

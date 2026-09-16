@@ -20,10 +20,10 @@
   {
     "check": "sdk-version",
     "status": "PASS",
-    "detail": "traigent 0.26.0",
+    "detail": "traigent 0.26.0; this walkthrough was measured on 0.27.0, and nothing it does needs that exact release, so the run continues. Where these notes describe what the SDK stores or sends, they describe 0.27.0",
     "metrics": {
       "installed": "0.26.0",
-      "tested": "0.26.0"
+      "tested": "0.27.0"
     }
   },
   {

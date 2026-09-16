@@ -1,5 +1,6 @@
 $ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --evaluator-origin brought --evaluator-method normalized-exact --task-kind code-sql --color never --ascii
 TRAIGENT OPTIMIZATION READINESS        25/100  NOT READY
+Action: Connect an existing agent or prepare a walkthrough agent.
 
   BLOCKER  25/100 NOT READY is what your evidence supports, and that stands. Whether
            the paid run may start is a separate question: one thing has to be cleared
@@ -8,6 +9,9 @@ TRAIGENT OPTIMIZATION READINESS        25/100  NOT READY
            comparison.
 
 Confirmed absence is a measured structural finding. The missing component's quality has not been tested.
+
+  FIX BEFORE PAID RUN No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one.
+  WOULD LIMIT TO 45 An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.
 
   AGENT       --------------------  0/100  (no agent source read; 0 of 5 checks measured)
     ? no reading of how the agent is built reached this score; reading the agent is what answers this
@@ -31,9 +35,5 @@ Confirmed absence is a measured structural finding. The missing component's qual
     OK same answer every time                          deterministic scoring rule
     !! right kind of check for this output             normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output
 
-  FIX BEFORE PAID RUN No agent reached this score - no settings document, no reading of its source, and no declaration that one exists - so there is nothing for a paid search to compare configurations of. Point this run at the agent to optimize, or create one.
-  WOULD LIMIT TO 45 An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.
-
   Local pre-run planning estimate, not a probability or measured optimization result.
-Action: Connect an existing agent or prepare a walkthrough agent.
 exit=0
