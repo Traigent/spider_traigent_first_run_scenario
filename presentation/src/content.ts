@@ -9,7 +9,7 @@ import {
 const customerPrompt =
   "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
 
-const guideRevision = "9ae7c7224fa0c3a6f0bf26958cb4421b4347730e";
+const guideRevision = "2f744d1b503ccdfec33f1be57d3e813cf042e863";
 
 // Repository-relative paths of every guide file a slide may cite.
 const README = "README.md";
@@ -1128,7 +1128,7 @@ const rawPresentation = {
         {
           startingPoint: "Model-written key or small set · ceiling 74",
           safestNextStep:
-            "Not blocking. The key is put to you once; a small set may get a bounded top-up offer.",
+            "Not blocking. The key is put to you once; a small set is offered a top-up, recommended.",
         },
       ],
       sources: [
@@ -1140,7 +1140,7 @@ const rawPresentation = {
         "Evaluator invalid means it scores a known-wrong answer as well as a known-right one: a broken evaluator measures nothing, so this is the lowest ceiling any evaluator condition carries and it holds the paid run.",
         "Evaluator unvalidated means it has not yet been tried on known-right and known-wrong answers; until it is, the card shows the pillar as thinly measured.",
         "Generated dataset means every row was written by a model, or the dataset says nothing about where its rows came from. For a declared-generated set, nothing is asked. For the undeclared twin, the assumption is stated on the card and again on the pre-spend approval as a limit on the claim, never put as a question. Add rows collected from the product before making a production claim.",
-        "A small set is called a wiring check and may get a bounded top-up offer; the model-written answer key is put to the customer once with two choices.",
+        "A small set is called a wiring check and is offered a top-up to 28 on the one gap question, marked recommended; the model-written answer key is put to the customer once with two choices.",
         "Two conditions not drawn on the scale: no agent at all is a ceiling of 25 that holds the paid run until an agent is chosen or created; an evaluator that executes code or SQL is not calibrated on the customer's engine and carries a refusal condition that never blocks - a ceiling of 45 while only the declaration is known, none once the engine is witnessed - with the run continuing on full disclosure or calibrating a copy against a read-only target the customer supplies.",
       ],
     },
@@ -1296,10 +1296,10 @@ const rawPresentation = {
           heading: "Yours, topped up",
           tone: "amber",
           items: [
-            "Small is normal, not a gap to fill",
+            "Under 28 rows: a top-up to 28 is recommended",
             "Asked once; written only if you say yes",
             "Adds only the shortfall, never replacing yours",
-            "Accepting lowers the ceiling; it says so first",
+            "Says first if the ceiling drops, and how far",
           ],
         },
         {
@@ -1323,8 +1323,8 @@ const rawPresentation = {
         "The guide's own order of preference for data: reviewed product fixtures, golden sets, regression tests or accepted examples first; then redacted real logs or traces with independently reviewed expected outcomes; then the customer's own examples expanded into additional tuning candidates; and only last, fully synthetic walkthrough data. Examples written for the walkthrough are weaker evidence than examples collected from the product.",
         "Yours, a selection: the run picks inside each split you already have and never fills tuning from your held-out rows, even when your split is larger than this run; the chosen ids and any seed go to traigent-runs/run-plan.md so the run can be repeated.",
         "No split of yours: the run reserves held-out rows in the working copy when it is written, before any evaluator design, calibration or tuning. With too few real rows for both sets they are divided about 18 to 10 in tuning's favour, rounding toward tuning - ten rows go seven and three - keeping every question's accepted answers together; if all your real rows are one question, they all go to tuning and the report says no independent held-out measurement was taken.",
-        "Yours, topped up: by default the run uses the rows you have, however few; a small real dataset is not permission to fill the gaps with synthetic rows. The offer appears only through a size ceiling's own choice on the readiness card - the 74 wiring-check ceiling or the 89 coarse-resolution one, when your file holds fewer than 28 rows and filling it to 28 would reach ten comparable rows - and rows are written only if the customer says yes. Accepted rows are derived from the real task and keep the existing split; rows without usable labels are reviewed or labelled first.",
-        "The offer is a question, asked once on the same ask as any other gap, and it says before the customer answers that accepting lowers the readiness ceiling: the added rows are generated, and on a short dataset they become most of the set. The guide's own measurement: nine real rows topped to twenty-eight move the card from the wiring-check ceiling to a mostly-generated one, four points lower. A topped-up dataset is one this run can compare on, not one that has been improved.",
+        "Yours, topped up: fewer rows are enough and 28 is never required, but under 28 the run recommends the top-up, because the walkthrough is built as 18 tuning and 10 held-out rows and a shorter file leaves one side or both short of that shape. The offer appears only through a size ceiling's own choice on the readiness card - the 74 wiring-check ceiling or the 89 coarse-resolution one, when your file holds fewer than 28 rows and filling it to 28 would reach ten comparable rows - as route A of the one gap question, with continuing on your rows as route B; rows are written only if the customer says yes. Accepted rows are derived from the real task and keep the existing split; rows without usable labels are labelled by the run in a working copy first, declared model-written.",
+        "The offer says before the customer answers whether accepting lowers the readiness ceiling, and by how much: the added rows are generated, and on a short dataset they become most of the set. The guide's own measurement: nine real rows topped to twenty-eight move the card from the wiring-check ceiling to a mostly-generated one, four points lower; ten to thirteen rows move from 89 to that same 70; from fourteen up no ceiling moves. A topped-up dataset is one this run can compare on, not one that has been improved.",
         "No dataset at all: 28 examples are written, 18 tuning rows (aiming for 4 easy, 5 medium, 5 hard, 4 very hard) plus the held-out ten (2, 3, 3, 2), listed under Walkthrough setup and capped at 65 until collected rows arrive.",
         "Readiness is always scored on the whole dataset, never on the selection or the top-up; the selection bounds this one comparison, and the full dataset stays intact for the customer's continuing work.",
       ],
