@@ -1,5 +1,8 @@
 $ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --calibration $EVIDENCE/03-calibration.json --evaluator-origin brought --evaluator-method normalized-exact --task-kind code-sql --color never --ascii
 TRAIGENT OPTIMIZATION READINESS        74/100  WORKABLE
+Action: Add examples that broaden this comparison.
+
+  LIMITED TO 74 only 8 comparable example(s) - one example moves the score by about 12 points, so a configuration can look better by winning a single row. Treat any difference as a hint, not a result. This run can write generated examples up to 28 rows in total while preserving your project's existing tuning/held-out split, and stops there. It asks first, and rows it writes are scored as generated.
 
   AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
     ? whether it ends, and on what                     not independently verified: one call per input, so it ends
@@ -22,10 +25,7 @@ TRAIGENT OPTIMIZATION READINESS        74/100  WORKABLE
     OK same answer every time                          deterministic scoring rule
     !! right kind of check for this output             normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output
 
-  LIMITED TO 74 only 8 comparable example(s) - one example moves the score by about 12 points, so a configuration can look better by winning a single row. Treat any difference as a hint, not a result. This run can write generated examples up to 28 rows in total while preserving your project's existing tuning/held-out split, and stops there. It asks first, and rows it writes are scored as generated.
-
   The detailed readiness report carries the source observations and settings-check guidance.
 
   Local pre-run planning estimate, not a probability or measured optimization result.
-Action: Add examples that broaden this comparison.
 exit=0

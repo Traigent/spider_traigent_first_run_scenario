@@ -9,7 +9,7 @@ import {
 const customerPrompt =
   "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
 
-const guideRevision = "e4096e3aa808d5ad67d84db916f8643bca331128";
+const guideRevision = "9ae7c7224fa0c3a6f0bf26958cb4421b4347730e";
 
 // Repository-relative paths of every guide file a slide may cite.
 const README = "README.md";
@@ -163,7 +163,7 @@ const rawPresentation = {
         "Presenter: read this slide and the next slowly if the room has not seen Traigent before. Every later slide leans on these six terms.",
         "The coding assistant is a tool that reads the project and runs commands on the customer's instruction. It does the work in this guide; Traigent's own service appears only in stage 4, to run the managed search.",
         "The agent is the thing being optimized: whatever program in the project calls a language model to do a task.",
-        "A dataset is examples of the task, each with the answer the customer expects. The evaluator is the method that grades an agent's answer against that expectation.",
+        "A dataset is examples of the task, each with the answer the customer expects. The evaluator is the method that grades an agent's answer against that expectation. The guide sometimes says evaluation method: same thing. The SDK calls the code an evaluator.",
       ],
     },
     {
@@ -316,7 +316,7 @@ const rawPresentation = {
         "Stage 4 is a separate approval on purpose: the baseline stays inside the customer's own settings, the search explores a broader space, and Traigent's service enters only here.",
         "Before the baseline's key ask there is one free approval: where Traigent installs, with the resolved plan shown - an environment found in the project, a new project .venv, or the throwaway fallback.",
         "The assistant stops only for a real choice between agents, one question about the task when nothing in the project explains it, a key, the environment choice and install approval below, a paid or data-sending step, a change to real answers or grading rules, or a destructive change. Do not present Readiness as something the customer approves.",
-        "Stage 5 also hands over the Traigent optimization skills, so the customer can continue on their full dataset without the guide.",
+        "Stage 5 also hands over the Traigent optimization skills, so the customer can continue on their own agent, dataset and evaluator. An automatic full-dataset run is not the default next step.",
       ],
     },
     {
@@ -454,9 +454,9 @@ const rawPresentation = {
             "Kept exactly: same configurations, same models. Never padded to look bigger.",
         },
         {
-          startingPoint: "More than about 100 usable rows",
+          startingPoint: "Thousands of usable rows",
           safestNextStep:
-            "Readiness reads all of it; the paid comparison runs on 18 tuning questions plus 10 held-out rows.",
+            "Readiness reads every row; the comparison uses at most 18 tuning and 10 held-out.",
         },
         {
           startingPoint: "One fixed model, one fixed prompt",
@@ -471,13 +471,13 @@ const rawPresentation = {
       ],
       sources: [
         `${GUIDE} · Default run`,
-        `${EVALUATION} · First-run subset for a large dataset`,
+        `${EVALUATION} · First-run dataset scope`,
         `${RUN_SAFETY} · Execution evaluators are out of scope`,
       ],
       notes: [
         "An existing baseline is preserved exactly; one configuration is correct if that is what the customer defined.",
-        "Over about 100 usable rows, every trial would pay for every row, so the paid comparison is bounded to 18 tuning questions by default, at least four from each of the four difficulty bands, plus the 10 held-out rows: 28 by default. The subset is drawn inside each split so it cannot invent a tune/holdout overlap, the chosen row ids and any seed are written to traigent-runs/run-plan.md, and the report names the subset beside the full count, for example '18 tuning questions in 36 rows, and 10 held-out rows, of your 4,812'. Questions are counted and rows are drawn: a question with several accepted answers brings every one of its rows, so 28 caps the questions, and the rows can be more.",
-        "The subset bounds the run, never the dataset: readiness is scored on the whole dataset, before and after, and the run's own sample-size limitation is reported separately in the run report.",
+        "Whatever the source holds - 20 rows or 4,812 - the paid comparison runs on at most 28 rows: up to 18 tuning and up to 10 held-out, picked inside each existing split so it cannot create an overlap, with the chosen row ids and any seed written to traigent-runs/run-plan.md. The report names the selected counts beside the full count, for example '9 tuning questions in 18 rows, and 10 held-out rows, of your 4,812'. A question with several accepted answers keeps every one of its rows, so the run picks fewer questions rather than cutting an accepted answer.",
+        "The selection bounds the run, never the dataset: readiness is scored on the whole dataset, before and after, and the run's own sample-size limitation is reported separately in the run report. The customer's full dataset stays intact for their own continuing work.",
         "The fixed-agent row is the most common surprise: a search needs something to search over, or it would compare one configuration with itself. The readiness card names the missing dimension.",
         "The code-or-SQL row is the one place the guide declines a check on its own initiative; it discloses and continues, or calibrates a copy against a target you bound. A task whose answer is code stays in scope; what is out of scope is grading by executing that answer.",
       ],
@@ -567,7 +567,7 @@ const rawPresentation = {
         {
           startingPoint: "LIMITED TO 89",
           safestNextStep:
-            "The comparison can run; the evidence bounds the claim. Nothing is asked of you.",
+            "The comparison can run; the evidence bounds the claim. Nothing to fix first.",
         },
         {
           startingPoint: "A question for you",
@@ -590,8 +590,8 @@ const rawPresentation = {
         "The label is the whole message: FIX BEFORE PAID RUN holds the run, LIMITED TO bounds the claim, and the question is the only label that needs something from the customer.",
         "FIX BEFORE PAID RUN causes: no dataset, no expected answers, an evaluator that grades a wrong answer as well as a right one, or tuning rows that overlap the held-out rows.",
         "LIMITED TO causes: generated examples, or too few rows for a stable comparison. Two conditions can carry the same ceiling and both read LIMITED TO 45; fixing one leaves the number where it is until the other is fixed too.",
-        "The two questions only a person can judge: an answer key a model wrote end to end, or rows whose answer does not match their own question. Data with no stated origin is read as generated and that assumption is stated on the approval, not asked.",
-        "One more label, an open ask: the unread-answer-key hold caps nothing and asks you to read the key; the card lists it beside the caps and recommends continuing.",
+        "The two questions only a person can judge: an answer key a model wrote end to end, or rows whose answer does not match their own question. The second is asked only while a flagged row could be among the rows this run uses; otherwise the card keeps the finding as unresolved and the run continues without asking. Data with no stated origin is read as generated and that assumption is stated on the approval, not asked.",
+        "One more label, an open ask: the unread-answer-key hold caps nothing and asks you to read the key; the card lists it after the pillar evidence and recommends continuing.",
         "89/100 WORKABLE example: an evaluation pillar with only 2 of 4 checks observed. The card says which pillar and what fills it in.",
         "Band and blocker are separate questions, and at this revision they line up: every condition that holds the paid run carries a ceiling of 50 or below, and the score is the minimum of the average and every ceiling, so a card with a FIX BEFORE PAID RUN line always reads NOT READY or PARTIAL, and a WORKABLE card always has a clear blocker line. A generated walkthrough dataset caps at 65 and does not block.",
       ],
@@ -668,7 +668,7 @@ const rawPresentation = {
       ],
       notes: [
         "Keys live in a local .env that only the customer can read and that Git ignores. The run installs into your environment or a new persistent .venv after approval, or the throwaway .venv-traigent as fallback. Never a shared, dependent, external, or assistant-owned environment. Never edits your dependency files.",
-        "Tested pins traigent==0.26.0, litellm==1.93.0, python-dotenv==1.2.2 are the exact install on the throwaway route and the recommendation elsewhere; a traigent or litellm you already have at or above the pin is kept and named. Never an unversioned pip install traigent.",
+        "Tested pins traigent==0.27.0, litellm==1.93.0, python-dotenv==1.2.2 are the exact install on the throwaway route and the recommendation elsewhere; a traigent or litellm you already have at or above the pin is kept and named. Never an unversioned pip install traigent.",
         "An evaluator that executes the agent's answer as code or SQL is not run on the guide's initiative. The guide skips that check, tells you plainly what was not checked, and continues; it can calibrate a copy against a read-only or duplicate target you supply. No sandbox is shipped or improvised.",
         "Changes to real answers or grading rules, and anything destructive or production-affecting, each need their own explicit approval. Approving one step never pre-approves another.",
       ],
@@ -724,7 +724,7 @@ const rawPresentation = {
       kind: "columns",
       eyebrow: "PRIVACY",
       title: "Traigent sees settings and scores, not your content.",
-      body: "Under the pinned SDK's telemetry contract (version 0.26.0), connected runs send metadata, not material.",
+      body: "Under the pinned SDK's telemetry contract (version 0.27.0), connected runs send metadata, not material.",
       columns: [
         {
           heading: "Sent to Traigent",
@@ -759,7 +759,7 @@ const rawPresentation = {
       ],
       sources: [`${README} · Privacy`, `${RUN_SAFETY} · The run log`],
       notes: [
-        "Say exactly what the guide's README says and no more: the contract is the SDK's own, at the pinned version 0.26.0, and the guide stops if what it observes contradicts it. The guide does not inspect network traffic itself.",
+        "Say exactly what the guide's README says and no more: the contract is the SDK's own, at the pinned version 0.27.0, and the guide stops if what it observes contradicts it. The guide does not inspect network traffic itself.",
         "Connected runs send the tuned setting names and values, numeric metrics, run state and content-free metadata. They do not send prompts, dataset rows, expected answers or model responses, unless the customer deliberately places content in a tuned setting value or opts into recording it.",
         "The model provider still receives what the agent normally sends it during calls. The assistant names every recipient and asks before any paid or data-sending step.",
         "Local retention is a separate thing: with TRAIGENT_LOG_EXAMPLE_CONTENT=false, ids and metrics are kept in the optimization logs while the query, response and expected answer are written as null. The run log records where the run waited or stopped as one plain sentence per event, never a path, id, credential or quoted row.",
@@ -786,7 +786,7 @@ const rawPresentation = {
         {
           icon: "🔒",
           label: "Held-out check",
-          detail: "The recommendation scored once on ten reserved rows.",
+          detail: "The recommendation scored once on up to ten reserved rows.",
         },
         {
           icon: "🏷️",
@@ -801,7 +801,7 @@ const rawPresentation = {
         {
           icon: "🚀",
           label: "Skills to continue",
-          detail: "Traigent's optimization skills for your full dataset.",
+          detail: "Traigent's optimization skills for your own agent and data.",
         },
       ],
       sources: [
@@ -811,7 +811,7 @@ const rawPresentation = {
       ],
       notes: [
         "Baseline and search result appear side by side, with a verified portal link for every run that was recorded, and a local-only label for a baseline that was not uploaded.",
-        "The held-out check comes with a plain note that ten rows cannot settle much.",
+        "The held-out check comes with a plain note that a few rows cannot settle much. When no independent held-out rows exist, the report says that check was not measured rather than scoring tuning rows under its name.",
         "If any substitute was used, the interpretation opens by saying the result demonstrates the workflow and is not evidence of production performance.",
       ],
     },
@@ -827,7 +827,7 @@ const rawPresentation = {
           tone: "blue",
           items: [
             "Best baseline beside best searched configuration",
-            "Held-out score with its small-sample note",
+            "Held-out score with its caveat, or why unavailable",
             "Cost, failures and stop reason",
             "One next action the evidence earns",
           ],
@@ -972,7 +972,7 @@ const rawPresentation = {
       kind: "statement",
       eyebrow: "STAGE 2 OF 5 · READINESS",
       title:
-        "Reading the card: score, band, coverage, blocker, ceilings, asks.",
+        "Reading the card: score, action, blocker, ceilings, coverage, asks.",
       body: "Shown once. The guide's own example reads EVALUATION 53/100 (2 of 4 checks measured).",
       bullets: [
         "Unmeasured checks are left out, not scored zero",
@@ -981,7 +981,7 @@ const rawPresentation = {
         "Band grades evidence; blocker gates spend",
         "LIMITED TO 45: the ceiling holding you now",
         "WOULD LIMIT TO 89: the ceiling you hit next",
-        "An ask that caps nothing sits beside the caps",
+        "An ask that caps nothing is listed separately",
         "Readiness reads the whole dataset, never the subset",
       ],
       sources: [
@@ -991,9 +991,10 @@ const rawPresentation = {
       ],
       notes: [
         "A check the scorer could not compute is marked unmeasured and left out rather than scored zero. A check the run asked the customer for and did not get is unmeasured too, but keeps its weight and earns nothing, so withholding never pays. An absent required component is a completed structural check recorded at zero, not an unmeasured one.",
-        "For each pillar the card shows how much was actually measured. The BLOCKER line under the score says whether the paid comparison may start and how many things must clear first.",
+        "The Action line under the score is the one recommended next step, printed before any detail. For each pillar the card shows how much was actually measured.",
         "The tense is the whole difference between the two ceiling labels. LIMITED TO 89 is the number you are at. WOULD LIMIT TO 89 is a limit you have not reached: either something stricter is holding the score down, or the average has not climbed that high yet. It is still worth reading, because it is what you run into next, but it is not why the score is what it is today.",
         "Two conditions can share one ceiling and both stay in force. After a repair the score is run again only to confirm the repair cleared what it failed on.",
+        "A ❗ beside a dataset check can also mean the assistant's row review was unsure about an expected answer; it signals uncertainty, moves no points and asks for no repair.",
       ],
     },
     {
@@ -1092,7 +1093,7 @@ const rawPresentation = {
         `${README} · The readiness score`,
       ],
       notes: [
-        "The ceilings come from the scorer's own constants: evaluator invalid 25, evaluator unvalidated 45, nothing to vary 45, generated dataset 65, model-written answer key or fewer comparable examples than a stable comparison needs 74.",
+        "The ceilings come from the scorer's own constants: evaluator invalid 25, evaluator unvalidated 45, nothing to vary 45, generated dataset 65, model-written answer key 74; one to nine comparable examples 74, ten to twenty-nine 89.",
         "74 rather than 75 is deliberate: 75 is the Strong threshold, and a dataset whose whole answer key a model wrote may be workable but may not present as Strong.",
         "A capped project is not a failed project. A truthful 45 with a named ceiling is more useful than an unsupported 90.",
       ],
@@ -1136,9 +1137,9 @@ const rawPresentation = {
         `${GLOSSARY} · Core terms`,
       ],
       notes: [
-        "Evaluator invalid means it scores a known-wrong answer as well as a known-right one: a broken ruler measures nothing, so this is the lowest ceiling any evaluator condition carries and it holds the paid run.",
+        "Evaluator invalid means it scores a known-wrong answer as well as a known-right one: a broken evaluator measures nothing, so this is the lowest ceiling any evaluator condition carries and it holds the paid run.",
         "Evaluator unvalidated means it has not yet been tried on known-right and known-wrong answers; until it is, the card shows the pillar as thinly measured.",
-        "Generated dataset means every row was written by a model, or the dataset says nothing about where its rows came from. For a declared-generated set, nothing is asked. For the undeclared twin, the scorer's Cap carries asks=False and the question rides on the approval that already halts before the first billed call: that assumption is stated on the approval rather than asked. Add rows collected from the product before making a production claim.",
+        "Generated dataset means every row was written by a model, or the dataset says nothing about where its rows came from. For a declared-generated set, nothing is asked. For the undeclared twin, the assumption is stated on the card and again on the pre-spend approval as a limit on the claim, never put as a question. Add rows collected from the product before making a production claim.",
         "A small set is called a wiring check and may get a bounded top-up offer; the model-written answer key is put to the customer once with two choices.",
         "Two conditions not drawn on the scale: no agent at all is a ceiling of 25 that holds the paid run until an agent is chosen or created; an evaluator that executes code or SQL is not calibrated on the customer's engine and carries a refusal condition that never blocks - a ceiling of 45 while only the declaration is known, none once the engine is witnessed - with the run continuing on full disclosure or calibrating a copy against a read-only target the customer supplies.",
       ],
@@ -1264,12 +1265,12 @@ const rawPresentation = {
       ],
       sources: [
         `${SKILL} · 7. Run the honest comparison`,
-        `${EVALUATION} · First-run subset for a large dataset`,
+        `${EVALUATION} · First-run dataset scope`,
         `${README} · What the run does`,
       ],
       notes: [
         "The search keeps every baseline value and model and adds only settings the agent actually uses. Any new model would be a separately disclosed experiment.",
-        "Same rows on both sides: the baseline and the search are compared on the same tuning rows. On more than about 100 usable rows those rows are the bounded subset chosen before the baseline (18 tuning questions plus 10 held-out by default), which scopes the whole paid comparison; it is not something the search adds, and readiness is never scored on it.",
+        "Same rows on both sides: the baseline and the search are compared on the same tuning rows. Those rows are the bounded selection made before the baseline - at most 28 rows from any source, up to 18 tuning and up to 10 held-out - which scopes the whole paid comparison; it is not something the search adds, and readiness is never scored on it.",
         "Where the rows come from, and what the run does when there are too few or none, is the next slide. The search itself never writes, drops or replaces a row.",
       ],
     },
@@ -1281,20 +1282,13 @@ const rawPresentation = {
       body: "Examples from your product are stronger evidence than anything the run writes, so the guide prefers yours, in this order.",
       columns: [
         {
-          heading: "Yours, as they are",
+          heading: "Yours, a selection",
           tone: "blue",
           items: [
-            "Up to about 100 usable rows",
-            "Used exactly, nothing written",
-            "Your own held-out split is kept",
-          ],
-        },
-        {
-          heading: "Yours, a subset",
-          tone: "blue",
-          items: [
-            "Over about 100 usable rows",
-            "18 tuning questions plus 10 held-out",
+            "Any size, 20 rows or thousands",
+            "At most 28 rows: 18 tuning, 10 held-out",
+            "Picked within your split, never mixing tuning and held-out",
+            "No split of yours? One is reserved first",
             "Row ids recorded to repeat the run",
           ],
         },
@@ -1302,9 +1296,9 @@ const rawPresentation = {
           heading: "Yours, topped up",
           tone: "amber",
           items: [
-            "Fewer than 28 comparable rows",
-            "A bounded offer, asked once",
-            "Never past 28, never replacing yours",
+            "Small is normal, not a gap to fill",
+            "Asked once; written only if you say yes",
+            "Adds only the shortfall, never replacing yours",
             "Accepting lowers the ceiling; it says so first",
           ],
         },
@@ -1322,15 +1316,17 @@ const rawPresentation = {
       sources: [
         `${EVALUATION} · Dataset construction`,
         `${EVALUATION} · Topping a real dataset up to that size`,
-        `${EVALUATION} · First-run subset for a large dataset`,
-        `${README} · What the run does`,
+        `${EVALUATION} · First-run dataset scope`,
+        `${EVALUATION} · Held-out set and claims`,
       ],
       notes: [
         "The guide's own order of preference for data: reviewed product fixtures, golden sets, regression tests or accepted examples first; then redacted real logs or traces with independently reviewed expected outcomes; then the customer's own examples expanded into additional tuning candidates; and only last, fully synthetic walkthrough data. Examples written for the walkthrough are weaker evidence than examples collected from the product.",
-        "Fewer than 28 comparable real rows: the run makes a bounded offer to top the set up, and only when the extra rows would make the comparison meaningfully larger. 28 is a ceiling on the offer, not a target the run pursues. It draws only the difference, derives every drawn row from the rows already there, never draws past 28 in total, and never draws to replace a real row. Rows without usable labels are reviewed or labelled first.",
-        "The offer is a question, asked once on the same ask as any other gap, and it says before the customer answers that accepting lowers the readiness ceiling: the added rows are generated, and on a short dataset they become most of the set. The guide's own measurement: nine real rows topped to twenty-eight move the card from a small-comparison-set ceiling to a mostly-generated one, four points lower. A topped-up dataset is one this run can compare on, not one that has been improved.",
-        "No dataset at all: 28 examples are written, 18 tuning rows (3 easy, 5 medium, 5 hard, 5 very hard) plus the held-out ten, listed under Walkthrough setup and capped at 65 until collected rows arrive. A project that maintains its own held-out split keeps it exactly; nothing here re-cuts it.",
-        "Over about 100 usable rows: the bounded subset from the special-cases slide, 18 tuning questions plus the 10 held-out rows, drawn inside each split with the ids recorded. Readiness is always scored on the whole dataset, never on the subset or the top-up.",
+        "Yours, a selection: the run picks inside each split you already have and never fills tuning from your held-out rows, even when your split is larger than this run; the chosen ids and any seed go to traigent-runs/run-plan.md so the run can be repeated.",
+        "No split of yours: the run reserves held-out rows in the working copy when it is written, before any evaluator design, calibration or tuning. With too few real rows for both sets they are divided about 18 to 10 in tuning's favour, rounding toward tuning - ten rows go seven and three - keeping every question's accepted answers together; if all your real rows are one question, they all go to tuning and the report says no independent held-out measurement was taken.",
+        "Yours, topped up: by default the run uses the rows you have, however few; a small real dataset is not permission to fill the gaps with synthetic rows. The offer appears only through a size ceiling's own choice on the readiness card - the 74 wiring-check ceiling or the 89 coarse-resolution one, when your file holds fewer than 28 rows and filling it to 28 would reach ten comparable rows - and rows are written only if the customer says yes. Accepted rows are derived from the real task and keep the existing split; rows without usable labels are reviewed or labelled first.",
+        "The offer is a question, asked once on the same ask as any other gap, and it says before the customer answers that accepting lowers the readiness ceiling: the added rows are generated, and on a short dataset they become most of the set. The guide's own measurement: nine real rows topped to twenty-eight move the card from the wiring-check ceiling to a mostly-generated one, four points lower. A topped-up dataset is one this run can compare on, not one that has been improved.",
+        "No dataset at all: 28 examples are written, 18 tuning rows (aiming for 4 easy, 5 medium, 5 hard, 4 very hard) plus the held-out ten (2, 3, 3, 2), listed under Walkthrough setup and capped at 65 until collected rows arrive.",
+        "Readiness is always scored on the whole dataset, never on the selection or the top-up; the selection bounds this one comparison, and the full dataset stays intact for the customer's continuing work.",
       ],
     },
     {
@@ -1341,9 +1337,9 @@ const rawPresentation = {
       body: "Picking the best of several on the same rows picks partly on luck, so the winner's score can be inflated by the choosing.",
       steps: [
         {
-          label: "Reserve ten rows",
+          label: "Reserve held-out rows",
           detail:
-            "2 easy, 3 medium, 3 hard, 2 very hard, set aside before any tuning.",
+            "Up to ten, before tuning: 2 easy, 3 medium, 3 hard, 2 very hard.",
           executor: "Coding assistant",
         },
         {
@@ -1362,7 +1358,7 @@ const rawPresentation = {
         {
           label: "Disclose the limit",
           detail:
-            "Ten rows cannot settle much: the held-out number can land lower, level or higher.",
+            "Few rows cannot settle much: the held-out number can land lower, level or higher.",
           executor: "Coding assistant",
           humanGate: "You read the caveat",
         },
@@ -1372,9 +1368,9 @@ const rawPresentation = {
         `${GLOSSARY} · Core terms`,
       ],
       notes: [
-        "The held-out rows exist to check the selection risk, not to remove it, and never to choose. A project with its own held-out split keeps it as it is; the walkthrough split goes into its own file before any design, calibration or tuning touches the data.",
+        "The held-out rows exist to check the selection risk, not to remove it, and never to choose. A project with its own held-out split keeps that membership; the walkthrough split goes into its own file before any design, calibration or tuning touches the data. When no independent held-out rows remain - all your real rows are one question, say - the check is reported as not measured, never taken on tuning rows under its name.",
         "Wording matters: a held-out set is a sealed holdout only when its split and labels stayed hidden until the candidate was locked. Because the assistant creates and can inspect the walkthrough split, the guide calls it held-back and non-blind.",
-        "Counts, not percentages: on ten rows one outcome moves the figure by ten points, so no interval is quoted. A gap between tuning and held-out can arise without a bug and establishes neither overfitting nor its absence. Never say that Traigent prevents it.",
+        "Counts, not percentages: on ten rows one outcome moves the figure by ten points, so no interval is quoted and the report gives the actual reserved count. A gap between tuning and held-out can arise without a bug and establishes neither overfitting nor its absence. Never say that Traigent prevents it.",
         "A set used to select is no longer held out. A flat result on demonstration data says nothing about production.",
       ],
     },
@@ -1389,7 +1385,7 @@ const rawPresentation = {
         "Leads with outcome, evidence, limits, one next action",
         "Then configurations, trials, failures, cost, stop reason",
         "Best baseline against best searched, on tuning rows",
-        "Held-out score with its small-sample note first",
+        "Held-out score with its caveat, or why unavailable",
         "Spent, approved, and what is left",
         "Provenance on every result: ✅, ❗, substitutes",
       ],
@@ -1401,8 +1397,8 @@ const rawPresentation = {
       notes: [
         "The end goal is an explainable decision. A result without its baseline, evidence boundary and limitations is not a valid first-run outcome.",
         "The report leads with the outcome, what the evidence establishes, the current state and its limits, and one next action; then the details: configurations, objectives, trials, failures, cost, stop reason, artifacts and verified links. A frontier over your objective and cost appears in the details only when cost was measured comparably; otherwise the primary result and the telemetry limitation.",
-        "Cost is reported as configurations tested out of the space's total, failures and stop reason, the approved total, what was spent, and what is left.",
-        "No configuration is promoted from a fully synthetic run; for real components, promotion still needs explicit approval and a later validation check. Learning links and lifecycle suggestions come only after the customer has seen the result.",
+        "Coverage is reported as distinct configurations measured out of the space's total, with executed trials stated separately, because a repeated trial does not widen coverage; then failures and stop reason, the approved total, what was spent, and what is left.",
+        "The one next action applies the most useful lesson to the customer's own agent, dataset or evaluator, and names the Traigent skill for it; another walkthrough or an automatic full-dataset run is never the default. No configuration is promoted from a fully synthetic run; for real components, promotion still needs explicit approval and a later validation check. Learning links and lifecycle suggestions come only after the customer has seen the result.",
       ],
     },
     {
@@ -1465,7 +1461,7 @@ const rawPresentation = {
           icon: "📌",
           label: "Pinned SDK stack",
           detail:
-            "traigent 0.26.0, litellm 1.93.0, python-dotenv 1.2.2; newer ones kept.",
+            "traigent 0.27.0, litellm 1.93.0, python-dotenv 1.2.2; newer ones kept.",
         },
         {
           icon: "🔑",
@@ -1494,7 +1490,7 @@ const rawPresentation = {
         `${README} · Install as an Agent Skill`,
       ],
       notes: [
-        "Python 3.11 to 3.13 in your own venv, a normal project .venv the run creates for you to keep, or the approved throwaway fallback: one approval either way. The tested SDK stack pinned in the guide's requirements file (traigent==0.26.0, litellm==1.93.0, python-dotenv==1.2.2) is the exact install on the throwaway route and the recommendation elsewhere; a traigent or litellm you already have at or above the pin is kept, a lower one is replaced only after you say yes to the exact change. Never an unversioned pip install traigent.",
+        "Python 3.11 to 3.13 in your own venv, a normal project .venv the run creates for you to keep, or the approved throwaway fallback: one approval either way. The tested SDK stack pinned in the guide's requirements file (traigent==0.27.0, litellm==1.93.0, python-dotenv==1.2.2) is the exact install on the throwaway route and the recommendation elsewhere; a traigent or litellm you already have at or above the pin is kept, a lower one is replaced only after you say yes to the exact change. Never an unversioned pip install traigent.",
         "One supported LLM-provider key with a small amount of credit for the paid steps goes first, into a local .env. A Traigent portal key that can write experiments is activated after the first result is on screen, not before; if none is present, the assistant asks for one then.",
       ],
     },

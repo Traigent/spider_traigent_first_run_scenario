@@ -1,11 +1,14 @@
 $ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --calibration $EVIDENCE/03-calibration.json --evaluator-origin brought --evaluator-method normalized-exact --task-kind code-sql --color never --ascii
 TRAIGENT OPTIMIZATION READINESS        25/100  NOT READY
+Action: Review the evaluator's grading issue and validate its repair.
 
   BLOCKER  25/100 NOT READY is what your evidence supports, and that stands. Whether
            the paid run may start is a separate question: one thing has to be cleared
            first, marked FIX BEFORE PAID RUN below. Your assistant will explain and
            address these items with you, then recheck readiness before any paid
            comparison.
+
+  FIX BEFORE PAID RUN The completed calibration failed at least one authored behavioral check, so this evaluator has not demonstrated that it ranks the task correctly. Every number below it is unreliable.
 
   AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
     ? whether it ends, and on what                     not independently verified: one call per input, so it ends
@@ -28,10 +31,7 @@ TRAIGENT OPTIMIZATION READINESS        25/100  NOT READY
     OK same answer every time                          deterministic scoring rule
     !! right kind of check for this output             normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output
 
-  FIX BEFORE PAID RUN The completed calibration failed at least one authored behavioral check, so this evaluator has not demonstrated that it ranks the task correctly. Every number below it is unreliable.
-
   The detailed readiness report carries the source observations and settings-check guidance.
 
   Local pre-run planning estimate, not a probability or measured optimization result.
-Action: Review the evaluator's grading issue and validate its repair.
 exit=0

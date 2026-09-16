@@ -5,7 +5,8 @@ reproduce it is in this directory: the script, the two hand-written agent reads 
 the captured invocation and full output of every run.
 
 **Measured against the first-run guide at revision
-`e4096e3aa808d5ad67d84db916f8643bca331128` (`e4096e3a`), on 2026-09-15, on Python 3.12.3.**
+`9ae7c7224fa0c3a6f0bf26958cb4421b4347730e` (`9ae7c722`), on 2026-09-16, on Python 3.12.3, with traigent 0.26.0 installed against the guide's 0.27.0
+pin, which preflight records and continues past.**
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
 
@@ -13,7 +14,7 @@ somebody else's tool on one date, and the tool is under active development.
 
 ```bash
 git clone https://github.com/Traigent/traigent-first-run ~/code/traigent-first-run
-git -C ~/code/traigent-first-run checkout e4096e3aa808d5ad67d84db916f8643bca331128
+git -C ~/code/traigent-first-run checkout 9ae7c7224fa0c3a6f0bf26958cb4421b4347730e
 
 python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
@@ -35,7 +36,7 @@ the directory of any run that did not: a refused run reaches two or three files 
 refusal, and moving those over its committed card would delete the rendered card and the `argv`
 record with it.
 
-**One run cannot be measured at `e4096e3a`.** `best-case--off-method-calibration` asks the
+**One run cannot be measured at `9ae7c722`.** `best-case--off-method-calibration` asks the
 calibration tool to run the execution scorer against the project's databases, and the tool now
 refuses to import a scorer whose walk reaches a SQL engine (exit 2). The sweep records the
 refusal in `results.json` and leaves `cards/best-case--off-method-calibration/` as it was: the
@@ -47,7 +48,7 @@ The sweep checks one more thing before it builds anything: that the documents un
 field lists from the checkout it is handed, so *which fields a document may carry* is settled
 by the guide rather than by a copy of its rules kept here; which fields are *required* the
 guide expresses in control flow rather than as data, so `source_lines` is the one hardcoded
-coordinate in the check, named in `score_bank.py` beside a comment saying so. At `e4096e3a`
+coordinate in the check, named in `score_bank.py` beside a comment saying so. At `9ae7c722`
 the documents and the pin agree, which is why the command above needs no `--revision`.
 
 **Exit status:** 0 when every run scored, 1 when the guide refused one or more, 2 when the
@@ -71,7 +72,7 @@ answered when it could.
 | `cards/<run>/argv.json` | every invocation, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE` |
 | `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
 
-Two things about the rows at `e4096e3a`. A cap's `ceiling` may be `null` in `results.json`
+Two things about the rows at `9ae7c722`. A cap's `ceiling` may be `null` in `results.json`
 and on the card: such a cap discloses a finding without bounding the score
 (`evaluator-calibration-refused`, ceiling null, blocks false). And the guide holds the top two
 bands at WORKABLE until a review of the expected answers has entered through `--row-review`,
@@ -123,7 +124,7 @@ Seventeen presets, then the comparisons the documentation makes:
 
 ## Results
 
-**Every row below is the 2026-09-15 reading at `e4096e3a`**, taken from `cards/results.json`.
+**Every row below is the 2026-09-16 reading at `9ae7c722`**, taken from `cards/results.json`.
 The agent pillar reads 100 on every project with an agent: the guide's static reader follows
 all four of the demo agent's settings to the request since guide #549, for the reason the
 repository README gives under "What the source reader sees". A regeneration at `9eaabbb2`
@@ -194,7 +195,7 @@ diff <(tail -n +2 ready/04-readiness-card.txt) <(tail -n +2 wrong-wiring/04-read
 At `6ec2b9c1`, with the `ready` family's dataset 98 and agent 70, the overall score was
 `0.40x98 + 0.35xE + 0.25x70 = 56.7 + 0.35E`; EXCELLENT starts at 90, so it needed an evaluation
 pillar of 94, the text comparator's calibrated pillar was 83 (86 overall) and the execution
-scorer's was 99 (91). At `e4096e3a` the agent pillar is 100 with no trial budget declared, so
+scorer's was 99 (91). Since guide #549 landed (`e4096e3a`) the agent pillar is 100 with no trial budget declared, so
 the average is `64.2 + 0.35E`: 93 for `checked` (E = 83), 99 for the `exact` + `structured`
 declaration (E = 100), 85 for `best-case` (E = 59, two of four checks measured). None of them
 is capped, and none reads above WORKABLE: the two calibrated ones are held by the unread answer

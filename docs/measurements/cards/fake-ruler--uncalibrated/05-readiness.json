@@ -44,6 +44,7 @@
           "measured": false,
           "name": "control-flow",
           "value": 0.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -53,6 +54,7 @@
           "measured": false,
           "name": "output-contract",
           "value": 0.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -62,6 +64,7 @@
           "measured": false,
           "name": "prompt",
           "value": 0.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -71,6 +74,7 @@
           "measured": true,
           "name": "search-space",
           "value": 100.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -80,6 +84,7 @@
           "measured": false,
           "name": "tools",
           "value": 0.0,
+          "warning": false,
           "withheld": false
         }
       ]
@@ -96,6 +101,7 @@
           "measured": true,
           "name": "difficulty",
           "value": 15.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -105,6 +111,7 @@
           "measured": false,
           "name": "diversity",
           "value": 0.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -114,6 +121,7 @@
           "measured": true,
           "name": "labels",
           "value": 30.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -123,6 +131,7 @@
           "measured": true,
           "name": "power",
           "value": 23.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -132,6 +141,7 @@
           "measured": true,
           "name": "provenance",
           "value": 10.0,
+          "warning": false,
           "withheld": false
         }
       ]
@@ -148,6 +158,7 @@
           "measured": false,
           "name": "calibration",
           "value": 0.0,
+          "warning": false,
           "withheld": true
         },
         {
@@ -157,6 +168,7 @@
           "measured": false,
           "name": "probe-spread",
           "value": 0.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -166,6 +178,7 @@
           "measured": true,
           "name": "reproducibility",
           "value": 20.0,
+          "warning": false,
           "withheld": false
         },
         {
@@ -175,6 +188,7 @@
           "measured": true,
           "name": "task-fit",
           "value": 8.0,
+          "warning": false,
           "withheld": false
         }
       ]
