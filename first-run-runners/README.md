@@ -63,7 +63,7 @@ so `id`, `difficulty`, `db_id`, `schema` and `split` sit at the top level and re
 its `metadata` argument; a nested `metadata` object would arrive one level too deep and the scorer
 would not find `db_id`. `holdout.jsonl` keeps the project's own nested shape because `run_holdout`
 reads `row["metadata"]` directly. Two more places these scripts differ from the guide's own
-wrapper at `2f744d1b`: the guide's held-out pass loads its file through `Dataset.from_jsonl`
+wrapper at `289898c5`: the guide's held-out pass loads its file through `Dataset.from_jsonl`
 and averages every scored row, where this script reads the nested shape by hand and averages
 the rows that scored; and the connected script neither writes `traigent-runs/config-space.json`
 after the search nor probes portal tracking before it, so a run under it produces nothing the
