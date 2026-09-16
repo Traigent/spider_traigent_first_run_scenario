@@ -388,11 +388,12 @@ The table was first measured at `6ec2b9c1` on 2026-09-02 and regenerated at `9ea
 followed none of the demo agents' settings to the request. That reading lasted a day: guide
 #549 taught the reader the three shapes it was refusing -- LiteLLM's module-level request, a
 `float()` cast on the local, a mapping handed to a nested helper -- and this is the
-regeneration on the trunk that carries it, re-taken at `9ae7c722` on 2026-09-16 after guide
-#551 bounded the first run to at most 28 rows from any source and #552 pinned SDK 0.27.0: no
-score, band or action moved. What changed on the cards is their shape, with the `Action` line
-and the ceilings now printed above the pillars, and the preflight note that the SDK installed
-here is 0.26.0 against a walkthrough measured on 0.27.0, which the guide records and continues past. [The section on the source
+regeneration on the trunk that carries it (`e4096e3a`, 2026-09-15), re-taken at `9ae7c722` on
+2026-09-16 after guide #551 bounded the first run to at most 28 rows from any source and #552
+pinned SDK 0.27.0: no score, band or action moved. What changed on the cards is their shape,
+with the `Action` line and the ceilings now printed above the pillars, and the preflight note
+that the SDK installed here is 0.26.0 against a walkthrough measured on 0.27.0, which the guide
+records and continues past. [The section on the source
 reader](#what-the-source-reader-sees-and-what-the-agent-actually-has) has the whole of that
 story. The projects are unchanged throughout; what moved is the tool.
 

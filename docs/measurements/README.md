@@ -5,8 +5,8 @@ reproduce it is in this directory: the script, the two hand-written agent reads 
 the captured invocation and full output of every run.
 
 **Measured against the first-run guide at revision
-`9ae7c7224fa0c3a6f0bf26958cb4421b4347730e` (`9ae7c722`), on 2026-09-16, on Python 3.12.3, with traigent 0.26.0 installed against the guide's 0.27.0 pin, which
-preflight records and continues past.**
+`9ae7c7224fa0c3a6f0bf26958cb4421b4347730e` (`9ae7c722`), on 2026-09-16, on Python 3.12.3, with traigent 0.26.0 installed against the guide's 0.27.0
+pin, which preflight records and continues past.**
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
 
