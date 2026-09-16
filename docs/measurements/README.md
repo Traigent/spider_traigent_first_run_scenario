@@ -195,7 +195,7 @@ diff <(tail -n +2 ready/04-readiness-card.txt) <(tail -n +2 wrong-wiring/04-read
 At `6ec2b9c1`, with the `ready` family's dataset 98 and agent 70, the overall score was
 `0.40x98 + 0.35xE + 0.25x70 = 56.7 + 0.35E`; EXCELLENT starts at 90, so it needed an evaluation
 pillar of 94, the text comparator's calibrated pillar was 83 (86 overall) and the execution
-scorer's was 99 (91). Since `e4096e3a` the agent pillar is 100 with no trial budget declared, so
+scorer's was 99 (91). Since guide #549 landed (`e4096e3a`) the agent pillar is 100 with no trial budget declared, so
 the average is `64.2 + 0.35E`: 93 for `checked` (E = 83), 99 for the `exact` + `structured`
 declaration (E = 100), 85 for `best-case` (E = 59, two of four checks measured). None of them
 is capped, and none reads above WORKABLE: the two calibrated ones are held by the unread answer

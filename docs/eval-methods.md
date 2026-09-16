@@ -123,8 +123,8 @@ Measured against the first-run guide at revision
 > moved.** The score bank was regenerated at `e4096e3a` on 2026-09-15 and re-taken unchanged at
 > `9ae7c722` on 2026-09-16 -- the current cards are
 > under [`docs/measurements/cards/`](measurements/README.md) and the current table is in the
-> repository README -- and since `e4096e3a` the run behind the 91 EXCELLENT number is refused
-> by the calibration tool, `checked` reads 93 and the declared pair below 99, and both are held
+> repository README -- and since `9eaabbb2` the run behind the 91 EXCELLENT number is refused
+> by the calibration tool; since `e4096e3a` `checked` reads 93 and the declared pair 99, and both are held
 > at WORKABLE until the expected answers are read. The numbers in this section are not
 > republished as current; they are the reading the guide's later changes answered.
 

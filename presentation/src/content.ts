@@ -567,7 +567,7 @@ const rawPresentation = {
         {
           startingPoint: "LIMITED TO 89",
           safestNextStep:
-            "The comparison can run; the evidence bounds the claim. Nothing has to be fixed first.",
+            "The comparison can run; the evidence bounds the claim. Nothing to fix first.",
         },
         {
           startingPoint: "A question for you",
@@ -1093,7 +1093,7 @@ const rawPresentation = {
         `${README} · The readiness score`,
       ],
       notes: [
-        "The ceilings come from the scorer's own constants: evaluator invalid 25, evaluator unvalidated 45, nothing to vary 45, generated dataset 65, model-written answer key 74; fewer than ten comparable examples 74, ten to twenty-nine 89.",
+        "The ceilings come from the scorer's own constants: evaluator invalid 25, evaluator unvalidated 45, nothing to vary 45, generated dataset 65, model-written answer key 74; one to nine comparable examples 74, ten to twenty-nine 89.",
         "74 rather than 75 is deliberate: 75 is the Strong threshold, and a dataset whose whole answer key a model wrote may be workable but may not present as Strong.",
         "A capped project is not a failed project. A truthful 45 with a named ceiling is more useful than an unsupported 90.",
       ],
@@ -1323,7 +1323,7 @@ const rawPresentation = {
         "The guide's own order of preference for data: reviewed product fixtures, golden sets, regression tests or accepted examples first; then redacted real logs or traces with independently reviewed expected outcomes; then the customer's own examples expanded into additional tuning candidates; and only last, fully synthetic walkthrough data. Examples written for the walkthrough are weaker evidence than examples collected from the product.",
         "Yours, a selection: the run picks inside each split you already have and never fills tuning from your held-out rows, even when your split is larger than this run; the chosen ids and any seed go to traigent-runs/run-plan.md so the run can be repeated.",
         "No split of yours: the run reserves held-out rows in the working copy when it is written, before any evaluator design, calibration or tuning. With too few real rows for both sets they are divided about 18 to 10 in tuning's favour, rounding toward tuning - ten rows go seven and three - keeping every question's accepted answers together; if all your real rows are one question, they all go to tuning and the report says no independent held-out measurement was taken.",
-        "Yours, topped up: by default the run uses the rows you have, however few; a small real dataset is not permission to fill the gaps with synthetic rows. The offer appears only through a size ceiling's own choice on the readiness card - the 74 wiring-check ceiling or the 89 coarse-resolution one, whenever your file holds fewer than 28 rows - and rows are written only if the customer says yes. Accepted rows are derived from the real task and keep the existing split; rows without usable labels are reviewed or labelled first.",
+        "Yours, topped up: by default the run uses the rows you have, however few; a small real dataset is not permission to fill the gaps with synthetic rows. The offer appears only through a size ceiling's own choice on the readiness card - the 74 wiring-check ceiling or the 89 coarse-resolution one, when your file holds fewer than 28 rows and filling it to 28 would reach ten comparable rows - and rows are written only if the customer says yes. Accepted rows are derived from the real task and keep the existing split; rows without usable labels are reviewed or labelled first.",
         "The offer is a question, asked once on the same ask as any other gap, and it says before the customer answers that accepting lowers the readiness ceiling: the added rows are generated, and on a short dataset they become most of the set. The guide's own measurement: nine real rows topped to twenty-eight move the card from the wiring-check ceiling to a mostly-generated one, four points lower. A topped-up dataset is one this run can compare on, not one that has been improved.",
         "No dataset at all: 28 examples are written, 18 tuning rows (aiming for 4 easy, 5 medium, 5 hard, 4 very hard) plus the held-out ten (2, 3, 3, 2), listed under Walkthrough setup and capped at 65 until collected rows arrive.",
         "Readiness is always scored on the whole dataset, never on the selection or the top-up; the selection bounds this one comparison, and the full dataset stays intact for the customer's continuing work.",
