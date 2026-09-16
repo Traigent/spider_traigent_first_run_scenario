@@ -315,7 +315,7 @@ const rawPresentation = {
         "Stages 1 and 2 make no provider or Traigent calls and spend nothing. Stage 3 is the first paid stage, on the customer's own key and stop target. Only after that result does the assistant ask for a Traigent key.",
         "Stage 4 is a separate approval on purpose: the baseline stays inside the customer's own settings, the search explores a broader space, and Traigent's service enters only here.",
         "Before the baseline's key ask there is one free approval: where Traigent installs, with the resolved plan shown - an environment found in the project, a new project .venv, or the throwaway fallback.",
-        "The assistant stops only for a real choice between agents, one question about the task when nothing in the project explains it, a key, the environment choice and install approval below, a paid or data-sending step, a change to real answers or grading rules, or a destructive change. Do not present Readiness as something the customer approves.",
+        "The assistant stops only for a real choice between agents, one question about the task when nothing in the project explains it, the one gap question when material is missing or short, a key, the environment choice and install approval below, a paid or data-sending step, a change to real answers or grading rules, or a destructive change. Do not present Readiness as something the customer approves.",
         "Stage 5 also hands over the Traigent optimization skills, so the customer can continue on their own agent, dataset and evaluator. An automatic full-dataset run is not the default next step.",
       ],
     },
@@ -413,7 +413,7 @@ const rawPresentation = {
       id: "when-material-is-weak",
       kind: "tiles",
       eyebrow: "WHAT HAPPENS IN YOUR SITUATION · WEAK MATERIAL",
-      title: "Too small, corrupted, or off-task? You get three exits.",
+      title: "Corrupted, repetitive, or off-task? You get three exits.",
       body: "The assistant shows the evidence first. Your originals are never rewritten.",
       tiles: [
         {
@@ -437,7 +437,7 @@ const rawPresentation = {
         `${SKILL} · One ask for every gap`,
       ],
       notes: [
-        "This row covers a dataset or evaluator that exists but is too small, corrupted, repetitive, or does not match the task.",
+        "This row covers a dataset or evaluator that exists but is corrupted, repetitive, or does not match the task. Too few rows is not a repair: where a row-count ceiling asks, the bounded top-up replaces repair, and that case is on the special-cases slide.",
         "The assistant shows the evidence and offers the three exits. Repairing means editing a working copy and re-checking it; the originals stay untouched. Continuing means the report carries the limit in plain words.",
       ],
     },
@@ -445,7 +445,7 @@ const rawPresentation = {
       id: "special-cases",
       kind: "matrix",
       eyebrow: "WHAT HAPPENS IN YOUR SITUATION · SPECIAL CASES",
-      title: "Four cases the guide handles differently, and says so first.",
+      title: "Five cases the guide handles differently, and says so first.",
       body: "In each, the guide states what it will do before doing it.",
       matrix: [
         {
@@ -457,6 +457,11 @@ const rawPresentation = {
           startingPoint: "Thousands of usable rows",
           safestNextStep:
             "Readiness reads every row; the comparison uses at most 18 tuning and 10 held-out.",
+        },
+        {
+          startingPoint: "Fewer than 28 rows",
+          safestNextStep:
+            "Recommended: top up to 28 with generated rows; yours stay as they are, the result marks which.",
         },
         {
           startingPoint: "One fixed model, one fixed prompt",
@@ -472,10 +477,12 @@ const rawPresentation = {
       sources: [
         `${GUIDE} · Default run`,
         `${EVALUATION} · First-run dataset scope`,
+        `${COMPONENT_CREATION} · When the gap is a shortfall`,
         `${RUN_SAFETY} · Execution evaluators are out of scope`,
       ],
       notes: [
         "An existing baseline is preserved exactly; one configuration is correct if that is what the customer defined.",
+        "Fewer than 28 rows: the one gap question marks the top-up recommended, because the walkthrough is built as 18 tuning and 10 held-out rows and a shorter file leaves one side or both short. The generated rows are recorded as additions in the derived tuning and held-out files under traigent-runs/; the customer's file is never edited, and nothing is written until the customer says yes. The ask says that their own rows stay exactly as they are and that the added rows are written for the walkthrough and weaker evidence, so the run reads as a walkthrough, not a measurement of their product; it never states the ceiling or its number. The approval and the result say which rows were theirs and which were written, and what ceiling the generated share carries.",
         "Whatever the source holds - 20 rows or 4,812 - the paid comparison runs on at most 28 rows: up to 18 tuning and up to 10 held-out, picked inside each existing split so it cannot create an overlap, with the chosen row ids and any seed written to traigent-runs/run-plan.md. The report names the selected counts beside the full count, for example '9 tuning questions in 18 rows, and 10 held-out rows, of your 4,812'. A question with several accepted answers keeps every one of its rows, so the run picks fewer questions rather than cutting an accepted answer.",
         "The selection bounds the run, never the dataset: readiness is scored on the whole dataset, before and after, and the run's own sample-size limitation is reported separately in the run report. The customer's full dataset stays intact for their own continuing work.",
         "The fixed-agent row is the most common surprise: a search needs something to search over, or it would compare one configuration with itself. The readiness card names the missing dimension.",
@@ -567,7 +574,7 @@ const rawPresentation = {
         {
           startingPoint: "LIMITED TO 89",
           safestNextStep:
-            "The comparison can run; the evidence bounds the claim. Nothing to fix first.",
+            "The comparison can run; the evidence bounds the claim. Under 28 rows, a top-up is offered.",
         },
         {
           startingPoint: "A question for you",
@@ -589,7 +596,7 @@ const rawPresentation = {
       notes: [
         "The label is the whole message: FIX BEFORE PAID RUN holds the run, LIMITED TO bounds the claim, and the question is the only label that needs something from the customer.",
         "FIX BEFORE PAID RUN causes: no dataset, no expected answers, an evaluator that grades a wrong answer as well as a right one, or tuning rows that overlap the held-out rows.",
-        "LIMITED TO causes: generated examples, or too few rows for a stable comparison. Two conditions can carry the same ceiling and both read LIMITED TO 45; fixing one leaves the number where it is until the other is fixed too.",
+        "LIMITED TO causes: generated examples, or too few rows for a stable comparison. Two conditions can carry the same ceiling and both read LIMITED TO 45; fixing one leaves the number where it is until the other is fixed too. Under 28 rows either size ceiling also puts a bounded top-up to 28 on the one gap question, recommended and declared as generated; accept it or keep what you brought.",
         "The two questions only a person can judge: an answer key a model wrote end to end, or rows whose answer does not match their own question. The second is asked only while a flagged row could be among the rows this run uses; otherwise the card keeps the finding as unresolved and the run continues without asking. Data with no stated origin is read as generated and that assumption is stated on the approval, not asked.",
         "One more label, an open ask: the unread-answer-key hold caps nothing and asks you to read the key; the card lists it after the pillar evidence and recommends continuing.",
         "89/100 WORKABLE example: an evaluation pillar with only 2 of 4 checks observed. The card says which pillar and what fills it in.",
@@ -715,6 +722,7 @@ const rawPresentation = {
         "The preview before the baseline: scope, configurations, calls, metric, runtime, estimated spend, who receives data, and the $5.00 default stop target. The connected stage gets its own approval card covering the same things.",
         "The runtime is an estimate, never a promised duration: before the paid probe the assistant estimates it conservatively from dataset size, planned trials and calls per example, and after the probe replaces it with observed latency. If the estimate exceeds $5.00 or 30 minutes, the guide first recommends a smaller representative slice. Do not quote a duration per stage; the guide gives none.",
         "If the run had to write the dataset or grading method, the same preview shows exactly what it wrote and asks the customer to proceed or fix before anything is charged.",
+        "If a readiness ceiling asked something - a model-written answer key, a top-up to 28 - the same card restates the finding, the answer you gave, and what proceeding on it means for the money about to be spent. After a top-up, this is the first place the ceiling the generated share carries is named, with its number; the ask itself never carried it.",
         "The stop target is a conservative control the run stops at and a re-approval trigger, not a billing guarantee. Provider errors, missing credentials or a breached stop target stop the run loudly; nothing is mocked or invented to fill the gap.",
         "If your evaluator executes answers, the same card says what was not checked and asks, optionally, whether it connects read-only; it also states any provenance the run assumed and whether Traigent was already set up here.",
       ],
@@ -812,7 +820,7 @@ const rawPresentation = {
       notes: [
         "Baseline and search result appear side by side, with a verified portal link for every run that was recorded, and a local-only label for a baseline that was not uploaded.",
         "The held-out check comes with a plain note that a few rows cannot settle much. When no independent held-out rows exist, the report says that check was not measured rather than scoring tuning rows under its name.",
-        "If any substitute was used, the interpretation opens by saying the result demonstrates the workflow and is not evidence of production performance.",
+        "If any substitute was used - written rows from a top-up count - the interpretation opens by saying the result demonstrates the workflow and is not evidence of production performance.",
       ],
     },
     {
@@ -1140,7 +1148,7 @@ const rawPresentation = {
         "Evaluator invalid means it scores a known-wrong answer as well as a known-right one: a broken evaluator measures nothing, so this is the lowest ceiling any evaluator condition carries and it holds the paid run.",
         "Evaluator unvalidated means it has not yet been tried on known-right and known-wrong answers; until it is, the card shows the pillar as thinly measured.",
         "Generated dataset means every row was written by a model, or the dataset says nothing about where its rows came from. For a declared-generated set, nothing is asked. For the undeclared twin, the assumption is stated on the card and again on the pre-spend approval as a limit on the claim, never put as a question. Add rows collected from the product before making a production claim.",
-        "A small set is called a wiring check and is offered a top-up to 28 on the one gap question, marked recommended; the model-written answer key is put to the customer once with two choices.",
+        "A small set is called a wiring check and is offered a top-up to 28 on the one gap question, marked recommended; the model-written answer key is put to the customer once with two choices. The 89 coarse-resolution ceiling carries the same offer under 28 rows, put as the shape this walkthrough builds rather than a rescue; under it neither route clears the ceiling, and the result, not the ask, says it stays.",
         "Two conditions not drawn on the scale: no agent at all is a ceiling of 25 that holds the paid run until an agent is chosen or created; an evaluator that executes code or SQL is not calibrated on the customer's engine and carries a refusal condition that never blocks - a ceiling of 45 while only the declaration is known, none once the engine is witnessed - with the run continuing on full disclosure or calibrating a copy against a read-only target the customer supplies.",
       ],
     },
@@ -1369,7 +1377,7 @@ const rawPresentation = {
       ],
       notes: [
         "The held-out rows exist to check the selection risk, not to remove it, and never to choose. A project with its own held-out split keeps that membership; the walkthrough split goes into its own file before any design, calibration or tuning touches the data. When no independent held-out rows remain - all your real rows are one question, say - the check is reported as not measured, never taken on tuning rows under its name.",
-        "Wording matters: a held-out set is a sealed holdout only when its split and labels stayed hidden until the candidate was locked. Because the assistant creates and can inspect the walkthrough split, the guide calls it held-back and non-blind.",
+        "Wording matters: a held-out set is a sealed holdout only when its split and labels stayed hidden until the candidate was locked. Because the assistant creates and can inspect the walkthrough split, the guide calls it held-back and non-blind. If the split was topped up, the held-out score line says so: held out means the search never saw the rows, not that they came from the customer's world, and generated held-out rows show unseen examples, not generalization to real inputs.",
         "Counts, not percentages: on ten rows one outcome moves the figure by ten points, so no interval is quoted and the report gives the actual reserved count. A gap between tuning and held-out can arise without a bug and establishes neither overfitting nor its absence. Never say that Traigent prevents it.",
         "A set used to select is no longer held out. A flat result on demonstration data says nothing about production.",
       ],
@@ -1388,6 +1396,7 @@ const rawPresentation = {
         "Held-out score with its caveat, or why unavailable",
         "Spent, approved, and what is left",
         "Provenance on every result: ✅, ❗, substitutes",
+        "Topped up? The ceiling it carries, with its number",
       ],
       sources: [
         `${SKILL} · 8. Verify and report`,
@@ -1397,7 +1406,7 @@ const rawPresentation = {
       notes: [
         "The end goal is an explainable decision. A result without its baseline, evidence boundary and limitations is not a valid first-run outcome.",
         "The report leads with the outcome, what the evidence establishes, the current state and its limits, and one next action; then the details: configurations, objectives, trials, failures, cost, stop reason, artifacts and verified links. A frontier over your objective and cost appears in the details only when cost was measured comparably; otherwise the primary result and the telemetry limitation.",
-        "Coverage is reported as distinct configurations measured out of the space's total, with executed trials stated separately, because a repeated trial does not widen coverage; then failures and stop reason, the approved total, what was spent, and what is left.",
+        "Coverage is reported as distinct configurations measured out of the space's total, with executed trials stated separately, because a repeated trial does not widen coverage; then failures and stop reason, the approved total, what was spent, and what is left. For a topped-up dataset the current-state layer names the ceiling its generated share carries, with its number, and the details layer keeps the counts of your rows and written rows.",
         "The one next action applies the most useful lesson to the customer's own agent, dataset or evaluator, and names the Traigent skill for it; another walkthrough or an automatic full-dataset run is never the default. No configuration is promoted from a fully synthetic run; for real components, promotion still needs explicit approval and a later validation check. Learning links and lifecycle suggestions come only after the customer has seen the result.",
       ],
     },
