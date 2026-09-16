@@ -241,7 +241,7 @@ export function displayEyebrow(slide: SlideSpec): string {
     : slide.eyebrow;
 }
 
-/** `Traigent/traigent-first-run@e4096e3a`: the pinned guide the deck describes. */
+/** `Traigent/traigent-first-run@2df97691`: the pinned guide the deck describes. */
 export function sourceCitation(spec: PresentationSpec): string {
   return `${spec.source.repository}@${spec.source.revision.slice(0, 8)}`;
 }
