@@ -9,7 +9,7 @@ import {
 const customerPrompt =
   "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
 
-const guideRevision = "cb30bd5965801a449f14c1b201a5050b62d457a7";
+const guideRevision = "2f744d1b503ccdfec33f1be57d3e813cf042e863";
 
 // Repository-relative paths of every guide file a slide may cite.
 const README = "README.md";

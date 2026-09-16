@@ -85,8 +85,8 @@ from typing import Any
 # the revision the documents under agent-knobs/ validate at; the two name the same commit
 # since the 2026-09-15 regeneration, so no --revision override is needed, and they are kept
 # separate for the next time the guide's document contract moves ahead of the pin.
-PINNED_REVISION = "9ae7c7224fa0c3a6f0bf26958cb4421b4347730e"
-WORKING_REVISION = "9ae7c7224fa0c3a6f0bf26958cb4421b4347730e"
+PINNED_REVISION = "2f744d1b503ccdfec33f1be57d3e813cf042e863"
+WORKING_REVISION = "2f744d1b503ccdfec33f1be57d3e813cf042e863"
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
