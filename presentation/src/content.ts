@@ -445,7 +445,7 @@ const rawPresentation = {
       id: "special-cases",
       kind: "matrix",
       eyebrow: "WHAT HAPPENS IN YOUR SITUATION · SPECIAL CASES",
-      title: "Five cases the guide handles differently, and says so first.",
+      title: "Four cases the guide handles differently, and says so first.",
       body: "In each, the guide states what it will do before doing it.",
       matrix: [
         {
@@ -459,11 +459,6 @@ const rawPresentation = {
             "Readiness reads every row; the comparison uses at most 18 tuning and 10 held-out.",
         },
         {
-          startingPoint: "Fewer than 28 rows",
-          safestNextStep:
-            "Recommended: top up to 28 with generated rows; yours stay as they are, the result marks which.",
-        },
-        {
           startingPoint: "One fixed model, one fixed prompt",
           safestNextStep:
             "Nothing to search over, so the paid search waits; the card names the setting to add.",
@@ -471,22 +466,21 @@ const rawPresentation = {
         {
           startingPoint: "Evaluator runs the answer as code or SQL",
           safestNextStep:
-            "Not run by the guide: it says what was not checked and continues. No sandbox is improvised.",
+            "Not calibrated on your original. For a database evaluator, a copy is calibrated against a target you supply.",
         },
       ],
       sources: [
         `${GUIDE} · Default run`,
         `${EVALUATION} · First-run dataset scope`,
-        `${COMPONENT_CREATION} · When the gap is a shortfall`,
         `${RUN_SAFETY} · Execution evaluators are out of scope`,
+        `${RUN_SAFETY} · The copied-actor route`,
       ],
       notes: [
         "An existing baseline is preserved exactly; one configuration is correct if that is what the customer defined.",
-        "Fewer than 28 rows: the one gap question marks the top-up recommended, because the walkthrough is built as 18 tuning and 10 held-out rows and a shorter file leaves one side or both short. The generated rows are recorded as additions in the derived tuning and held-out files under traigent-runs/; the customer's file is never edited, and nothing is written until the customer says yes. The ask says that their own rows stay exactly as they are and that the added rows are written for the walkthrough and weaker evidence, so the run reads as a walkthrough, not a measurement of their product; it never states the ceiling or its number. The approval and the result say which rows were theirs and which were written, and what ceiling the generated share carries.",
         "Whatever the source holds - 20 rows or 4,812 - the paid comparison runs on at most 28 rows: up to 18 tuning and up to 10 held-out, picked inside each existing split so it cannot create an overlap, with the chosen row ids and any seed written to traigent-runs/run-plan.md. The report names the selected counts beside the full count, for example '9 tuning questions in 18 rows, and 10 held-out rows, of your 4,812'. A question with several accepted answers keeps every one of its rows, so the run picks fewer questions rather than cutting an accepted answer.",
         "The selection bounds the run, never the dataset: readiness is scored on the whole dataset, before and after, and the run's own sample-size limitation is reported separately in the run report. The customer's full dataset stays intact for their own continuing work.",
         "The fixed-agent row is the most common surprise: a search needs something to search over, or it would compare one configuration with itself. The readiness card names the missing dimension.",
-        "The code-or-SQL row is the one place the guide declines a check on its own initiative; it discloses and continues, or calibrates a copy against a target you bound. A task whose answer is code stays in scope; what is out of scope is grading by executing that answer.",
+        "The code-or-SQL row is about the calibration check, not the paid run. The guide does not calibrate the customer's original evaluator: that would run statements against whatever engine it is configured to reach. Where the evaluator opens a database connection - sqlite3, psycopg2, create_engine, duckdb - it copies the evaluator file into traigent-runs/calibration/, repoints only that connection line, and calibrates the copy against a read-only connection or a duplicate of the data the customer made with a proper tool; the target goes into their .env, never into chat, and one lettered question asks for it. An evaluator whose target arrives another way, or that executes the answer as code with no connection to repoint, takes the disclosure route: the card says what was not checked and the run continues. The paid run then uses the customer's own evaluator as configured, and the approval card says so before any spend. No sandbox is shipped or improvised.",
       ],
     },
     {
@@ -651,9 +645,9 @@ const rawPresentation = {
         },
         {
           icon: "🚫",
-          label: "No code execution",
+          label: "Code or SQL evaluator",
           detail:
-            "The guide never runs an evaluator that executes answers as code.",
+            "Calibrated on a copy against a target you bound, never your original.",
         },
         {
           icon: "✍️",
@@ -676,7 +670,7 @@ const rawPresentation = {
       notes: [
         "Keys live in a local .env that only the customer can read and that Git ignores. The run installs into your environment or a new persistent .venv after approval, or the throwaway .venv-traigent as fallback. Never a shared, dependent, external, or assistant-owned environment. Never edits your dependency files.",
         "Tested pins traigent==0.27.0, litellm==1.93.0, python-dotenv==1.2.2 are the exact install on the throwaway route and the recommendation elsewhere; a traigent or litellm you already have at or above the pin is kept and named. Never an unversioned pip install traigent.",
-        "An evaluator that executes the agent's answer as code or SQL is not run on the guide's initiative. The guide skips that check, tells you plainly what was not checked, and continues; it can calibrate a copy against a read-only or duplicate target you supply. No sandbox is shipped or improvised.",
+        "An evaluator that executes the agent's answer as code or SQL is not calibrated in its original form, because that would run statements against whatever engine it reaches. For an evaluator that opens a database connection, the guide copies the file into traigent-runs/calibration/, repoints only its connection line, and calibrates that copy against a read-only connection or a duplicate of the data you supply - the target goes into your .env, never into chat. Where there is no connection to repoint, it tells you plainly what was not checked and continues. The paid run uses your evaluator as configured, and the approval card says so first. No sandbox is shipped or improvised.",
         "Changes to real answers or grading rules, and anything destructive or production-affecting, each need their own explicit approval. Approving one step never pre-approves another.",
       ],
     },
