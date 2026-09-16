@@ -456,12 +456,12 @@ const rawPresentation = {
         {
           startingPoint: "Inputs, but no expected answers",
           safestNextStep:
-            "Labelled in a working copy first, declared model-written; judgment calls need your approval.",
+            "Recommended: answers added to a copy of your data, marked model-written; you approve judgment calls.",
         },
         {
           startingPoint: "Fewer than 28 rows",
           safestNextStep:
-            "Recommended: top up to 28 with generated rows; yours stay as they are, the result marks which.",
+            "Recommended: add generated rows up to 28. Yours stay untouched; the report lists which rows it added.",
         },
         {
           startingPoint: "One fixed model, one fixed prompt",
@@ -471,7 +471,7 @@ const rawPresentation = {
         {
           startingPoint: "Evaluator runs the answer as code or SQL",
           safestNextStep:
-            "Not calibrated on your original. Where its connection line is visible, a copy may use your target.",
+            "Never checked as-is. For SQL, a copy can be, on a read-only or duplicate database you name.",
         },
       ],
       sources: [
@@ -653,7 +653,7 @@ const rawPresentation = {
           icon: "🚫",
           label: "Code or SQL evaluator",
           detail:
-            "Never on your original; a SQL-engine copy may use your bound target.",
+            "Never checked as-is; only a copy, on a safe database you name.",
         },
         {
           icon: "✍️",
