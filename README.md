@@ -66,7 +66,7 @@ Clone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.
 ```
 
 That is the same prompt a customer is given -- the guide's README, "Start with one prompt", at
-`f7148710`. For four days in September it was three lines that also said where to clone, beside
+`5ce65540`. For four days in September it was three lines that also said where to clone, beside
 the project and not inside it; guide #550 put it back to two, because that is the assistant's
 rule (it lives in `GUIDE.md`) and not something a customer should have to know or say.
 `build.py` prints it when it finishes, and records it in `demo.json`.
@@ -346,7 +346,7 @@ records.
 
 So the presets ask different questions: `checked` asks whether a first run works end to end on
 a non-executing proxy; `sql-exec-stop` and `best-case` ask what the guide does at the one
-boundary in this bank -- a scorer it will not calibrate on the original -- and at `f7148710` the
+boundary in this bank -- a scorer it will not calibrate on the original -- and at `5ce65540` the
 answer is a card that says so and a run that goes on.
 [docs/eval-methods.md](docs/eval-methods.md) has the detail, including how the two scorers
 are graded.
@@ -381,19 +381,20 @@ scores twice -- once at the opening and again after it has created or repaired a
 the number a finished run reports is not the one in this table, and should not be.
 
 **Measured with the guide's own `preflight.py`, `calibrate_evaluator.py` and `readiness.py`, at
-guide revision `f7148710f79e356a9f624a88318681b1e9f7f237` (`f7148710`), on 2026-09-16.**
+guide revision `5ce65540e42b4f6a5a36a28c80e91745848ea507` (`5ce65540`), on 2026-09-17.**
 
 The table was first measured at `6ec2b9c1` on 2026-09-02 and regenerated at `9eaabbb2` on
 2026-09-15, where every project with an agent opened at 45 because the guide's static reader
 followed none of the demo agents' settings to the request. That reading lasted a day: guide
 #549 taught the reader the three shapes it was refusing -- LiteLLM's module-level request, a
 `float()` cast on the local, a mapping handed to a nested helper -- and this is the
-regeneration on the trunk that carries it (`e4096e3a`, 2026-09-15), re-taken at `f7148710` on
-2026-09-16 after guide #551 bounded the first run to at most 28 rows from any source, #552
+regeneration on the trunk that carries it (`e4096e3a`, 2026-09-15), re-taken at `5ce65540` on
+2026-09-17 after guide #551 bounded the first run to at most 28 rows from any source, #552
 pinned SDK 0.27.0, #553 marked the short-dataset top-up recommended, #554 moved the ceiling
-from the ask to the approval and the result, #555 named it on the approval card, and #556 let the
-run copy a local database file for the evaluator check: no score, band or action moved (the two
-execution-evaluator cards changed only in the wording of their disclosure), and the two cards whose action is `label-data` now read "Review the expected results this
+from the ask to the approval and the result, #555 named it on the approval card, #556 let the
+run copy a local database file for the evaluator check and #557 bounded and verified that copy:
+no score, band or action moved (the two execution-evaluator cards changed only in the wording of
+their disclosure), and the two cards whose action is `label-data` now read "Review the expected results this
 run proposes". What changed on the cards is their shape,
 with the `Action` line and the ceilings now printed above the pillars, and the preflight note
 that the SDK installed here is 0.26.0 against a walkthrough measured on 0.27.0, which the guide
@@ -403,7 +404,7 @@ story. The projects are unchanged throughout; what moved is the tool.
 
 Rebuild the table with one command. **It does not overwrite the committed cards**: the run
 writes into its own workspace and prints where, and only `--publish` replaces what is under
-`docs/measurements/cards/`. The checkout must be sitting on `f7148710`, and the run says so if
+`docs/measurements/cards/`. The checkout must be sitting on `5ce65540`, and the run says so if
 it is not.
 
 ```bash
@@ -462,7 +463,7 @@ STRONG 75-89, EXCELLENT 90-100.
 
 A bank of broken projects is worth having because of what it finds, and at `6ec2b9c1` it found
 three. Two of them the guide has since answered and one it has not. Each is a `diff` over two
-committed cards, re-taken at `f7148710`.
+committed cards, re-taken at `5ce65540`.
 
 **A dataset whose every answer answers a different question is still not noticed.**
 `wrong-answers` keeps every question and every answer and pairs them wrongly, inside each
@@ -575,7 +576,7 @@ with `checked`'s dataset 98 and evaluation 83 is `0.40x98 + 0.35x83 + 0.25x100 =
 EXCELLENT, and agent 100 needed a declared budget of at least 12 trials. But a trial budget can
 only enter `readiness.py` through a `--config-space` document -- there is no flag, and the
 `--agent-knobs` document refuses the key by name, exit 2, `carries unknown field(s)
-max_trials; it reads 'knobs', 'source' and 'build'`, re-checked at `f7148710` -- and the
+max_trials; it reads 'knobs', 'source' and 'build'`, re-checked at `5ce65540` -- and the
 opening gate withholds that document. The guide's `references/run-safety.md`, stated as a
 property of the score rather than as advice:
 
@@ -587,7 +588,7 @@ that file "only after this search returns nonzero trials, from the exact space r
 the budget cannot exist as current-run evidence until money has already been spent, and the
 score it feeds is one the guide says to "never show ... or set it beside the opening one". (At
 `6ec2b9c1` those three sentences lived in `SKILL.md`; since `e4096e3a` they are in
-`references/run-safety.md`, and the wording quoted is the current one, `f7148710`.)
+`references/run-safety.md`, and the wording quoted is the current one, `5ce65540`.)
 
 What changed on the other side is that the opening read stopped holding a budgetless space one
 step below full credit (guide #422, 2026-09-03): a source read that follows at least twelve
@@ -601,7 +602,7 @@ The refusal and the single entry point are above, verbatim, and so are the three
 quotes -- the last of them elided at the ellipsis you can see in it. What is *not* published
 here is a card for that check: `docs/measurements/cards/` holds the score bank, and the bank
 scores projects rather than the guide's handling of a config-space document. So a reader checks
-this the way it is written -- the quoted text against the guide at `f7148710`, and
+this the way it is written -- the quoted text against the guide at `5ce65540`, and
 `readiness.py --agent-knobs` against a document carrying `max_trials` -- and not against a
 measurement of ours.
 
@@ -629,7 +630,7 @@ because the project got more honest, not because it got worse.
 ### What `best-case` really opens at
 
 **85, WORKABLE, `confirm-evaluator-connection`** -- and its card is byte-identical to
-`sql-exec-stop`'s, at `f7148710` as it was at `6ec2b9c1`.
+`sql-exec-stop`'s, at `5ce65540` as it was at `6ec2b9c1`.
 
 `best-case` is `checked` with the execution scorer: the same agent, the same 300 rows, marked
 the way Spider marks them, and it ships probe answers. Calibration still does not run at the
@@ -688,7 +689,7 @@ number anything in this repository could be made to produce, and the shape of it
 point: exactly what someone optimising for the number would arrive at, and exactly what a
 spot-check of either field on its own would miss.
 
-Re-measured at `f7148710` ([`cards/grid-*`](docs/measurements/cards/)), the pair still pays:
+Re-measured at `5ce65540` ([`cards/grid-*`](docs/measurements/cards/)), the pair still pays:
 **99** against **93** for the honest declaration, the same six points, from an evaluation
 pillar of 100 against 83. Two things changed around it. The guide now reads the evaluator file
 for the comparison it performs and refutes a declaration the file does not support, where it can
@@ -795,7 +796,7 @@ reverted with CI still green.
 The score table itself is not in that list, because *measuring* it needs a checkout of somebody
 else's repository -- but no network, and no install. Re-measure it separately whenever the guide
 moves. The run leaves the committed cards alone unless `--publish` is passed, and it refuses a
-checkout that is not sitting on the pinned revision, `f7148710`
+checkout that is not sitting on the pinned revision, `5ce65540`
 ([why](docs/measurements/README.md#reproducing-it)):
 
 ```bash

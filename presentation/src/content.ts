@@ -9,7 +9,7 @@ import {
 const customerPrompt =
   "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
 
-const guideRevision = "f7148710f79e356a9f624a88318681b1e9f7f237";
+const guideRevision = "5ce65540e42b4f6a5a36a28c80e91745848ea507";
 
 // Repository-relative paths of every guide file a slide may cite.
 const README = "README.md";
@@ -227,7 +227,7 @@ const rawPresentation = {
       kind: "tiles",
       eyebrow: "WHAT IT ASKS YOU",
       title: "Five routine asks; a few more only when your project needs them.",
-      body: "The extras: what the task is, an unclear grading rule, a doubtful answer, your Traigent key after the baseline, one question when material is missing or short.",
+      body: "The extras: what the task is, an unclear grading rule, a doubtful answer, your Traigent key after the baseline, one question when material is missing or short, one for a SQL evaluator.",
       tiles: [
         {
           icon: "🎯",
@@ -265,7 +265,7 @@ const rawPresentation = {
         "Those five are the routine asks; the rarer ones are in note four. With exactly one credible agent the run names it inside the one gap question instead of halting for a separate confirmation; where nothing is missing, the identity line shown before the readiness card names it. With several it asks the customer to choose. Once chosen, it never asks again.",
         "The provider key goes into a local .env file that only the customer can read and that Git ignores. The assistant never asks for a secret in chat.",
         "Approval is asked before it happens for any paid model call and for any step that sends data outside the machine; separately, before any change to real examples, expected answers or grading rules, and before anything destructive or production-affecting.",
-        "The extras, each asked once: what the task is when nothing in the project says (starting-point slide); a grading rule that is genuinely ambiguous; an expected answer that looks wrong (agree or disagree); the one gap question when a dataset, evaluator or agent is missing or short (special-cases slide); your Traigent key, after the baseline result; and, only for an evaluator that runs SQL: let the run copy a local database file for the check (recommended), paste a read-only link for a server database, or skip.",
+        "The extras, each asked once: what the task is when nothing in the project says (starting-point slide); a grading rule that is genuinely ambiguous; an expected answer that looks wrong (agree or disagree); the one gap question when a dataset, evaluator or agent is missing (starting-point slide) or short (special-cases slide); your Traigent key, after the baseline result; and, only for an evaluator that runs SQL: let the run copy a local database file for the check (recommended), paste a read-only link for a server database, or skip.",
       ],
     },
     {
@@ -316,7 +316,7 @@ const rawPresentation = {
         "Stages 1 and 2 make no provider or Traigent calls and spend nothing. Stage 3 is the first paid stage, on the customer's own key and stop target. Only after that result does the assistant ask for a Traigent key.",
         "Stage 4 is a separate approval on purpose: the baseline stays inside the customer's own settings, the search explores a broader space, and Traigent's service enters only here.",
         "Before the baseline's key ask there is one free approval: where Traigent installs, with the resolved plan shown - an environment found in the project, a new project .venv, or the throwaway fallback.",
-        "The assistant stops only for a real choice between agents, one question about the task when nothing in the project explains it, the one gap question when material is missing or short, a key, the environment choice and install approval, a paid or data-sending step, a change to real answers or grading rules, or a destructive change. Two more stops sit inside Readiness: one grading question when a rule is genuinely ambiguous, and one agree/disagree when an expected answer looks wrong. Do not present Readiness as something the customer approves.",
+        "The assistant stops only for a real choice between agents, one question about the task when nothing in the project explains it, the one gap question when material is missing or short, a key, the environment choice and install approval, a paid or data-sending step, a change to real answers or grading rules, or a destructive change. Three more stops sit inside Readiness: one grading question when a rule is genuinely ambiguous, one agree/disagree when an expected answer looks wrong, and for a SQL evaluator one lettered choice about the copy check. Do not present Readiness as something the customer approves.",
         "Stage 5 also hands over the Traigent optimization skills, so the customer can continue on their own agent, dataset and evaluator. An automatic full-dataset run is not the default next step.",
       ],
     },
@@ -374,12 +374,12 @@ const rawPresentation = {
       kind: "matrix",
       eyebrow: "WHAT HAPPENS IN YOUR SITUATION",
       title: "Every starting point is supported. None is a failure.",
-      body: "What you have is kept, marked ✅ real or ❗ missing or thin. Anything written for the walkthrough is listed as a substitute.",
+      body: "What you have is kept, marked ✅ real or ❗ missing, invalid or thin. Anything written for the walkthrough is listed as a substitute.",
       matrix: [
         {
           startingPoint: "Agent, dataset and evaluator all present",
           safestNextStep:
-            "All three checked and kept; you approve where Traigent installs, paste your key, then approve the baseline.",
+            "All three checked and kept; you approve where Traigent installs, add a missing key, then approve the baseline.",
         },
         {
           startingPoint: "Agent, but no examples or expected answers",
@@ -414,8 +414,8 @@ const rawPresentation = {
       id: "when-material-is-weak",
       kind: "tiles",
       eyebrow: "WHAT HAPPENS IN YOUR SITUATION · WEAK MATERIAL",
-      title: "Thin, easy-only, or off-task material? Three exits.",
-      body: "You see the evidence first. Broken material gets two exits: repair a copy, or pause. Your originals are never rewritten.",
+      title: "Easy-only or off-task material? Three exits.",
+      body: "You see the evidence first. Broken material gets two exits: a rebuilt copy, or pause. Your originals are never rewritten.",
       tiles: [
         {
           icon: "🛠️",
@@ -457,7 +457,7 @@ const rawPresentation = {
         {
           startingPoint: "Inputs, but no expected answers",
           safestNextStep:
-            "Blocked until answers go into a copy of your data; asked once to check a sample; it proceeds.",
+            "Blocked until the run writes answers into a copy of your data; one sample check; it proceeds.",
         },
         {
           startingPoint: "Fewer than 28 rows",
@@ -472,7 +472,7 @@ const rawPresentation = {
         {
           startingPoint: "Evaluator runs the answer as code or SQL",
           safestNextStep:
-            "Local database: checked on a copy it makes, nothing read. Server: your read-only link. Code: told, continues.",
+            "Local file: asked once; copy it makes, nothing read. Server: read-only or duplicate link. Code: not checked.",
         },
       ],
       sources: [
@@ -651,10 +651,10 @@ const rawPresentation = {
           detail: "Tested versions; never an unversioned pip install traigent.",
         },
         {
-          icon: "🚫",
+          icon: "🗄️",
           label: "Code or SQL evaluator",
           detail:
-            "Local database: checked on a copy it makes; server: your read-only link.",
+            "Local file: copy it makes, if you say so; server: your link.",
         },
         {
           icon: "✍️",
@@ -752,17 +752,17 @@ const rawPresentation = {
             "Your prompts",
             "Dataset rows and expected answers",
             "Model responses",
-            "Except setting values or opted-in recording",
+            "Unless you place content in a setting",
           ],
         },
         {
-          heading: "Kept local, one exception",
+          heading: "Stays on your machine",
           tone: "amber",
           items: [
             "Example text blanked in local logs",
             "A run log, one plain sentence per event",
             "Yours to read or delete",
-            "Except provider calls: your agent's normal requests",
+            "Your provider still gets your agent's normal calls",
           ],
         },
       ],
@@ -800,7 +800,7 @@ const rawPresentation = {
         {
           icon: "🏷️",
           label: "Everything labelled",
-          detail: "✅ real, ❗ missing or limited, substitutes named in words.",
+          detail: "✅ real, ❗ missing, invalid or limited, substitutes named.",
         },
         {
           icon: "🧭",
@@ -896,7 +896,7 @@ const rawPresentation = {
         "What it creates is listed under Walkthrough setup, never marked ✅ real.",
       bullets: [
         "It asks what the walkthrough agent should do first",
-        "Every substitute is named in words on the board",
+        "Every substitute is named in words, never marked ✅",
         "The result is a demonstration, not production evidence",
         "Bring real examples later for a production claim",
       ],
@@ -1105,7 +1105,7 @@ const rawPresentation = {
       notes: [
         "The ceilings come from the scorer's own constants: evaluator invalid 25, evaluator unvalidated 45, nothing to vary 45, generated dataset 65, model-written answer key 74; one to nine comparable examples 74, ten to twenty-nine 89.",
         "74 rather than 75 is deliberate: 75 is the Strong threshold, and a dataset whose whole answer key a model wrote may be workable but may not present as Strong.",
-        "A capped project is not a failed project. A low score never stops the run; the named ceiling says what the number may claim.",
+        "A capped project is not a failed project. A low score never stops the run - a holding condition does - and the named ceiling says what the number may claim.",
       ],
     },
     {
@@ -1166,7 +1166,7 @@ const rawPresentation = {
         "Never padded; one configuration is fine if defined",
         "No baseline? A twelve-configuration local grid",
         "Result on screen before any Traigent key",
-        "Uploaded later only if no re-run is needed",
+        "Uploaded later only if the SDK syncs it exactly",
         "Otherwise it stays local, labelled local-only",
         "Local is not free: it spends the approved total",
       ],
@@ -1306,7 +1306,7 @@ const rawPresentation = {
           heading: "Yours, topped up",
           tone: "amber",
           items: [
-            "Under 28 rows: a top-up to 28 is recommended",
+            "Short of 28: a top-up, if it reaches ten",
             "Asked once; written only if you say yes",
             "Adds only the shortfall, never replacing yours",
             "Your rows untouched; added rows are weaker evidence",
@@ -1398,7 +1398,7 @@ const rawPresentation = {
         "Held-out score with its caveat, or why unavailable",
         "Spent, approved, and what is left",
         "Provenance on every component: ✅, ❗, substitutes",
-        "Topped up? The ceiling it carries, with its number",
+        "Topped-up data: its ceiling, with the number",
       ],
       sources: [
         `${SKILL} · 8. Verify and report`,
@@ -1416,7 +1416,8 @@ const rawPresentation = {
       id: "what-you-keep",
       kind: "tiles",
       eyebrow: "STAGE 5 OF 5 · WHAT STAYS WITH YOU",
-      title: "Everything the run wrote stays in your project.",
+      title:
+        "Run artifacts stay in your project; an optional skills install does not.",
       body: "Nothing is deleted as cleanup, and nothing is sent anywhere you did not approve.",
       tiles: [
         {
@@ -1462,7 +1463,7 @@ const rawPresentation = {
       kind: "tiles",
       eyebrow: "REQUIREMENTS",
       title: "What a first run needs.",
-      body: "Stated up front, so nothing new is asked mid-run.",
+      body: "Stated up front; approvals still come at each step that needs one.",
       tiles: [
         {
           icon: "🐍",
@@ -1473,7 +1474,7 @@ const rawPresentation = {
           icon: "📌",
           label: "Pinned SDK stack",
           detail:
-            "traigent 0.27.0, litellm 1.93.0, python-dotenv 1.2.2; yours kept if newer.",
+            "traigent 0.27.0, litellm 1.93.0, python-dotenv 1.2.2; yours kept at or above.",
         },
         {
           icon: "🔑",
