@@ -9,7 +9,7 @@ import {
 const customerPrompt =
   "Help me run my first Traigent optimization.\nClone https://github.com/Traigent/traigent-first-run and follow GUIDE.md.";
 
-const guideRevision = "289898c547a0339a8c348c1d782b1a7cba393540";
+const guideRevision = "f7148710f79e356a9f624a88318681b1e9f7f237";
 
 // Repository-relative paths of every guide file a slide may cite.
 const README = "README.md";
@@ -265,7 +265,7 @@ const rawPresentation = {
         "Those five are the routine asks; the rarer ones are in note four. With exactly one credible agent the run names it inside the one gap question instead of halting for a separate confirmation; where nothing is missing, the identity line shown before the readiness card names it. With several it asks the customer to choose. Once chosen, it never asks again.",
         "The provider key goes into a local .env file that only the customer can read and that Git ignores. The assistant never asks for a secret in chat.",
         "Approval is asked before it happens for any paid model call and for any step that sends data outside the machine; separately, before any change to real examples, expected answers or grading rules, and before anything destructive or production-affecting.",
-        "The extras, each asked once: what the task is when nothing in the project says (starting-point slide); a grading rule that is genuinely ambiguous; an expected answer that looks wrong (agree or disagree); the one gap question when a dataset, evaluator or agent is missing or short (special-cases slide); your Traigent key, after the baseline result; and, only for an evaluator that runs SQL, whether to name a read-only or duplicate database for a copy - skipping it is the default.",
+        "The extras, each asked once: what the task is when nothing in the project says (starting-point slide); a grading rule that is genuinely ambiguous; an expected answer that looks wrong (agree or disagree); the one gap question when a dataset, evaluator or agent is missing or short (special-cases slide); your Traigent key, after the baseline result; and, only for an evaluator that runs SQL: let the run copy a local database file for the check (recommended), paste a read-only link for a server database, or skip.",
       ],
     },
     {
@@ -472,7 +472,7 @@ const rawPresentation = {
         {
           startingPoint: "Evaluator runs the answer as code or SQL",
           safestNextStep:
-            "Not checked as-is; you're told, it continues. SQL only: a copy may use a database you supply.",
+            "Local database: checked on a copy it makes, nothing read. Server: your read-only link. Code: told, continues.",
         },
       ],
       sources: [
@@ -487,7 +487,7 @@ const rawPresentation = {
         "Fewer than 28 rows: the one gap question marks the top-up recommended, because the walkthrough is built as 18 tuning and 10 held-out rows and a shorter file leaves one side or both short. The generated rows are recorded as additions in the derived tuning and held-out files under traigent-runs/; the customer's file is never edited, and nothing is written until the customer says yes. The ask says that their own rows stay exactly as they are and that the added rows are written for the walkthrough and weaker evidence, so the run reads as a walkthrough, not a measurement of their product; the approval names the files written and the ceiling the generated share carries; the result's details layer says which rows were theirs and which were written, with the generated ids.",
         "For the room's inevitable question about a large dataset: whatever the source holds - 20 rows or 4,812 - the paid comparison runs on at most 28 rows, up to 18 tuning and up to 10 held-out, picked inside each existing split with the chosen ids written to traigent-runs/run-plan.md, and readiness is always scored on the whole dataset. That is the one rule for every size, which is why it is not a row on this slide; the appendix data slide has the detail.",
         "The nothing-to-vary row is the surprise: a search needs something to search over, or it would compare one configuration with itself. The readiness card says no setting the agent uses can vary, and the remedy is the repair the guide makes for any limited component - a minimal reversible integration under traigent-runs/ or a thin wrapper around the existing function, never a refactor of production code - so the search has settings to vary. One setting with two values is the minimum that clears the block; twelve distinct configurations is what the scorer counts as a full space, and the search tests up to 12 from a materially larger one. The enhancement adds only controls it proves reach the request. The customer's agent is not edited.",
-        "The code-or-SQL row is about the calibration check, not the paid run. The guide does not calibrate the customer's original evaluator: that would run statements against whatever engine it is configured to reach. Where the evaluator opens a database connection - sqlite3, psycopg2, create_engine, duckdb - it copies the evaluator file into traigent-runs/calibration/, repoints only that connection line, and calibrates the copy against a read-only connection or a duplicate of the data the customer made with a proper tool; the target goes into their .env, never into chat, and one lettered question asks for it. An evaluator whose target arrives another way, or that executes the answer as code with no connection to repoint, takes the disclosure route: the card says what was not checked and the run continues. The paid run then uses the customer's own evaluator as configured, and the approval card says so before any spend. No sandbox is shipped or improvised.",
+        "The code-or-SQL row is about the calibration check, not the paid run. The guide does not calibrate the customer's original evaluator: that would run statements against whatever engine it is configured to reach. Where the evaluator opens a database connection in its own code, it copies the evaluator file into traigent-runs/calibration/ and repoints only that connection line; one lettered question then offers three routes. For a local database file under 256 MB, route A, recommended: the run copies the file and its sidecars with a plain shell copy into traigent-runs/calibration/, byte for byte, never opened, never read, never printed - seconds and no tokens - and calibrates the evaluator copy against that copy; if a sidecar shows something may be writing the file, it waits for the customer to say nothing is. For a server database, route B: paste a read-only connection or a duplicate into .env, never into chat. Route C skips; skipping and silence are the default. An evaluator whose target arrives another way, or that executes the answer as code, takes the disclosure route: the card says what was not checked and the run continues. The paid run then uses the customer's own evaluator as configured, and the approval card says so before any spend. No sandbox is shipped or improvised.",
       ],
     },
     {
@@ -654,7 +654,7 @@ const rawPresentation = {
           icon: "🚫",
           label: "Code or SQL evaluator",
           detail:
-            "Not checked as-is; SQL: a copy may use a database you supply.",
+            "Local database: checked on a copy it makes; server: your read-only link.",
         },
         {
           icon: "✍️",
@@ -677,7 +677,7 @@ const rawPresentation = {
       notes: [
         "Keys live in a local .env that only the customer can read and that Git ignores. The run installs into your environment or a new persistent .venv after approval, or the throwaway .venv-traigent as fallback. Never a shared, dependent, external, or assistant-owned environment. Never edits your dependency files.",
         "Tested pins traigent==0.27.0, litellm==1.93.0, python-dotenv==1.2.2 are the exact install on the throwaway route and the recommendation elsewhere; a traigent or litellm you already have at or above the pin is kept and named. Never an unversioned pip install traigent.",
-        "An evaluator that executes the agent's answer as code or SQL is not calibrated in its original form, because that would run statements against whatever engine it reaches. For an evaluator whose database connection target sits in its own constructor call, the guide offers to copy the file into traigent-runs/calibration/, repoint only that line, and, if you reply A, calibrate the copy against a read-only connection or a duplicate you supply - the target goes into your .env, never into chat. Where the target arrives another way, the evaluator runs code rather than SQL, or you decline, it tells you plainly what was not checked and continues. The paid run uses your evaluator as configured, and the approval card says so first. No sandbox is shipped or improvised.",
+        "An evaluator that executes the agent's answer as code or SQL is not calibrated in its original form, because that would run statements against whatever engine it reaches. For an evaluator whose database connection target sits in its own code, the guide copies the evaluator file into traigent-runs/calibration/, repoints only that line, and asks once: for a local database file it copies the file itself with a plain shell copy - whole file and sidecars, never opened or read, no tokens spent - and checks the evaluator copy against that copy (recommended); for a server database you paste a read-only connection or a duplicate into your .env, never into chat; or you skip. Where the target arrives another way, the evaluator runs code rather than SQL, or you decline, it tells you plainly what was not checked and continues. The paid run uses your evaluator as configured, and the approval card says so first. No sandbox is shipped or improvised.",
         "Changes to real answers or grading rules, and anything destructive or production-affecting, each need their own explicit approval. Approving one step never pre-approves another.",
       ],
     },
@@ -723,7 +723,7 @@ const rawPresentation = {
         "The preview before the baseline: scope, configurations, calls, metric, runtime, estimated spend, who receives data, and the $5.00 default stop target. The connected stage gets its own approval card covering the same things.",
         "The runtime is an estimate, never a promised duration: before the paid probe the assistant estimates it conservatively from dataset size, planned trials and calls per example, and after the probe replaces it with observed latency. If the estimate exceeds $5.00 or 30 minutes, the guide first recommends a smaller representative slice. Quote no duration beyond the baseline's 30-minute completion target, and call it an estimate.",
         "If the run had to write the dataset or grading method, the same preview shows exactly what it wrote and asks the customer to proceed or fix before anything is charged.",
-        "If a readiness ceiling asked something - a model-written answer key, a top-up to 28 - the same card restates the finding, the answer you gave, and what proceeding on it means for the money about to be spent. After a top-up, the ceiling the generated share carries is named with its number in the result's current-state layer; the ask itself never carried it.",
+        "If a readiness ceiling asked something - a model-written answer key, a top-up to 28 - the same card restates the finding, the answer you gave, and what proceeding on it means for the money about to be spent. After a top-up, this card is the first place the ceiling the generated share carries is named, with its number; the ask itself never carried it, and the result repeats it.",
         "The stop target is a conservative control the run stops at and a re-approval trigger, not a billing guarantee. Provider errors, missing credentials or a breached stop target stop the run loudly; nothing is mocked or invented to fill the gap.",
         "If your evaluator executes answers, the same card says what was not checked and asks, optionally, whether it connects read-only; it also states any provenance the run assumed and whether Traigent was already set up here.",
       ],
