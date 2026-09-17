@@ -16,7 +16,7 @@ import { SOURCE_SEPARATOR, type PresentationSpec } from "../src/model";
 const presentationRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const GUIDE_REPOSITORY = "Traigent/traigent-first-run";
-const GUIDE_REVISION = "289898c547a0339a8c348c1d782b1a7cba393540";
+const GUIDE_REVISION = "5ce65540e42b4f6a5a36a28c80e91745848ea507";
 
 const CORE_SLIDE_IDS = [
   "ready-to-optimize",
