@@ -226,9 +226,8 @@ const rawPresentation = {
       id: "five-asks",
       kind: "tiles",
       eyebrow: "WHAT IT ASKS YOU",
-      title:
-        "The assistant asks you five things, and one more only when needed.",
-      body: "One more only when your project cannot settle it: what the task is, an unclear grading rule, a doubtful expected answer.",
+      title: "Five routine asks; a few more only when your project needs them.",
+      body: "The extras: what the task is, an unclear grading rule, a doubtful answer, your Traigent key after the baseline, one question when material is missing or short.",
       tiles: [
         {
           icon: "🎯",
@@ -266,7 +265,7 @@ const rawPresentation = {
         "Those five are the routine asks; the rarer ones are in note four. With exactly one credible agent the run names it inside the one gap question instead of halting for a separate confirmation; where nothing is missing, the identity line shown before the readiness card names it. With several it asks the customer to choose. Once chosen, it never asks again.",
         "The provider key goes into a local .env file that only the customer can read and that Git ignores. The assistant never asks for a secret in chat.",
         "Approval is asked before it happens for any paid model call and for any step that sends data outside the machine; separately, before any change to real examples, expected answers or grading rules, and before anything destructive or production-affecting.",
-        "Three more can come up, each asked once and only when the project cannot settle it: what the task is (nothing in the project says), a grading rule that is genuinely ambiguous, or an expected answer that looks wrong. The first is on the starting-point slide.",
+        "The extras, each asked once: what the task is when nothing in the project says (starting-point slide); a grading rule that is genuinely ambiguous; an expected answer that looks wrong (agree or disagree); the one gap question when a dataset, evaluator or agent is missing or short (special-cases slide); your Traigent key, after the baseline result; and, only for an evaluator that runs SQL, whether to name a read-only or duplicate database for a copy - skipping it is the default.",
       ],
     },
     {
@@ -458,7 +457,7 @@ const rawPresentation = {
         {
           startingPoint: "Inputs, but no expected answers",
           safestNextStep:
-            "Blocked until answers are written into a copy of your data; you check a sample once, it proceeds.",
+            "Blocked until answers go into a copy of your data; asked once to check a sample; it proceeds.",
         },
         {
           startingPoint: "Fewer than 28 rows",
@@ -473,7 +472,7 @@ const rawPresentation = {
         {
           startingPoint: "Evaluator runs the answer as code or SQL",
           safestNextStep:
-            "SQL: a copy can run on a read-only or duplicate database you name. Code: not checked, you're told.",
+            "Not checked as-is; you're told, it continues. SQL only: a copy may use a database you supply.",
         },
       ],
       sources: [
@@ -654,7 +653,8 @@ const rawPresentation = {
         {
           icon: "🚫",
           label: "Code or SQL evaluator",
-          detail: "Not checked as-is; SQL via a copy, on a database you name.",
+          detail:
+            "Not checked as-is; SQL: a copy may use a database you supply.",
         },
         {
           icon: "✍️",
@@ -723,7 +723,7 @@ const rawPresentation = {
         "The preview before the baseline: scope, configurations, calls, metric, runtime, estimated spend, who receives data, and the $5.00 default stop target. The connected stage gets its own approval card covering the same things.",
         "The runtime is an estimate, never a promised duration: before the paid probe the assistant estimates it conservatively from dataset size, planned trials and calls per example, and after the probe replaces it with observed latency. If the estimate exceeds $5.00 or 30 minutes, the guide first recommends a smaller representative slice. Quote no duration beyond the baseline's 30-minute completion target, and call it an estimate.",
         "If the run had to write the dataset or grading method, the same preview shows exactly what it wrote and asks the customer to proceed or fix before anything is charged.",
-        "If a readiness ceiling asked something - a model-written answer key, a top-up to 28 - the same card restates the finding, the answer you gave, and what proceeding on it means for the money about to be spent. After a top-up, this is the first place the ceiling the generated share carries is named, with its number; the ask itself never carried it.",
+        "If a readiness ceiling asked something - a model-written answer key, a top-up to 28 - the same card restates the finding, the answer you gave, and what proceeding on it means for the money about to be spent. After a top-up, the ceiling the generated share carries is named with its number in the result's current-state layer; the ask itself never carried it.",
         "The stop target is a conservative control the run stops at and a re-approval trigger, not a billing guarantee. Provider errors, missing credentials or a breached stop target stop the run loudly; nothing is mocked or invented to fill the gap.",
         "If your evaluator executes answers, the same card says what was not checked and asks, optionally, whether it connects read-only; it also states any provenance the run assumed and whether Traigent was already set up here.",
       ],
@@ -1186,7 +1186,7 @@ const rawPresentation = {
       id: "baseline-grid",
       kind: "columns",
       eyebrow: "STAGE 3 OF 5 · THE TWELVE-CONFIGURATION GRID",
-      title: "Three models × two prompt styles × two thinking styles = twelve.",
+      title: "Three models × two prompt styles × two thinking shapes = twelve.",
       body: "Used only when you had no baseline. One model family from the provider you set up, all twelve run.",
       columns: [
         {
@@ -1208,7 +1208,7 @@ const rawPresentation = {
           ],
         },
         {
-          heading: "2 thinking styles",
+          heading: "2 thinking shapes",
           tone: "amber",
           items: ["Direct answer", "Reasoning step by step"],
         },
@@ -1219,7 +1219,7 @@ const rawPresentation = {
       ],
       notes: [
         "A generated grid uses one model family from the provider the customer set up: a fast tier, a mid tier and a strong tier one step below the newest flagship, skipped on purpose so the first run stays quick and cheap.",
-        "3 models × 2 prompt styles × 2 thinking styles (direct, or reasoning step by step) = 12 configurations, all run. This grid is used only when the customer had no baseline of their own.",
+        "3 models × 2 prompt styles × 2 thinking shapes (direct, or reasoning step by step) = 12 configurations, all run. This grid is used only when the customer had no baseline of their own.",
       ],
     },
     {
@@ -1295,7 +1295,7 @@ const rawPresentation = {
           heading: "Yours, a selection",
           tone: "blue",
           items: [
-            "From 28 rows up, or thousands",
+            "Any size; under 28, see the next column",
             "At most 28 rows: 18 tuning, 10 held-out",
             "Picked within your split, never mixing tuning and held-out",
             "No split of yours? One is reserved first",
