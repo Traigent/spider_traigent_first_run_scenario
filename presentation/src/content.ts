@@ -456,7 +456,7 @@ const rawPresentation = {
         {
           startingPoint: "Inputs, but no expected answers",
           safestNextStep:
-            "Recommended: answers added to a copy of your data, marked model-written; you approve judgment calls.",
+            "Recommended: answers written into a copy of your data, marked model-written; you review a sample, the run proceeds.",
         },
         {
           startingPoint: "Fewer than 28 rows",
@@ -464,9 +464,9 @@ const rawPresentation = {
             "Recommended: add generated rows up to 28. Yours stay untouched; the report lists which rows it added.",
         },
         {
-          startingPoint: "One fixed model, one fixed prompt",
+          startingPoint: "Your agent has no setting to vary",
           safestNextStep:
-            "Nothing to search over, so the paid search waits until one setting has a second value.",
+            "Recommended: a reversible wrapper gives your agent one setting to vary; your code untouched.",
         },
         {
           startingPoint: "Evaluator runs the answer as code or SQL",
@@ -482,10 +482,10 @@ const rawPresentation = {
       ],
       notes: [
         "An existing baseline is preserved exactly; one configuration is correct if that is what the customer defined.",
-        "Inputs but no expected answers: the dataset is kept, marked limited; the guide recommends repairing a labelled working copy, and asks before any judgment-dependent label. The written answers are declared model-written, which is what the result reads them as; input-only rows are never used unchanged with an evaluator that needs a reference.",
+        "Inputs but no expected answers: the dataset is kept, marked limited; the recommended route on the one gap question is a labelled working copy, and any answer that is a judgment call - the customer's own policy rather than something derivable from the input - is shown on that same question for approval. The written answers are declared model-written; a person reviews a sample of them before any correctness claim, and the run proceeds meanwhile. Input-only rows are never used unchanged with an evaluator that needs a reference.",
         "Fewer than 28 rows: the one gap question marks the top-up recommended, because the walkthrough is built as 18 tuning and 10 held-out rows and a shorter file leaves one side or both short. The generated rows are recorded as additions in the derived tuning and held-out files under traigent-runs/; the customer's file is never edited, and nothing is written until the customer says yes. The ask says that their own rows stay exactly as they are and that the added rows are written for the walkthrough and weaker evidence, so the run reads as a walkthrough, not a measurement of their product; the approval names the files written and the ceiling the generated share carries; the result's details layer says which rows were theirs and which were written, with the generated ids.",
         "For the room's inevitable question about a large dataset: whatever the source holds - 20 rows or 4,812 - the paid comparison runs on at most 28 rows, up to 18 tuning and up to 10 held-out, picked inside each existing split with the chosen ids written to traigent-runs/run-plan.md, and readiness is always scored on the whole dataset. That is the one rule for every size, which is why it is not a row on this slide; the appendix data slide has the detail.",
-        "The fixed-agent row is the surprise: a search needs something to search over, or it would compare one configuration with itself. The readiness card says no setting the agent uses can vary; the remedy is to mark one setting with a second value or expose a request parameter.",
+        "The nothing-to-vary row is the surprise: a search needs something to search over, or it would compare one configuration with itself. The readiness card says no setting the agent uses can vary, and the recommended route is the repair the guide makes for any limited component - a minimal reversible integration under traigent-runs/ or a thin wrapper around the existing function, never a refactor of production code - so one setting carries two values and the search can run. The customer's agent is not edited.",
         "The code-or-SQL row is about the calibration check, not the paid run. The guide does not calibrate the customer's original evaluator: that would run statements against whatever engine it is configured to reach. Where the evaluator opens a database connection - sqlite3, psycopg2, create_engine, duckdb - it copies the evaluator file into traigent-runs/calibration/, repoints only that connection line, and calibrates the copy against a read-only connection or a duplicate of the data the customer made with a proper tool; the target goes into their .env, never into chat, and one lettered question asks for it. An evaluator whose target arrives another way, or that executes the answer as code with no connection to repoint, takes the disclosure route: the card says what was not checked and the run continues. The paid run then uses the customer's own evaluator as configured, and the approval card says so before any spend. No sandbox is shipped or improvised.",
       ],
     },
