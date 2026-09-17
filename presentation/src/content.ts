@@ -457,7 +457,7 @@ const rawPresentation = {
         {
           startingPoint: "Inputs, but no expected answers",
           safestNextStep:
-            "Blocked until the run writes answers into a copy of your data; one sample check; it proceeds.",
+            "The run writes answers into a copy of your data; you check a sample before it claims correctness.",
         },
         {
           startingPoint: "Fewer than 28 rows",
