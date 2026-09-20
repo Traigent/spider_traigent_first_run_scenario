@@ -6,7 +6,11 @@ the captured invocation and full output of every run.
 
 **Measured against the first-run guide at revision
 `5ce65540e42b4f6a5a36a28c80e91745848ea507` (`5ce65540`), on 2026-09-17, on Python 3.12.3, with traigent 0.26.0 installed against the guide's 0.27.0
-pin, which preflight records and continues past.**
+pin, which preflight records and continues past.** The nine presets ported on 2026-09-18 were
+measured the same day, at the same revision, by the same sweep; the seventeen earlier cards
+came back byte-identical, which is the reproducibility check this directory exists for. The
+guide's trunk was one commit ahead at `d07b62cd`, touching `.github/`, `tests/` and six lines of
+its `CLAUDE.md` -- nothing under `skills/` -- so the pin stands.
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
 
@@ -110,16 +114,18 @@ Two things follow, and both are properties of this table rather than of the guid
 
 ## What the sweep covers
 
-Seventeen presets, then the comparisons the documentation makes:
+Twenty-six presets, then the comparisons the documentation makes:
 
 | run | what it is for |
 |---|---|
-| the 17 presets | the score table in the README |
+| the 26 presets | the score tables in the README |
 | `best-case--off-method-calibration` | the number once reached by calibrating an executing scorer; refused by the tool since `9eaabbb2`, its `6ec2b9c1` card retained |
 | `wrong-answers--calibrated` | `--preset wrong-answers --calibration present` |
 | `wrong-wiring--calibrated` | `--preset wrong-wiring --calibration present` |
 | `fake-ruler--uncalibrated` | `--preset fake-ruler --calibration none` |
 | `ready--without-agent-knobs` | the same project scored with the agent read withheld |
+| `raw-export--fields-declared` | `--preset raw-export` with `--input-field question --expected-field query` passed to preflight: what a run that had opened the file would declare |
+| `length-blind--uncalibrated` | `--preset length-blind --calibration none`: the length scorer with nothing to catch it |
 | `grid-*` | the four declared-method x declared-task-kind combinations, all on the same unchanged text comparator |
 
 ## Results
@@ -155,11 +161,22 @@ ceiling reads `none` discloses something without bounding the number
 | `sql-exec-stop` | 85 | WORKABLE | `confirm-evaluator-connection` | 100 | 98 | 59 | `evaluator-calibration-refused` none |
 | `best-case` | 85 | WORKABLE | `confirm-evaluator-connection` | 100 | 98 | 59 | `evaluator-calibration-refused` none |
 | `checked` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
+| `raw-export` | 25 | NOT READY | `read-dataset` | 100 | 0 | 33 | `dataset-shape-unrecognised` 25\* · `evaluator-unvalidated` 45 |
+| `length-blind` | 25 | NOT READY | `repair-evaluator` | 100 | 98 | 4 | `evaluator-invalid` 25\* |
+| `torn-lines` | 35 | PARTIAL | `repair-dataset` | 100 | 84 | 33 | `dataset-integrity-fail` 35\* · `evaluator-unvalidated` 45 · `dataset-coarse-resolution` 89 |
+| `opaque-scorer` | 40 | PARTIAL | `repair-evaluator` | 100 | 98 | 0 | `evaluator-unresolved` 40\* |
+| `holdout-only` | 45 | PARTIAL | `resplit-dataset` | 100 | 45 | 33 | `evaluator-unvalidated` 45 · `dataset-tuning-split-empty` 50\* |
+| `leaky-split` | 45 | PARTIAL | `resplit-dataset` | 100 | 88 | 33 | `evaluator-unvalidated` 45 · `dataset-tune-holdout-overlap` 50\* · `dataset-repeated-rows` 89 |
+| `undeclared-source` | 45 | PARTIAL | `complete-calibration` | 100 | 89 | 33 | `evaluator-unvalidated` 45 · `dataset-undeclared-provenance` 65 |
+| `split-by-database` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
+| `two-agents` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
 | `best-case--off-method-calibration` | refused | -- | -- | -- | -- | -- | `calibrate_evaluator.py` exit 2: the guide refuses to import a scorer that reaches a SQL engine; the committed directory is the `6ec2b9c1` card |
 | `wrong-answers--calibrated` | 90 | WORKABLE | `review-answer-key` | 100 | 91 | 83 | none |
 | `wrong-wiring--calibrated` | 25 | NOT READY | `repair-evaluator` | 100 | 98 | 28 | `evaluator-invalid` 25\* |
 | `fake-ruler--uncalibrated` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
 | `ready--without-agent-knobs` | 25 | NOT READY | `connect-agent` | 0 | 98 | 33 | `agent-absent` 25\* · `evaluator-unvalidated` 45 |
+| `raw-export--fields-declared` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
+| `length-blind--uncalibrated` | 40 | PARTIAL | `repair-evaluator` | 100 | 98 | 0 | `evaluator-unresolved` 40\* |
 | `grid-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `grid-normalized-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `grid-normalized-exact--structured` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
@@ -167,6 +184,34 @@ ceiling reads `none` discloses something without bounding the number
 
 The band boundaries the guide uses, for reading the column: NOT READY 0-29, PARTIAL 30-54,
 WORKABLE 55-74, STRONG 75-89, EXCELLENT 90-100.
+
+## What the nine ported presets measured
+
+Eight of the nine opened on the cap they were built for. The ninth did not, and one other
+thing did not happen either; both are worth writing down.
+
+- **`two-agents` is `ready`.** The card is byte-identical to `ready`'s: the sweep
+  points `--selected-agent` at `agent.py`, as the customer's `PROJECT.md` says to, and the
+  read credits its four settings. Nothing on the card mentions `sql_explainer/` or the note.
+  Which agent an assistant would *select* is a question for a real run, not for this sweep.
+- **`split-by-database` is `ready` with `239 / 61` where `ready` has `240 / 60`.**
+  `dataset-split-family` reads a family off the two leading words of each question, and
+  question forms span every database, so its finding on a split made of whole databases is
+  `PASS -- 11 of 24 recurring input forms appear on both sides` (15 of 24 on `ready`). The
+  cap the preset was built to test, `dataset-split-by-task-family`, is not raised.
+- **`raw-export` opens at 25 unaided and at 45 declared.** Read under the default field
+  names the file has no usable rows (`dataset-shape-unrecognised`, blocks); read under its own
+  (`raw-export--fields-declared`) it is `ready`'s card.
+- **`leaky-split` is bound by the evaluator, not by the leak.** The overlap cap is 50 and
+  blocks; `evaluator-unvalidated` at 45 is what the number reads. The same holds for
+  `holdout-only` (`dataset-tuning-split-empty` 50, blocks) -- both open at 45 with the block
+  on the card and `resplit-dataset` as the action.
+- **The two scorers that are not scorers land where the guide's ladder puts them.** With no
+  `--evaluator-method` declared -- the only honest declaration for either --
+  `opaque-scorer` reads `evaluator-unresolved` 40, blocks; `length-blind` with probes reads
+  `evaluator-invalid` 25, blocks, from a calibration that ran and failed
+  (`non_constant` true, `bad_fails` false on every case), and without them the same 40
+  `unresolved` as `opaque`.
 
 ## Three cards that are identical to another card
 

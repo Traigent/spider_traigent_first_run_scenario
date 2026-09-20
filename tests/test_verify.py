@@ -354,6 +354,102 @@ class VerifyReadsTheDemosOwnPath(ADemoFixture):
         self.assertTrue(any("'wrong-answers'" in p for p in problems), problems)
 
 
+class VerifyReadsTheRecordOfDeliberateDamage(unittest.TestCase):
+    """Two states write the data other than the way `verify` used to read it.
+
+    `torn` ships two lines that are not JSON, and `raw-export` writes its rows under
+    Spider's own key names. `verify` reads both off `demo.json` -- the torn lines and the
+    field names are recorded there -- so a demo damaged the way its record says is clean,
+    and one damaged any other way is not. The gate is checked in both directions.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workspace = tempfile.mkdtemp()
+        cls.torn = Path(cls.workspace) / "torn"
+        build_or_raise("demo", "--preset", "torn-lines", "--out", str(cls.torn))
+        cls.raw = Path(cls.workspace) / "raw"
+        build_or_raise("demo", "--preset", "raw-export", "--out", str(cls.raw))
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.workspace, ignore_errors=True)
+
+    def copy(self, pristine: Path) -> Path:
+        holder = Path(tempfile.mkdtemp(dir=self.workspace))
+        self.addCleanup(shutil.rmtree, holder, ignore_errors=True)
+        out = holder / "demo"
+        shutil.copytree(pristine, out)
+        return out
+
+    def rewrite(self, out: Path, lines: list[str]) -> None:
+        dataset = out / build.PROJECT_SUBDIR / "dataset.jsonl"
+        dataset.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        repair_record(out, "dataset.jsonl")
+
+    def test_a_torn_demo_torn_where_its_record_says_is_clean(self) -> None:
+        self.assertEqual(build.verify_demo(self.copy(self.torn)), [])
+        record = json.loads((self.torn / "demo.json").read_text())
+        self.assertEqual(
+            record["components"]["dataset"]["damage_detail"]["torn_lines"], [10, 20]
+        )
+
+    def test_a_third_torn_line_is_reported(self) -> None:
+        out = self.copy(self.torn)
+        lines = (out / build.PROJECT_SUBDIR / "dataset.jsonl").read_text().split("\n")
+        lines[2] = lines[2][:40]
+        self.rewrite(out, [line for line in lines if line])
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any("the rows or the catalog cannot be read" in p for p in problems),
+            problems,
+        )
+
+    def test_a_recorded_torn_line_that_reads_whole_is_reported(self) -> None:
+        """The record says line 10 is torn; a line 10 that parses is a demo that no
+        longer matches its own description, in the direction that hides the damage."""
+        out = self.copy(self.torn)
+        lines = (out / build.PROJECT_SUBDIR / "dataset.jsonl").read_text().split("\n")
+        mini = build.select_rows(build.read_dataset(), "mini")
+        lines[9] = json.dumps(
+            build.project_row(mini[9], "torn"), ensure_ascii=False, sort_keys=True
+        )
+        self.rewrite(out, [line for line in lines if line])
+        problems = build.verify_demo(out)
+        self.assertIn("line 10 is recorded as torn and reads as a whole row", problems)
+
+    def test_a_raw_export_demo_is_read_under_its_own_field_names(self) -> None:
+        self.assertEqual(build.verify_demo(self.copy(self.raw)), [])
+
+    def test_a_raw_export_row_missing_its_question_is_still_caught(self) -> None:
+        out = self.copy(self.raw)
+        lines = (out / build.PROJECT_SUBDIR / "dataset.jsonl").read_text().split("\n")
+        row = json.loads(lines[0])
+        del row["question"]
+        lines[0] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+        self.rewrite(out, [line for line in lines if line])
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any("cannot be read" in p and "question" in p for p in problems), problems
+        )
+
+    def test_a_second_agent_that_does_not_compile_is_caught(self) -> None:
+        out = Path(self.workspace) / "two"
+        build_or_raise("demo", "--preset", "two-agents", "--out", str(out))
+        self.assertEqual(build.verify_demo(out), [])
+        broken = out / build.PROJECT_SUBDIR / "sql_explainer" / "agent.py"
+        broken.write_text(broken.read_text() + "\ndef run(  :\n")
+        repair_record(out, "sql_explainer/agent.py")
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any(
+                p.startswith("sql_explainer/agent.py does not compile")
+                for p in problems
+            ),
+            problems,
+        )
+
+
 class VerifyOverAWholeBank(unittest.TestCase):
     """`verify --demo <root>` reads every directory under the root, not only the good ones."""
 

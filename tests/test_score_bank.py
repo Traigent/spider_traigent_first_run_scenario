@@ -95,6 +95,27 @@ def fingerprint(tree: Path) -> dict[str, str]:
     }
 
 
+class TheSweepNamesEveryPreset(unittest.TestCase):
+    """A preset the builder has and the sweep does not name is a card that never exists.
+
+    The nine ported presets were added to both by hand; this pins the two lists to each
+    other so the next preset cannot land in one without the other.
+    """
+
+    def test_the_sweep_and_the_builder_agree_on_the_presets(self) -> None:
+        harness = load_harness()
+        located = importlib.util.spec_from_file_location(
+            "_build", REPO_ROOT / "build.py"
+        )
+        assert located is not None and located.loader is not None
+        builder = importlib.util.module_from_spec(located)
+        # Registered before it runs, as `load_harness` does: a dataclass looks its
+        # module up by name while the class is being made.
+        sys.modules[located.name] = builder
+        located.loader.exec_module(builder)
+        self.assertEqual(set(harness.PRESETS), set(builder.PRESETS))
+
+
 class HarnessTestCase(unittest.TestCase):
     """A scratch guide, a scratch `cards/`, and the harness pointed at both."""
 

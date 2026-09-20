@@ -39,7 +39,18 @@ What it decides, and why each decision is here rather than in the reader's head:
 `--evaluator-method` is taken from `demo.json`, which is the record of what the evaluator
 component actually is. A real run declares that from its own reading of the file; this
 script cannot read, so it uses the builder's record and says so. The same goes for
-`--task-kind code-sql`: every project in this bank produces SQL.
+`--task-kind code-sql`: every project in this bank produces SQL. Where the record holds no
+method -- `opaque`, whose grader is a library the project does not carry, and
+`length-blind`, whose comparison of lengths is not one of the methods the guide names --
+no `--evaluator-method` is passed at all, which is what a run that could not honestly
+declare one does; `readiness.py` answers an undeclared method with `evaluator-unresolved`
+unless calibration has spoken for the file.
+
+`--input-field` and `--expected-field` are not passed, except by one variant. The rows
+are written under `input` and `output` everywhere but `raw-export`, which uses Spider's
+own `question` and `query`; the preset is scored as the tools read it unaided, and
+`raw-export--fields-declared` scores the same project with the two names declared, which
+is what an assistant that had opened the file would pass.
 
 `--agent-knobs` is the coding assistant's own read of the agent's source, and the guide is
 explicit that the opening score requires it wherever an agent was found. No assistant is
@@ -112,6 +123,15 @@ PRESETS = (
     "hand-written",
     "checked",
     "best-case",
+    "raw-export",
+    "length-blind",
+    "torn-lines",
+    "opaque-scorer",
+    "holdout-only",
+    "leaky-split",
+    "undeclared-source",
+    "split-by-database",
+    "two-agents",
 )
 
 # The comparisons the documentation makes, each built from flags rather than a preset so
@@ -141,6 +161,16 @@ VARIANTS: tuple[tuple[str, tuple[str, ...], dict[str, Any]], ...] = (
         "ready--without-agent-knobs",
         ("--preset", "ready"),
         {"agent_knobs": False},
+    ),
+    (
+        "raw-export--fields-declared",
+        ("--preset", "raw-export"),
+        {"input_field": "question", "expected_field": "query"},
+    ),
+    (
+        "length-blind--uncalibrated",
+        ("--preset", "length-blind", "--calibration", "none"),
+        {},
     ),
 )
 
@@ -475,6 +505,8 @@ def score_one(
     force_execution_calibration: bool = False,
     method: str | None = None,
     task_kind: str = "code-sql",
+    input_field: str | None = None,
+    expected_field: str | None = None,
 ) -> dict[str, Any]:
     """Build one demo and score it the way the guide's opening gate scores it."""
     out = workspace / tag
@@ -534,6 +566,13 @@ def score_one(
         preflight += ["--models", ",".join(agent["models"])]
     if dataset:
         preflight += ["--dataset", dataset["path"]]
+        # Only where a variant declares them. The preset itself is scored the way the
+        # tools read a file unaided, which for `raw-export` is under names it does not
+        # use; the declaration is what a run that opened the file would add.
+        if input_field:
+            preflight += ["--input-field", input_field]
+        if expected_field:
+            preflight += ["--expected-field", expected_field]
     declared = None
     if evaluator:
         preflight += ["--evaluator", evaluator["path"]]

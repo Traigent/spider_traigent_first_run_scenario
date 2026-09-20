@@ -187,8 +187,42 @@ class EveryComponentParses(unittest.TestCase):
             sorted(
                 name for name in entries(components) if (components / name).is_dir()
             ),
-            ["agent", "calibration", "env", "evaluator", "legal", "readme"],
+            [
+                "agent",
+                "calibration",
+                "env",
+                "evaluator",
+                "explainer",
+                "legal",
+                "readme",
+            ],
             "components/ holds a directory nothing in build.py reads",
+        )
+        # The second agent's directory: one agent per vendor, one scorer, one note, and
+        # nothing else -- every file in it ships with `--agent two-agents`.
+        self.assertEqual(
+            sorted(
+                name
+                for name in entries(components / "explainer")
+                if (components / "explainer" / name).is_dir()
+            ),
+            sorted(build.PROVIDERS),
+            "explainer/ holds a vendor directory no --provider names",
+        )
+        for provider in build.PROVIDERS:
+            self.assertEqual(
+                entries(components / "explainer" / provider),
+                {build.second_agent_file(provider).name},
+                f"explainer/{provider} holds something the second agent does not ship",
+            )
+        self.assertEqual(
+            {
+                name
+                for name in entries(components / "explainer")
+                if (components / "explainer" / name).is_file()
+            },
+            {"evaluator.py", build.PROJECT_NOTE},
+            "explainer/ holds a file the second agent does not ship",
         )
         named_evaluators = {
             path.name for path in build.EVALUATOR_FILES.values() if path is not None
@@ -261,10 +295,32 @@ class EveryComponentParses(unittest.TestCase):
                         )
 
     def test_scorers_take_the_arguments_the_guide_passes(self) -> None:
-        for path in sorted(EVALUATOR_DIR.glob("*.py")):
+        """Every scorer's `score` takes the four names, read from the loaded module.
+
+        One scorer cannot be loaded: `opaque.py` imports a grading library the project
+        does not carry, and that is the whole of what it is. Its signature is read off
+        the tree instead, and the refusal to import is asserted to be that import and
+        not some other defect in the file.
+        """
+        for path in sorted(EVALUATOR_DIR.glob("*.py")) + [
+            REPO_ROOT / "components" / "explainer" / "evaluator.py"
+        ]:
             with self.subTest(evaluator=path.name):
-                module = load(path, f"probe_{path.stem}")
-                parameters = inspect.signature(module.score).parameters
+                try:
+                    module = load(path, f"probe_{path.stem}")
+                except ModuleNotFoundError as refused:
+                    self.assertEqual(path.name, "opaque.py", f"{path.name} cannot load")
+                    self.assertEqual(refused.name, "sqlgrade")
+                    tree = ast.parse(path.read_text(encoding="utf-8"))
+                    functions = {
+                        node.name: node
+                        for node in tree.body
+                        if isinstance(node, ast.FunctionDef)
+                    }
+                    self.assertIn("score", functions)
+                    parameters = [a.arg for a in functions["score"].args.args]
+                else:
+                    parameters = list(inspect.signature(module.score).parameters)
                 for argument in SCORER_ARGUMENTS:
                     self.assertIn(
                         argument, parameters, f"{path.name} cannot accept {argument}"
@@ -287,13 +343,33 @@ class WhichScorerExecutesModelOutput(unittest.TestCase):
         self.assertIn("sqlite3", imported_modules(EVALUATOR_DIR / "exec_match.py"))
 
     def test_the_manifest_facts_match_the_source(self) -> None:
+        """`executes_candidate_output` is true of the file, or honestly unknown.
+
+        `None` is allowed for exactly one shape of file: one that imports a module this
+        machine cannot resolve, so what the file does is what that module does, and that
+        cannot be read here. A file whose every import resolves has a knowable answer, and
+        recording "unknown" for it would be a way of declining to look.
+        """
         for state, facts in build.EVALUATOR_FACTS.items():
             source = build.EVALUATOR_FILES[state]
             executes = bool(imported_modules(source) & EXECUTION_MODULES)
+            recorded = facts["executes_candidate_output"]
+            if recorded is None:
+                unresolved = {
+                    name
+                    for name in imported_modules(source)
+                    if importlib.util.find_spec(name) is None
+                }
+                self.assertTrue(
+                    unresolved,
+                    f"{state} records executes_candidate_output as unknown, and every "
+                    "module its source imports is here to read",
+                )
+                continue
             self.assertEqual(
-                facts["executes_candidate_output"],
+                recorded,
                 executes,
-                f"{state} is recorded as executes_candidate_output={facts['executes_candidate_output']} "
+                f"{state} is recorded as executes_candidate_output={recorded} "
                 f"and its source says otherwise",
             )
 
@@ -722,7 +798,7 @@ class ProbesBelongToTheScorerTheyShipWith(unittest.TestCase):
         cls.workspace = tempfile.mkdtemp()
         cls.scorers = {}
         cls.cases = {}
-        for state in ("exact-match", "exec-match", "broken"):
+        for state in ("exact-match", "exec-match", "broken", "length-blind"):
             out = Path(cls.workspace) / state
             result = subprocess.run(
                 [
@@ -809,6 +885,36 @@ class ProbesBelongToTheScorerTheyShipWith(unittest.TestCase):
                     self.probe("broken", case, "bad"),
                     1.0,
                     "broken marked a wrong answer wrong, so calibration would not catch it",
+                )
+
+    def test_the_length_comparison_fails_its_own_probes_without_being_constant(
+        self,
+    ) -> None:
+        """`length-blind` ships the text probes so that calibration catches it, and it is
+        caught differently from `broken`: the recorded answer scores full marks, a
+        wrong answer of about the same length scores nearly as much, and no two probes
+        tie. The guide's calibrator holds a binary case's wrong answer at or under 0.2,
+        and every case here puts it above that.
+        """
+        cases = self.cases["length-blind"]
+        self.assertGreaterEqual(len(cases), 2, "too few cases to calibrate")
+        for case in cases:
+            with self.subTest(case=case["name"]):
+                scores = {
+                    name: self.probe("length-blind", case, name)
+                    for name in ("good", "equivalent_good", "partial", "bad")
+                }
+                self.assertEqual(scores["good"], 1.0, "the recorded answer is not 1.0")
+                self.assertGreater(
+                    scores["bad"],
+                    0.2,
+                    "the wrong answer scored low enough to pass calibration",
+                )
+                self.assertGreater(
+                    len({round(s, 8) for s in scores.values()}),
+                    1,
+                    "every probe tied, which is the always-correct scorer's failure, "
+                    "not this one's",
                 )
 
     def test_the_execution_probes_are_not_the_text_comparison_probes(self) -> None:
@@ -1033,6 +1139,147 @@ class Agents(unittest.TestCase):
             )
 
 
+class TheLengthComparison(unittest.TestCase):
+    """A ruler that moves, and never for the right reason."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.scorer = load(EVALUATOR_DIR / "length_blind.py", "length_probe")
+
+    def score(self, output: str, expected: str) -> float:
+        return self.scorer.score(
+            output=output, expected=expected, input_data=None, metadata=None
+        )
+
+    def test_the_same_length_scores_full_marks_whatever_the_text(self) -> None:
+        gold = "SELECT count(*) FROM singer"
+        self.assertEqual(self.score(gold, gold), 1.0)
+        self.assertEqual(self.score("x" * len(gold), gold), 1.0)
+
+    def test_the_score_is_one_minus_the_length_gap_as_a_share_of_the_recorded(
+        self,
+    ) -> None:
+        gold = "SELECT name FROM t"  # 18 characters
+        self.assertAlmostEqual(self.score("SELECT name FROM t;", gold), 1 - 1 / 18)
+        self.assertAlmostEqual(self.score("SELECT 1", gold), 1 - 10 / 18)
+        self.assertEqual(self.score("x" * 100, gold), 0.0, "not clipped at zero")
+
+    def test_it_is_not_constant(self) -> None:
+        gold = "SELECT count(*) FROM singer"
+        scores = {
+            self.score(o, gold) for o in (gold, "SELECT 1", "", gold + " LIMIT 1")
+        }
+        self.assertGreater(len(scores), 1)
+
+    def test_a_row_with_no_answer_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            self.score("SELECT 1", "")
+
+
+class TheOpaqueScorer(unittest.TestCase):
+    """A scorer whose grader is somewhere else: it parses, and it cannot run here."""
+
+    def test_it_imports_the_grading_library_the_project_does_not_carry(self) -> None:
+        source = EVALUATOR_DIR / "opaque.py"
+        self.assertIn(
+            "from sqlgrade.compare import QueryGrader",
+            source.read_text(encoding="utf-8"),
+        )
+        self.assertIn("sqlgrade", imported_modules(source))
+        self.assertIsNone(
+            importlib.util.find_spec("sqlgrade"),
+            "sqlgrade resolves on this machine, so the scorer is not unresolved here",
+        )
+        with self.assertRaises(ModuleNotFoundError) as refused:
+            load(source, "opaque_probe")
+        self.assertEqual(refused.exception.name, "sqlgrade")
+
+    def test_it_reaches_no_engine_of_its_own(self) -> None:
+        """What the walk can see: nothing. What the library does is the whole question."""
+        self.assertEqual(
+            imported_modules(EVALUATOR_DIR / "opaque.py") & EXECUTION_MODULES, set()
+        )
+
+
+class TheSecondAgent(unittest.TestCase):
+    """The agent that sits beside the tunable one in `--agent two-agents`."""
+
+    EXPLAINER = REPO_ROOT / "components" / "explainer"
+
+    def prepared(self, provider: str, name: str):
+        module = load(self.EXPLAINER / provider / "agent.py", name)
+        sent: list[tuple[str, str, float]] = []
+
+        def capture(model, prompt, temperature):
+            sent.append((model, prompt, temperature))
+            return "  The number of singers in the table.  "
+
+        module.call_model = capture
+        return module, sent
+
+    def test_it_has_one_model_and_ignores_its_configuration(self) -> None:
+        for provider in build.PROVIDERS:
+            with self.subTest(provider=provider):
+                module, sent = self.prepared(provider, f"explainer_{provider}")
+                self.assertEqual(len(module.MODELS), 1)
+                query = "SELECT count(*) FROM singer"
+                for configuration in (
+                    {},
+                    {"model": "a-model-this-agent-does-not-carry"},
+                    {"temperature": 0.9, "prompt_style": "query_plan_cot"},
+                ):
+                    self.assertEqual(
+                        module.run(query, configuration),
+                        "The number of singers in the table.",
+                    )
+                self.assertEqual(len(set(sent)), 1, "a setting changed the request")
+                model, prompt, temperature = sent[0]
+                self.assertEqual(model, module.MODELS[0])
+                self.assertIn(query, prompt)
+                self.assertEqual(temperature, 0.0)
+
+    def test_its_credentials_are_offered_by_the_vendors_env_template(self) -> None:
+        for provider in build.PROVIDERS:
+            with self.subTest(provider=provider):
+                module = load(
+                    self.EXPLAINER / provider / "agent.py", f"explainer_env_{provider}"
+                )
+                offered = {
+                    line.split("=", 1)[0]
+                    for line in build.env_file(provider).read_text().splitlines()
+                    if "=" in line and not line.lstrip().startswith("#")
+                }
+                for name in module.CREDENTIALS:
+                    self.assertIn(name, offered, f"{provider}: {name} is not offered")
+                self.assertEqual(
+                    sorted(module.MODEL_CREDENTIALS), sorted(module.MODELS)
+                )
+
+    def test_the_two_vendor_copies_differ_only_in_the_header(self) -> None:
+        bodies = {}
+        for provider in build.PROVIDERS:
+            source = (self.EXPLAINER / provider / "agent.py").read_text()
+            self.assertIn("INSTRUCTION = (", source)
+            bodies[provider] = source[source.index("INSTRUCTION = (") :]
+        self.assertEqual(len(set(bodies.values())), 1, "the two copies have drifted")
+
+    def test_its_scorer_passes_a_sentence_and_fails_sql_or_a_fragment(self) -> None:
+        scorer = load(self.EXPLAINER / "evaluator.py", "explainer_scorer")
+
+        def score(output):
+            return scorer.score(
+                output=output, expected=None, input_data="SELECT 1", metadata=None
+            )
+
+        self.assertEqual(
+            score("The names of every singer from France, oldest first."), 1.0
+        )
+        self.assertEqual(score("SELECT name FROM singer WHERE country = 'France'"), 0.0)
+        self.assertEqual(score("singers"), 0.0)
+        self.assertEqual(score(" ".join(["word"] * 41)), 0.0)
+        self.assertEqual(score(None), 0.0)
+
+
 class TheScorerReadsTheRowTheSdkActuallyHandsIt(unittest.TestCase):
     """The execution scorer resolves db_id from both shapes a row can arrive in.
 
@@ -1067,8 +1314,10 @@ class TheAgentCallsThroughTheDoorTraigentWatches(unittest.TestCase):
     """
 
     def test_every_template_resolves_litellm_completion_at_call_time(self) -> None:
-        templates = sorted(AGENT_DIR.glob("*/agent_*.py"))
-        self.assertTrue(templates)
+        templates = sorted(AGENT_DIR.glob("*/agent_*.py")) + sorted(
+            (REPO_ROOT / "components" / "explainer").glob("*/agent.py")
+        )
+        self.assertEqual(len(templates), 3 * len(build.PROVIDERS))
         for path in templates:
             with self.subTest(template=path.relative_to(REPO_ROOT)):
                 text = path.read_text(encoding="utf-8")

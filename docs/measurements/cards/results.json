@@ -513,6 +513,289 @@
       "calibration_passed": null
     },
     {
+      "tag": "raw-export",
+      "overall": 25,
+      "band": "NOT READY",
+      "recommended_action": "read-dataset",
+      "status": "BLOCKED",
+      "confidence": 0.61,
+      "pillars": {
+        "agent": 100,
+        "dataset": 0,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "dataset-shape-unrecognised",
+          "ceiling": 25,
+          "blocks": true,
+          "action_kind": "read-dataset",
+          "reason": "A dataset was provided and no row in it matched the shape this score read it with, so nothing could be measured yet: 300/300 rows (100.0%) are unusable; line 1 (+299 more): missing selected input field 'input'. That describes the reading, not a defect in the data - open the file, select the fields it actually uses, and re-score; this can clear on the next step."
+        },
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "length-blind",
+      "overall": 25,
+      "band": "NOT READY",
+      "recommended_action": "repair-evaluator",
+      "status": "BLOCKED",
+      "confidence": 0.7,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 4
+      },
+      "caps": [
+        {
+          "condition": "evaluator-invalid",
+          "ceiling": 25,
+          "blocks": true,
+          "action_kind": "repair-evaluator",
+          "reason": "The completed calibration failed at least one authored behavioral check, so this evaluator has not demonstrated that it ranks the task correctly. Every number below it is unreliable."
+        }
+      ],
+      "declared_evaluator_method": null,
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": false
+    },
+    {
+      "tag": "torn-lines",
+      "overall": 35,
+      "band": "PARTIAL",
+      "recommended_action": "repair-dataset",
+      "status": "BLOCKED",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 84,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "dataset-integrity-fail",
+          "ceiling": 35,
+          "blocks": true,
+          "action_kind": "repair-dataset",
+          "reason": "Some rows could not be read as data - malformed lines, or missing the input or expected-answer field."
+        },
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-coarse-resolution",
+          "ceiling": 89,
+          "blocks": false,
+          "action_kind": "add-examples",
+          "reason": "22 comparable examples resolve only coarse differences, so a small difference between configurations may be chance rather than a real improvement. The file already holds the 28 rows this guide builds for a first run, so no top-up is offered: this ceiling bounds what the result may claim, not the size of the run."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "opaque-scorer",
+      "overall": 40,
+      "band": "PARTIAL",
+      "recommended_action": "repair-evaluator",
+      "status": "BLOCKED",
+      "confidence": 0.65,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 0
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unresolved",
+          "ceiling": 40,
+          "blocks": true,
+          "action_kind": "repair-evaluator",
+          "reason": "An evaluator file is connected, but no method could be honestly declared for it without executing it, so no result can be trusted - inspect it and repair or replace it."
+        }
+      ],
+      "declared_evaluator_method": null,
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "holdout-only",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "resplit-dataset",
+      "status": "BLOCKED",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 45,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-tuning-split-empty",
+          "ceiling": 50,
+          "blocks": true,
+          "action_kind": "resplit-dataset",
+          "reason": "No row on the side of the split this run would compare on can be scored, so there is nothing for the search to tell configurations apart with. The rows are there; the line drawn through them is what has to move."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "leaky-split",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "resplit-dataset",
+      "status": "BLOCKED",
+      "confidence": 0.75,
+      "pillars": {
+        "agent": 100,
+        "dataset": 88,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-tune-holdout-overlap",
+          "ceiling": 50,
+          "blocks": true,
+          "action_kind": "resplit-dataset",
+          "reason": "The same examples appear in both the set the search tunes on and the set held back to check it, so the final score is flattered - a believable wrong number."
+        },
+        {
+          "condition": "dataset-repeated-rows",
+          "ceiling": 89,
+          "blocks": false,
+          "action_kind": "review-repeats",
+          "reason": "6 of the 306 rows this run can score in your dataset repeat an input already counted, so this comparison resolves 300 different examples rather than 306. Nothing here is broken and the run can carry on, but every copy is a trial paid for that teaches what the first one already did. Continue on the examples that differ, or replace the repeats in your own file and this run reads it again."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "undeclared-source",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 89,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-undeclared-provenance",
+          "ceiling": 65,
+          "blocks": false,
+          "action_kind": "declare-data-provenance",
+          "reason": "No row of this dataset was observed - every row is either declared generated, or records no source this run can read, and a row whose source it cannot read is scored as generated. Declare or re-label the source on any such row that was collected; if none was, this dataset is generated."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "split-by-database",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "two-agents",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
       "tag": "best-case--off-method-calibration",
       "refused": {
         "step": "calibrate_evaluator.py",
@@ -630,6 +913,58 @@
         }
       ],
       "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "raw-export--fields-declared",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "length-blind--uncalibrated",
+      "overall": 40,
+      "band": "PARTIAL",
+      "recommended_action": "repair-evaluator",
+      "status": "BLOCKED",
+      "confidence": 0.65,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 0
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unresolved",
+          "ceiling": 40,
+          "blocks": true,
+          "action_kind": "repair-evaluator",
+          "reason": "An evaluator file is connected, but no method could be honestly declared for it without executing it, so no result can be trusted - inspect it and repair or replace it."
+        }
+      ],
+      "declared_evaluator_method": null,
       "declared_task_kind": "code-sql",
       "calibration_ran": false,
       "calibration_passed": null

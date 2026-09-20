@@ -116,7 +116,7 @@ similarity check reads it.
 | `schema` | that database's `CREATE TABLE` text, checked to match the database actually shipped. |
 | `split` | `tuning` (240) or `holdout` (60). |
 | `difficulty` | `easy`, `medium`, `hard` or `very-hard`. |
-| `provenance` | `real`. These are recorded human-written rows, and saying so is what makes the readiness score treat them as evidence rather than as a demonstration. |
+| `provenance` | `real`. These are recorded human-written rows, and saying so is what makes the readiness score treat them as evidence rather than as a demonstration. The word is chosen for the guide's vocabulary, which reads `real` as collected; `--dataset undeclared` rewrites it to `spider-dev` on the way into a project -- the name of the benchmark split the rows came from, which is what a person exporting them would write -- and the guide reads that as a word it does not know. The committed slice is not touched. |
 
 ## How the 300 were chosen
 

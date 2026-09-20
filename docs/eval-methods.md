@@ -1,7 +1,9 @@
-# The two SQL scorers
+# The SQL scorers
 
-`--eval` picks how an answer gets marked. The two real choices disagree about what a right
-answer is, and the disagreement is not a detail.
+`--eval` picks how an answer gets marked. Two of the choices are real scorers, and they
+disagree about what a right answer is; the disagreement is not a detail. The other four --
+`broken`, `swapped`, `opaque` and `length-blind` -- are what a project arrives with when its
+scorer is not one, and each is described at the end.
 
 ## `exact-match` -- compare the text
 
@@ -229,8 +231,15 @@ and every probe query was executed against the shipped databases before being wr
 
 Measured: `exact-match` passes all 4, `exec-match` passes all 3, `broken` **fails** all 4 --
 it returns 1.0 for the wrong-answer probe -- and `swapped` **fails**, from the other direction,
-returning 0.0 for the right one. Both failures land on the same `evaluator-invalid` cap at
-ceiling 25 with `repair-evaluator`. That is why cases ship for the broken scorers too.
+returning 0.0 for the right one. `length-blind` **fails** a third way: the right answer scores
+1.0, and the wrong answer -- about as long -- scores between 0.81 and 1.0 across the four
+cases, where the calibrator holds a binary case's wrong answer at or under 0.2. On one case
+the right and wrong probes tie at 1.0; what keeps it apart from the constant scorer is that the
+four probes of a case never all tie (`non_constant` true on every case), so it is refused for
+letting the wrong answer through, not for scoring everything alike. All three land on the same `evaluator-invalid`
+cap at ceiling 25 with `repair-evaluator`. That is why cases ship for the broken scorers too.
+`opaque` gets none, and `--calibration present` is refused for it: its grader is a library the
+project does not carry, so nothing here has ever run it and nothing could vouch for the probes.
 
 **The gate the guide puts in front of this is the reason `best-case` opens where it does.**
 Calibration is opened at the opening gate only when the complete path does not execute
@@ -242,7 +251,7 @@ line. Only `--calibrated-copy-of` admits engine witnesses -- and only for a copy
 `traigent-runs/calibration/` repointed at a customer-supplied read-only or duplicate target.
 The gate has become a check.
 
-## `broken`, `swapped` and `missing`
+## `broken`, `swapped`, `opaque`, `length-blind` and `missing`
 
 `--eval broken` ships a scorer that returns full marks for everything -- all four of its
 arguments arrive and none is read. Every configuration measures the same, so any comparison
@@ -256,6 +265,25 @@ answers it, so every row scores zero and every configuration ties at the bottom.
 compares depends on the answer, which is why no amount of running it can tell two answers
 apart. It is what `--preset wrong-wiring` ships, and without probe answers its card is
 byte-identical to `--preset ready`'s.
+
+`--eval opaque` ships a scorer that hands both queries to `sqlgrade`, a grading library the
+project does not carry -- `from sqlgrade.compare import QueryGrader`, in the voice of a team
+that had one shared at work. It parses, it has never been run here, and it cannot be: what
+it does is what that library does. `demo.json` records `method: null` and
+`executes_candidate_output: null` for it, both meaning unknown, and the sweep passes no
+`--evaluator-method` for it, because none could be declared honestly. The guide answers an
+undeclared method with `evaluator-unresolved` (40, blocks): "a file is connected, but no
+method could be honestly declared for it without executing it". It is what
+`--preset opaque-scorer` ships.
+
+`--eval length-blind` ships `1 - abs(len(output) - len(expected)) / len(expected)`, clipped to
+`[0, 1]`: a scorer that moves, and never for the right reason. It is not one of the methods
+the guide names -- a comparison of lengths is not `normalized-exact`, and declaring the nearest
+word would credit the file with a comparison it does not make -- so `demo.json` records
+`method: null` for it too, and the sweep declares nothing. It imports nothing and runs nothing,
+so `executes_candidate_output` is `false`. With the text comparator's probes beside it,
+calibration runs and fails (`evaluator-invalid`, 25, blocks); without them it reads the same
+`evaluator-unresolved` 40 as `opaque`. It is what `--preset length-blind` ships.
 
 `--eval missing` ships no evaluator at all, which is a more honest starting point than it
 sounds -- most projects do not have one.
