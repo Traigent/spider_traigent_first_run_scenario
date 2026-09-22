@@ -124,7 +124,10 @@ DENOMINATOR_PATTERNS = (
     r"a ([a-z-]+|\d+)-preset bank",
     r"of the ([a-z-]+|\d+) cards",
     r"these ([a-z-]+|\d+) presets",
-    r"([a-z-]+|\d+) starting points",
+    # "as N starting points" is the whole table; a heading like "Three starting
+    # points the opening gate does not separate" is a subset, and matching it
+    # would make this gate reject a true sentence.
+    r"as ([a-z-]+|\d+) starting points",
 )
 # The sweep names one fewer preset than the builder has, because `slow-scorer` is
 # reached through a variant that carries its calibration budget. A sentence about the
@@ -2517,15 +2520,28 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
             REPO_ROOT / "docs" / "measurements" / "README.md",
         )
         checked = 0
+        unreadable: list[str] = []
         for document in documents:
             text = document.read_text(encoding="utf-8")
             for pattern in DENOMINATOR_PATTERNS + SWEEP_DENOMINATOR_PATTERNS:
                 for match in re.finditer(pattern, text):
                     written = match.group(1)
                     value = NUMBER_WORDS.get(written)
+                    if value is None and written.isdigit():
+                        value = int(written)
                     if value is None:
-                        value = int(written) if written.isdigit() else None
-                    if value is None:
+                        # A denominator this gate cannot read is not a
+                        # denominator it has approved. Skipping it silently --
+                        # which the first draft did, without even counting it --
+                        # means "forty-two presets" ships green, and the floor
+                        # below cannot see the difference. `score_bank.py` says
+                        # "went unchecked" for exactly this situation.
+                        unreadable.append(
+                            f"{document.relative_to(REPO_ROOT)}:"
+                            f"{text[: match.start()].count(chr(10)) + 1} "
+                            f"writes {written!r}, which is not a number this "
+                            f"test can read"
+                        )
                         continue
                     if pattern in SWEEP_DENOMINATOR_PATTERNS:
                         counted = "sweep presets"
@@ -2542,6 +2558,7 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                         f"{written!r} {counted}, "
                         f"and there are {totals[counted]}",
                     )
+        self.assertEqual([], unreadable, "denominators this gate could not read")
         self.assertGreater(checked, 0, "no written count was read, so none was checked")
 
     def test_a_probe_called_equivalent_returns_the_same_rows(self) -> None:
