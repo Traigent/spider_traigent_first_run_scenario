@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -173,13 +174,34 @@ EXPECTED_EXECUTES = {
 EXPECTED_AGENT_REQUIREMENT = "litellm==1.93.0"
 
 
-def run_build(*args: str) -> subprocess.CompletedProcess[str]:
+def run_build(
+    *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(REPO_ROOT / "build.py"), *args],
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
+
+
+def ascii_locale_env() -> dict[str, str]:
+    """The environment of a container nobody set `LANG` in.
+
+    Python then picks ASCII for `open()` without an explicit encoding, so any
+    file reader that forgot one fails on the first non-ASCII byte. Two rows of
+    the committed slice carry a typographic apostrophe, which makes this the
+    ordinary shape of a fresh machine rather than an exotic one.
+    """
+
+    return {
+        **os.environ,
+        "LC_ALL": "C",
+        "LANG": "C",
+        "PYTHONUTF8": "0",
+        "PYTHONCOERCECLOCALE": "0",
+    }
 
 
 def build_or_raise(*args: str) -> subprocess.CompletedProcess[str]:
@@ -2220,6 +2242,201 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                     [name for name in ids if name.endswith("-holdout")], ids
                 )
                 self.assertEqual(len(rows), build.SECOND_AGENT_ROWS)
+
+    def test_every_damage_detail_field_is_checked_against_the_rows(self) -> None:
+        """A record that restates a constant can restate the wrong one.
+
+        Three of `damage_detail`'s fields are read off the rows that ship, and
+        those are pinned elsewhere. The rest were restated from the constants
+        that produced them, and could be falsified one at a time with the whole
+        suite green -- `labelled_split: "tuning"` on a `holdout-labelled` demo
+        is the exact inverse of the file beside it. `docs/isolation.md` says
+        `demo.json` records what was done to the rows, so every field is read
+        back out of the bytes here.
+        """
+
+        def rows_of(out: Path) -> list[dict[str, object]]:
+            lines = (
+                (out / "project" / "dataset.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            )
+            return [json.loads(line) for line in lines if line.strip()]
+
+        def detail_of(out: Path) -> dict[str, object]:
+            manifest = json.loads((out / "demo.json").read_text(encoding="utf-8"))
+            return manifest["components"]["dataset"]["damage_detail"]
+
+        with self.subTest(dataset="holdout-labelled"):
+            out = self.outs["holdout-only"]
+            detail = detail_of(out)
+            labelled = {
+                row["metadata"]["split"] for row in rows_of(out) if "output" in row
+            }
+            self.assertEqual({detail["labelled_split"]}, labelled)
+
+        with self.subTest(dataset="raw-export"):
+            out = self.outs["raw-export"]
+            detail = detail_of(out)
+            rows = rows_of(out)
+            self.assertTrue(
+                all(key in rows[0] for key in detail["keys"].values()), rows[0]
+            )
+            for name in detail["top_level"]:
+                self.assertIn(name, rows[0])
+
+        with self.subTest(dataset="torn"):
+            out = self.outs["torn-lines"]
+            detail = detail_of(out)
+            raw = (
+                (out / "project" / "dataset.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            )
+            # Each torn line is a prefix of the row it was cut from, so the row
+            # is recoverable from the slice by that prefix -- and then the cut
+            # can be pinned from BOTH sides. An upper bound on the torn line's
+            # length passes for any LARGER `cut_at` as happily as for the right
+            # one, which is how a falsified `cut_at` stayed green.
+            whole = [
+                json.dumps(
+                    build.project_row(row, "torn"), ensure_ascii=False, sort_keys=True
+                )
+                for row in self.truth.values()
+            ]
+            for number in detail["torn_lines"]:
+                cut = raw[number - 1]
+                with self.assertRaises(ValueError):
+                    json.loads(cut)
+                originals = [line for line in whole if line.startswith(cut)]
+                self.assertEqual(1, len(originals), f"line {number} matches no row")
+                self.assertEqual(int(len(originals[0]) * detail["cut_at"]), len(cut))
+
+        with self.subTest(dataset="undeclared"):
+            out = self.outs["undeclared-source"]
+            detail = detail_of(out)
+            self.assertEqual(
+                {detail["provenance"]},
+                {row["metadata"]["provenance"] for row in rows_of(out)},
+            )
+            self.assertNotEqual(detail["provenance"], detail["slice_says"])
+
+        with self.subTest(dataset="leaky"):
+            out = self.outs["leaky-split"]
+            detail = detail_of(out)
+            copies = [
+                row
+                for row in rows_of(out)
+                if str(row["metadata"]["id"]).endswith(detail["copy_id_suffix"])
+            ]
+            self.assertTrue(copies)
+            self.assertEqual(
+                {detail["copy_split"]},
+                {row["metadata"]["split"] for row in copies},
+            )
+
+        with self.subTest(dataset="wrong-answers"):
+            out = Path(self.workspace) / "damage_detail_wrong_answers"
+            built = run_build("demo", "--preset", "wrong-answers", "--out", str(out))
+            self.assertEqual(built.returncode, 0, built.stderr)
+            detail = detail_of(out)
+            truth = {
+                identifier: row["output"]
+                for identifier, row in self.truth.items()
+                if "output" in row
+            }
+            kept = sum(
+                1
+                for row in rows_of(out)
+                if row.get("output") == truth.get(row["metadata"]["id"])
+            )
+            self.assertEqual(detail["rows_keeping_their_answer"], kept)
+            self.assertEqual(
+                1,
+                len(
+                    {
+                        row["metadata"]["db_id"]
+                        for row in rows_of(out)
+                        if row["metadata"]["id"] == rows_of(out)[0]["metadata"]["id"]
+                    }
+                ),
+                "the rotation is declared to stay within " + detail["rotated_within"],
+            )
+
+    def test_verify_reads_the_project_as_utf_8_whatever_the_locale_says(self) -> None:
+        """`build.py verify --demo` is the README's first-screen command.
+
+        Every writer here passes `encoding="utf-8"`; `verify_demo` was the one
+        reader that did not, so on a machine with `LANG` unset it read the rows
+        as ASCII and failed on the typographic apostrophe two of them carry.
+        `UnicodeDecodeError` is a `ValueError`, so the existing handler caught
+        it and reported a correct project as damaged -- and the `torn` state
+        makes "lines that are not JSON" a real condition, so the environment
+        failure wore the exact costume of the feature.
+        """
+
+        out = Path(self.workspace) / "locale_verify"
+        built = run_build("demo", "--preset", "ready", "--out", str(out))
+        self.assertEqual(built.returncode, 0, built.stderr)
+
+        result = run_build("verify", "--demo", str(out), env=ascii_locale_env())
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_second_agent_may_not_ship_an_answer_the_dataset_withholds(self) -> None:
+        """The second agent's input IS the row's gold query.
+
+        Drawn from the whole slice, `--dataset unlabeled` shipped forty rows with
+        no answers and the gold query for twenty of them in a file beside them,
+        under the same ids -- a project blind to nothing at all, which `verify`
+        called `ok`. The refusal is keyed on whether a row ships its answer, not
+        on a list of state names, so a labelling state added later is covered.
+        """
+        for state, withheld in (("unlabeled", "40"), ("holdout-labelled", "24")):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"two_agents_withheld_{state}"
+                result = run_build(
+                    "demo",
+                    "--agent",
+                    "two-agents",
+                    "--dataset",
+                    state,
+                    "--out",
+                    str(out),
+                )
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("withholds the answer on", result.stderr)
+                self.assertIn(withheld, result.stderr)
+                self.assertFalse(out.exists(), f"{out} was left behind")
+
+    def test_a_second_agent_declares_the_provenance_the_dataset_declares(self) -> None:
+        """`undeclared` rewrites every row's provenance; the sibling must follow.
+
+        The draw is taken before the damage, which is right for a repeated id and
+        wrong for a rewritten field: a second file saying `real` for twenty ids
+        contradicted, inside one project, the one thing that state exists to say.
+        """
+        out = Path(self.workspace) / "two_agents_undeclared"
+        result = run_build(
+            "demo",
+            "--agent",
+            "two-agents",
+            "--dataset",
+            "undeclared",
+            "--out",
+            str(out),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        sibling = [
+            json.loads(line)
+            for line in (out / "project" / "sql_explainer" / "dataset.jsonl")
+            .read_text()
+            .splitlines()
+        ]
+        self.assertEqual(
+            {build.UNDECLARED_PROVENANCE},
+            {row["metadata"]["provenance"] for row in sibling},
+        )
 
     def test_a_second_agent_needs_rows_to_draw_from(self) -> None:
         out = Path(self.workspace) / "two_agents_no_rows"

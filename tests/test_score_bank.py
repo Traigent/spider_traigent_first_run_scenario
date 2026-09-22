@@ -116,6 +116,70 @@ class TheSweepNamesEveryPreset(unittest.TestCase):
         self.assertEqual(set(harness.PRESETS), set(builder.PRESETS))
 
 
+# The cards whose readiness card is byte-identical to another's, written down so
+# the set is a claim the suite checks rather than a paragraph somebody remembers
+# to edit. Each one is a finding -- "the guide notices nothing here" -- and the
+# documents say so in prose; this is the same statement in a form that goes red.
+IDENTICAL_CARDS = (
+    ("best-case", "sql-exec-stop"),
+    ("checked", "grid-normalized-exact--code-sql"),
+    ("fake-ruler", "wrong-wiring--calibrated"),
+    (
+        "fake-ruler--uncalibrated",
+        "raw-export--fields-declared",
+        "ready",
+        "two-agents",
+        "wrong-wiring",
+    ),
+    ("length-blind--uncalibrated", "opaque-scorer"),
+    ("no-agent", "ready--without-agent-knobs"),
+)
+
+
+class TheCommittedCardsAreWhatTheDocumentsSay(unittest.TestCase):
+    """The two claims about `cards/` that prose was carrying alone.
+
+    Both were stale at once: a preset could land with no card directory and no
+    README row with the whole suite green, and the section that catalogues
+    identical cards listed two pairs where there were six -- including a pair
+    this repository's own nine-preset round created.
+    """
+
+    def card_bodies(self) -> dict[str, str]:
+        cards = REPO_ROOT / "docs" / "measurements" / "cards"
+        return {
+            directory.name: (directory / "04-readiness-card.txt").read_text(
+                encoding="utf-8"
+            )
+            for directory in sorted(cards.iterdir())
+            if directory.is_dir() and (directory / "04-readiness-card.txt").is_file()
+        }
+
+    def test_every_preset_the_sweep_names_has_a_committed_card(self) -> None:
+        harness = load_harness()
+        published = {
+            directory.name
+            for directory in (REPO_ROOT / "docs" / "measurements" / "cards").iterdir()
+            if directory.is_dir()
+        }
+        missing = sorted(set(harness.PRESETS) - published)
+        self.assertEqual([], missing, "presets the sweep names with no card")
+
+    def test_the_identical_cards_are_the_ones_written_down(self) -> None:
+        bodies = self.card_bodies()
+        by_body: dict[str, list[str]] = {}
+        for name, body in bodies.items():
+            by_body.setdefault(body, []).append(name)
+        found = sorted(
+            tuple(sorted(names)) for names in by_body.values() if len(names) > 1
+        )
+        self.assertEqual(
+            sorted(tuple(sorted(group)) for group in IDENTICAL_CARDS),
+            found,
+            "the cards that are identical to another are not the ones recorded",
+        )
+
+
 class HarnessTestCase(unittest.TestCase):
     """A scratch guide, a scratch `cards/`, and the harness pointed at both."""
 

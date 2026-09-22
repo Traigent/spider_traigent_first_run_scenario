@@ -5,12 +5,19 @@ reproduce it is in this directory: the script, the two hand-written agent reads 
 the captured invocation and full output of every run.
 
 **Measured against the first-run guide at revision
-`5ce65540e42b4f6a5a36a28c80e91745848ea507` (`5ce65540`), on 2026-09-17, on Python 3.12.3, with traigent 0.26.0 installed against the guide's 0.27.0
+`d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199` (`d07b62cd`), which is the guide's trunk, on Python 3.12.3, with traigent 0.26.0 installed against the guide's 0.27.0
 pin, which preflight records and continues past.** The nine presets ported on 2026-09-18 were
-measured the same day, at the same revision, by the same sweep; the seventeen earlier cards
-came back byte-identical, which is the reproducibility check this directory exists for. The
-guide's trunk was one commit ahead at `d07b62cd`, touching `.github/`, `tests/` and six lines of
-its `CLAUDE.md` -- nothing under `skills/` -- so the pin stands.
+measured by the same sweep as the seventeen before them, and those seventeen came back
+byte-identical, which is the reproducibility check this directory exists for.
+
+The pin moved here from `5ce65540` on 2026-09-22, and the move is itself a measurement rather
+than an argument. `5ce65540..d07b62cd` is one commit, touching `.github/`, `tests/` and six
+lines of the guide's own `CLAUDE.md`; the `skills/` tree and `GUIDE.md` are byte-identical
+across it. The whole sweep was re-run at `d07b62cd` and every one of the thirty-seven cards
+came back byte-identical -- `results.json` changed by exactly one line, the revision it
+records. That is what a pin move should cost when the tooling did not move, and running it was
+cheaper than writing the paragraph that would have argued the pin could stay.
+
 Re-measure before quoting these anywhere that matters -- they are a reading of one revision of
 somebody else's tool on one date, and the tool is under active development.
 
@@ -18,7 +25,7 @@ somebody else's tool on one date, and the tool is under active development.
 
 ```bash
 git clone https://github.com/Traigent/traigent-first-run ~/code/traigent-first-run
-git -C ~/code/traigent-first-run checkout 5ce65540e42b4f6a5a36a28c80e91745848ea507
+git -C ~/code/traigent-first-run checkout d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199
 
 python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
@@ -40,7 +47,7 @@ the directory of any run that did not: a refused run reaches two or three files 
 refusal, and moving those over its committed card would delete the rendered card and the `argv`
 record with it.
 
-**One run cannot be measured at `5ce65540`.** `best-case--off-method-calibration` asks the
+**One run cannot be measured at `d07b62cd`.** `best-case--off-method-calibration` asks the
 calibration tool to run the execution scorer against the project's databases, and the tool now
 refuses to import a scorer whose walk reaches a SQL engine (exit 2). The sweep records the
 refusal in `results.json` and leaves `cards/best-case--off-method-calibration/` as it was: the
@@ -52,7 +59,7 @@ The sweep checks one more thing before it builds anything: that the documents un
 field lists from the checkout it is handed, so *which fields a document may carry* is settled
 by the guide rather than by a copy of its rules kept here; which fields are *required* the
 guide expresses in control flow rather than as data, so `source_lines` is the one hardcoded
-coordinate in the check, named in `score_bank.py` beside a comment saying so. At `5ce65540`
+coordinate in the check, named in `score_bank.py` beside a comment saying so. At `d07b62cd`
 the documents and the pin agree, which is why the command above needs no `--revision`.
 
 **Exit status:** 0 when every run scored, 1 when the guide refused one or more, 2 when the
@@ -76,7 +83,7 @@ answered when it could.
 | `cards/<run>/argv.json` | every invocation, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE` |
 | `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
 
-Two things about the rows at `5ce65540`. A cap's `ceiling` may be `null` in `results.json`
+Two things about the rows at `d07b62cd`. A cap's `ceiling` may be `null` in `results.json`
 and on the card: such a cap discloses a finding without bounding the score
 (`evaluator-calibration-refused`, ceiling null, blocks false). And the guide holds the top two
 bands at WORKABLE until a review of the expected answers has entered through `--row-review`,
@@ -130,7 +137,7 @@ Twenty-six presets, then the comparisons the documentation makes:
 
 ## Results
 
-**Every row below is the 2026-09-17 reading at `5ce65540`**, taken from `cards/results.json`.
+**Every row below is the reading at `d07b62cd`**, taken from `cards/results.json`.
 The agent pillar reads 100 on every project with an agent: the guide's static reader follows
 all four of the demo agent's settings to the request since guide #549, for the reason the
 repository README gives under "What the source reader sees". A regeneration at `9eaabbb2`
@@ -213,23 +220,39 @@ thing did not happen either; both are worth writing down.
   (`non_constant` true, `bad_fails` false on every case), and without them the same 40
   `unresolved` as `opaque`.
 
-## Three cards that are identical to another card
+## The cards that are identical to another card
 
-Worth stating because each one is a finding rather than a coincidence. Each is checkable
-directly -- the first line of `04-readiness-card.txt` is the invocation that produced it, which
-names its own paths, so compare from the second line down:
+Worth stating because each one is a finding rather than a coincidence: where two starting
+states produce the same card, the guide's opening read did not distinguish them. Fifteen of the
+thirty-seven cards fall into the six groups below. Each is checkable directly -- the first line
+of `04-readiness-card.txt` is the invocation that produced it, which names its own paths, so
+compare from the second line down:
 
 ```bash
 cd docs/measurements/cards
 diff <(tail -n +2 ready/04-readiness-card.txt) <(tail -n +2 wrong-wiring/04-readiness-card.txt)
 ```
 
-- `wrong-wiring` and `ready` -- **byte-identical**. A scorer that never reads the model's output
-  is invisible to the opening gate.
+This list is not maintained by hand. `tests/test_score_bank.py` recomputes the groups from the
+committed cards and compares them with `IDENTICAL_CARDS`, so a round that creates a new
+identical pair and does not say so here goes red -- which is how the `opaque-scorer` pair below
+came to be written down at all.
+
+- `ready`, `wrong-wiring`, `fake-ruler--uncalibrated`, `raw-export--fields-declared` and
+  `two-agents` -- **all five byte-identical**. A scorer that never reads the model's output is
+  invisible to the opening gate; an uncalibrated ruler and a declared field rename are too; and
+  a second agent directory beside the first is not read at all.
 - `best-case` and `sql-exec-stop` -- **byte-identical**. The guide will not calibrate an
   executing scorer on the original at the opening, so shipping probe answers for one changes
   nothing there; both cards carry the same `evaluator-calibration-refused` disclosure and the
   same `confirm-evaluator-connection` action.
+- `length-blind--uncalibrated` and `opaque-scorer` -- **byte-identical**. Two scorers that
+  cannot be given a method honestly, and the opening reports the absence of a method rather
+  than anything about the scorer, so the two are the same reading.
+- `fake-ruler` and `wrong-wiring--calibrated` -- **byte-identical**.
+- `checked` and `grid-normalized-exact--code-sql` -- **byte-identical**.
+- `no-agent` and `ready--without-agent-knobs` -- **byte-identical**. Both cap at
+  `connect-agent`: no agent and an agent with nothing to vary read alike here.
 - `wrong-answers` and `ready` -- **not** identical, and the three differences are all about
   size rather than about the damage: dataset pillar 91 against 98, `60/60 rows` against
   `300/300`, and the comparison-size check dropping from `OK` to `!!` because a 60-row draw is

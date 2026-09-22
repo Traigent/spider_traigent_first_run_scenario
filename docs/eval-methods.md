@@ -122,8 +122,8 @@ Measured against the first-run guide at revision
 `6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9` (`6ec2b9c1`) on 2026-09-02.
 
 > **Every readiness figure in this section is that 2026-09-02 reading, and the tool has since
-> moved.** The score bank was regenerated at `e4096e3a` on 2026-09-15 and re-taken unchanged at
-> `5ce65540` on 2026-09-17 -- the current cards are
+> moved.** The score bank was regenerated at `e4096e3a` on 2026-09-15, re-taken unchanged at
+> `5ce65540` on 2026-09-17 and unchanged again at `d07b62cd` -- the current cards are
 > under [`docs/measurements/cards/`](measurements/README.md) and the current table is in the
 > repository README -- and since `9eaabbb2` the run behind the 91 EXCELLENT number is refused
 > by the calibration tool; since `e4096e3a` `checked` reads 93 and the declared pair 99, and both are held

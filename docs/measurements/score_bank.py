@@ -95,9 +95,12 @@ from typing import Any
 # re-measurement, never a side effect of somebody's checkout having moved. WORKING_REVISION is
 # the revision the documents under agent-knobs/ validate at; the two name the same commit
 # since the 2026-09-15 regeneration, so no --revision override is needed, and they are kept
-# separate for the next time the guide's document contract moves ahead of the pin.
-PINNED_REVISION = "5ce65540e42b4f6a5a36a28c80e91745848ea507"
-WORKING_REVISION = "5ce65540e42b4f6a5a36a28c80e91745848ea507"
+# separate for the next time the guide's document contract moves ahead of the pin. Both
+# moved from 5ce65540 to d07b62cd on 2026-09-22: the guide's `skills/` tree is byte-identical
+# across that commit, and the republished cards came back identical but for the revision
+# recorded in results.json, which is what made the move free to make.
+PINNED_REVISION = "d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199"
+WORKING_REVISION = "d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199"
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent

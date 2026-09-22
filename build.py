@@ -1285,7 +1285,7 @@ def render_readme(
     rows: Sequence[dict[str, Any]],
     databases: Sequence[str],
     agent_state: str,
-    keys: dict[str, str] = DATASET_KEYS,
+    keys: dict[str, str] | None = None,
     second_agent_rows: int = 0,
 ) -> str:
     """The project's own README, describing only what this project actually contains.
@@ -1295,6 +1295,9 @@ def render_readme(
     a project deliberately built with something missing, hands over the very thing the run is
     supposed to discover.
     """
+    # `DATASET_KEYS` is a module constant, and a constant used as a default
+    # argument is one shared object every caller could mutate through.
+    keys = DATASET_KEYS if keys is None else keys
     table = ["| File | |", "|---|---|"]
     for name in shipped:
         if name not in FILE_DESCRIPTIONS:
@@ -1524,6 +1527,13 @@ class Plan:
         if not self.ships_second_agent:
             return []
         source = self.undamaged_rows or self.rows
+        # Provenance is read from the rows AS SHIPPED, not from the undamaged draw.
+        # `undeclared` rewrites every row's provenance, and a second file still
+        # saying `real` for twenty of those ids contradicts, inside one project,
+        # the very thing that state exists to declare.
+        declared = {
+            row["metadata"]["id"]: row["metadata"]["provenance"] for row in self.rows
+        }
         return [
             {
                 "input": row["output"],
@@ -1531,7 +1541,9 @@ class Plan:
                     "db_id": row["metadata"]["db_id"],
                     "difficulty": row["metadata"]["difficulty"],
                     "id": row["metadata"]["id"],
-                    "provenance": row["metadata"]["provenance"],
+                    "provenance": declared.get(
+                        row["metadata"]["id"], row["metadata"]["provenance"]
+                    ),
                 },
             }
             for row in band_balanced_sample(source, SECOND_AGENT_ROWS)
@@ -1600,6 +1612,24 @@ def check_plan(plan: Plan) -> None:
             raise BuildError(
                 "--agent two-agents gives the second agent queries drawn from the rows, "
                 "and --dataset missing ships none"
+            )
+        # The second agent's input IS the row's gold query. A dataset state that
+        # withholds answers therefore cannot ship one: the answers to the withheld
+        # rows would sit in a file beside them, under the same ids, and the project
+        # would be blind to nothing at all. Keyed on `row_is_labelled` rather than
+        # on a list of state names, so a labelling state added later is refused
+        # without anyone remembering to come back here.
+        withheld = sum(
+            1
+            for row in (plan.undamaged_rows or plan.rows)
+            if not row_is_labelled(row, plan.dataset)
+        )
+        if withheld:
+            raise BuildError(
+                "--agent two-agents gives the second agent the rows' gold queries as "
+                f"its input, and --dataset {plan.dataset} withholds the answer on "
+                f"{withheld} of them: the project would ship the answers it is meant "
+                "to be missing, in a file beside them, under the same ids"
             )
         if len(plan.second_agent_rows) != SECOND_AGENT_ROWS:
             raise BuildError(
@@ -2272,7 +2302,9 @@ def verify_demo(root: Path) -> list[str]:
         torn = set(detail.get("torn_lines") or [])
         try:
             rows = []
-            for number, line in enumerate(dataset.read_text().split("\n"), 1):
+            for number, line in enumerate(
+                dataset.read_text(encoding="utf-8").split("\n"), 1
+            ):
                 if not line:
                     continue
                 try:
@@ -2286,7 +2318,7 @@ def verify_demo(root: Path) -> list[str]:
                         f"line {number} is recorded as torn and reads as a whole row"
                     )
                 rows.append(row)
-            catalog = json.loads((project / "catalog.json").read_text())
+            catalog = json.loads((project / "catalog.json").read_text(encoding="utf-8"))
             questions = [row[keys["input"]] for row in rows]
             databases = sorted({row["metadata"]["db_id"] for row in rows})
         except (ValueError, KeyError, TypeError, OSError) as error:
@@ -2522,6 +2554,17 @@ def render_suite(result: dict[str, Any]) -> str:
         )
     for entry in result["failed"]:
         lines.append(f"  {'--':<18} {entry['preset']:<18} FAILED: {entry['error']}")
+    if not result["built"]:
+        # Every preset failed, so there is no project to point an agent at. The
+        # handoff below tells a reader to hand one over, and printing it under a
+        # bank of nothing reads as success with a missing directory rather than
+        # as the refusal it is.
+        lines += [
+            "",
+            "No project was built, so there is nothing to hand to an agent. Each",
+            "preset's refusal is above and in the record; fix those and run again.",
+        ]
+        return "\n".join(lines)
     lines += [
         "",
         f"  {result['record']}  which directory is which; it names the state each demo was",
