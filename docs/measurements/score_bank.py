@@ -74,7 +74,13 @@ older reading.
 assistant's own read of every row; a hand-written stand-in for it would be this script
 deciding, row by row, whether each answer answers its question -- which is exactly the
 judgement the `wrong-answers` preset exists to test. Leaving it off keeps the table
-mechanical, and the omission is a property of this table rather than of the guide. The guide
+mechanical, and the omission is a property of this table rather than of the guide. It
+also puts one condition out of this bank's reach on purpose:
+`dataset-unsound-expected-outputs` fires when a row review carries `no` verdicts past a
+share, so a table that passes no review cannot raise it, and passing one here would be
+the script answering the question `wrong-answers` asks. The sibling scenario bank
+reaches it instead, where a five-row read is written by an assistant that actually read
+them. The guide
 also holds the top two bands at WORKABLE until a row review has entered, and that hold is
 what caps this bank's ceiling: `band_limited_by_unread_answers` is true on six cards --
 `checked`, `wrong-answers--calibrated` and the four `grid-*` runs -- which are exactly the
@@ -137,6 +143,7 @@ PRESETS = (
     "undeclared-source",
     "mostly-undeclared-source",
     "mostly-synthetic-source",
+    "synthetic-source",
     "generated-answer-key",
     "mostly-generated-answer-key",
     "split-by-database",
@@ -201,6 +208,11 @@ VARIANTS: tuple[tuple[str, tuple[str, ...], dict[str, Any]], ...] = (
     (
         "mostly-synthetic-source--calibrated",
         ("--preset", "mostly-synthetic-source", "--calibration", "present"),
+        {},
+    ),
+    (
+        "synthetic-source--calibrated",
+        ("--preset", "synthetic-source", "--calibration", "present"),
         {},
     ),
     (

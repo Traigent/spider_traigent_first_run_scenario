@@ -207,6 +207,7 @@ DATASET_STATES = (
     "undeclared",
     "mostly-undeclared",
     "mostly-synthetic",
+    "fully-synthetic",
     "generated-answers",
     "mostly-generated-answers",
     "missing",
@@ -251,6 +252,7 @@ DAMAGED_STATES = (
     "undeclared",
     "mostly-undeclared",
     "mostly-synthetic",
+    "fully-synthetic",
     "generated-answers",
     "mostly-generated-answers",
 )
@@ -263,6 +265,7 @@ FULL_SLICE_STATES = (
     "undeclared",
     "mostly-undeclared",
     "mostly-synthetic",
+    "fully-synthetic",
     "generated-answers",
     "mostly-generated-answers",
 )
@@ -456,6 +459,11 @@ PRESETS = {
         "dataset": "mostly-synthetic",
         "eval": "exact-match",
     },
+    "synthetic-source": {
+        "agent": "ready",
+        "dataset": "fully-synthetic",
+        "eval": "exact-match",
+    },
     "generated-answer-key": {
         "agent": "ready",
         "dataset": "generated-answers",
@@ -509,6 +517,7 @@ PRESET_NOTES = {
     "undeclared-source": "every row says where it came from in a word the guide does not know",
     "mostly-undeclared-source": "most rows do, and the rest still say they were collected",
     "mostly-synthetic-source": "most rows declare themselves written rather than collected",
+    "synthetic-source": "every row declares itself written rather than collected",
     "generated-answer-key": "every answer is declared model-written; the questions are real",
     "mostly-generated-answer-key": "most answers are, and the rest were written by a person",
     "opaque-scorer": "a scorer that calls a grading library the project does not carry",
@@ -761,6 +770,14 @@ def damage_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
         return declare_on_most(rows, "provenance", UNDECLARED_PROVENANCE)
     if state == "mostly-synthetic":
         return declare_on_most(rows, "provenance", SYNTHETIC_PROVENANCE)
+    if state == "fully-synthetic":
+        return [
+            {
+                **row,
+                "metadata": {**row["metadata"], "provenance": SYNTHETIC_PROVENANCE},
+            }
+            for row in rows
+        ]
     if state == "generated-answers":
         return [
             {
@@ -2100,6 +2117,17 @@ def damage_detail(plan: Plan, torn: Sequence[int]) -> dict[str, Any] | None:
         return {"torn_lines": list(torn), "cut_at": TORN_AT}
     if plan.dataset == "undeclared":
         return {"provenance": UNDECLARED_PROVENANCE, "slice_says": "real"}
+    if plan.dataset == "fully-synthetic":
+        return {
+            "provenance": SYNTHETIC_PROVENANCE,
+            "slice_says": "real",
+            "declared_rows": sum(
+                1
+                for row in plan.rows
+                if row["metadata"].get("provenance") == SYNTHETIC_PROVENANCE
+            ),
+            "of_rows": len(plan.rows),
+        }
     if plan.dataset in ("mostly-undeclared", "mostly-synthetic"):
         declared = (
             UNDECLARED_PROVENANCE

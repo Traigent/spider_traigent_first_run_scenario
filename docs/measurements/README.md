@@ -121,14 +121,14 @@ Two things follow, and both are properties of this table rather than of the guid
 
 ## What the sweep covers
 
-Thirty presets, then the comparisons the documentation makes. One preset the sweep
-names only through a variant -- `slow-scorer`, because it carries a non-default
-calibration budget -- so this table has thirty preset runs and thirteen comparisons
-against `build.py`'s thirty-one presets:
+Thirty-one presets, then the comparisons the documentation makes. One preset the
+sweep names only through a variant -- `slow-scorer`, because it carries a non-default
+calibration budget -- so this table has thirty-one preset runs and fourteen
+comparisons against `build.py`'s thirty-two presets:
 
 | run | what it is for |
 |---|---|
-| the 30 presets | the score tables in the README |
+| the 31 presets | the score tables in the README |
 | `best-case--off-method-calibration` | the number once reached by calibrating an executing scorer; refused by the tool since `9eaabbb2`, its `6ec2b9c1` card retained |
 | `wrong-answers--calibrated` | `--preset wrong-answers --calibration present` |
 | `wrong-wiring--calibrated` | `--preset wrong-wiring --calibration present` |
@@ -139,6 +139,7 @@ against `build.py`'s thirty-one presets:
 | `undeclared-source--calibrated` | the rung the provenance ladder puts a wholly undeclared file on, once the evaluator ceiling is out of the way |
 | `mostly-undeclared-source--calibrated` | the same, one rung up: most rows undeclared, the rest saying they were collected |
 | `mostly-synthetic-source--calibrated` | the declared arm of that rung, whose action is `proceed` rather than a request to declare |
+| `synthetic-source--calibrated` | the rung below it: every row declared written, which costs 65 where declaring most of them costs 70 |
 | `generated-answer-key--calibrated` | the answer-key ladder's top rung |
 | `mostly-generated-answer-key--calibrated` | the rung below it, which exists so the cap cannot turn on one row |
 | `slow-scorer` | `--preset slow-scorer` with `--timeout 5` on the calibration step. The guide budgets a deterministic calibration at 900 seconds, so reaching the timeout question the default way costs a quarter of an hour of every reproduction; the budget is stated instead, and the card records the one it was reached under |
@@ -186,6 +187,7 @@ ceiling reads `none` discloses something without bounding the number
 | `undeclared-source` | 45 | PARTIAL | `complete-calibration` | 100 | 89 | 33 | `evaluator-unvalidated` 45 · `dataset-undeclared-provenance` 65 |
 | `mostly-undeclared-source` | 45 | PARTIAL | `complete-calibration` | 100 | 92 | 33 | `evaluator-unvalidated` 45 · `dataset-mostly-undeclared` 70 |
 | `mostly-synthetic-source` | 45 | PARTIAL | `complete-calibration` | 100 | 92 | 33 | `evaluator-unvalidated` 45 · `dataset-mostly-synthetic` 70 |
+| `synthetic-source` | 45 | PARTIAL | `complete-calibration` | 100 | 89 | 33 | `evaluator-unvalidated` 45 · `dataset-fully-synthetic` 65 |
 | `generated-answer-key` | 45 | PARTIAL | `complete-calibration` | 100 | 93 | 33 | `evaluator-unvalidated` 45 · `dataset-generated-answer-key` 74 |
 | `mostly-generated-answer-key` | 45 | PARTIAL | `complete-calibration` | 100 | 94 | 33 | `evaluator-unvalidated` 45 · `dataset-mostly-generated-answer-key` 74 |
 | `split-by-database` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
@@ -200,6 +202,7 @@ ceiling reads `none` discloses something without bounding the number
 | `undeclared-source--calibrated` | 65 | WORKABLE | `declare-data-provenance` | 100 | 89 | 83 | `dataset-undeclared-provenance` 65 |
 | `mostly-undeclared-source--calibrated` | 70 | WORKABLE | `declare-data-provenance` | 100 | 92 | 83 | `dataset-mostly-undeclared` 70 |
 | `mostly-synthetic-source--calibrated` | 70 | WORKABLE | `proceed` | 100 | 92 | 83 | `dataset-mostly-synthetic` 70 |
+| `synthetic-source--calibrated` | 65 | WORKABLE | `proceed` | 100 | 89 | 83 | `dataset-fully-synthetic` 65 |
 | `generated-answer-key--calibrated` | 74 | WORKABLE | `review-answer-key` | 100 | 93 | 83 | `dataset-generated-answer-key` 74 |
 | `mostly-generated-answer-key--calibrated` | 74 | WORKABLE | `review-answer-key` | 100 | 94 | 83 | `dataset-mostly-generated-answer-key` 74 |
 | `slow-scorer` | 45 | PARTIAL | `bound-evaluator-cost` | 100 | 98 | 33 | `evaluator-timeout` 45\* |
@@ -243,7 +246,7 @@ thing did not happen either; both are worth writing down.
 
 Worth stating because each one is a finding rather than a coincidence: where two starting
 states produce the same card, the guide's opening read did not distinguish them. Fifteen of the
-forty-seven cards fall into the six groups below. Each is checkable directly -- the first line
+forty-nine cards fall into the six groups below. Each is checkable directly -- the first line
 of `04-readiness-card.txt` is the invocation that produced it, which names its own paths, so
 compare from the second line down:
 

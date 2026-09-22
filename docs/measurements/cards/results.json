@@ -810,6 +810,39 @@
       "calibration_passed": null
     },
     {
+      "tag": "synthetic-source",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 89,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-fully-synthetic",
+          "ceiling": 65,
+          "blocks": false,
+          "action_kind": "connect-real-data",
+          "reason": "The dataset is generated, so a high score here measures the walkthrough, not real-world readiness."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
       "tag": "generated-answer-key",
       "overall": 45,
       "band": "PARTIAL",
@@ -1172,6 +1205,32 @@
           "blocks": false,
           "action_kind": "connect-real-data",
           "reason": "Most of the dataset is generated, so the result mostly measures invented examples rather than real traffic."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "synthetic-source--calibrated",
+      "overall": 65,
+      "band": "WORKABLE",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 89,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-fully-synthetic",
+          "ceiling": 65,
+          "blocks": false,
+          "action_kind": "connect-real-data",
+          "reason": "The dataset is generated, so a high score here measures the walkthrough, not real-world readiness."
         }
       ],
       "declared_evaluator_method": "normalized-exact",

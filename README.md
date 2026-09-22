@@ -130,7 +130,7 @@ put in, and an agent that can read that is not being tested on anything.
 with the data because the licence says it has to: CC BY-SA 4.0 requires the attribution and a
 notice that the data was modified to accompany the data wherever it goes. `build.py` copies it
 in the same branch that writes `dataset.jsonl`, `catalog.json` and `databases/`, so the four
-arrive together or not at all -- 29 of the 31 presets get it, and the two that do not are
+arrive together or not at all -- 30 of the 32 presets get it, and the two that do not are
 `empty` and `no-data`, the two with no rows.
 
 It ships alone, and that is a change worth stating. Projects used to carry `NOTICE`, `LICENSE`
@@ -183,6 +183,7 @@ Presets are shorthand for the combinations worth having a name:
 | `undeclared-source` | every row says where it came from in a word the guide does not know |
 | `mostly-undeclared-source` | most rows do, and the rest still say they were collected |
 | `mostly-synthetic-source` | most rows declare themselves written rather than collected |
+| `synthetic-source` | every row does, which is the rung below it |
 | `generated-answer-key` | every answer is declared model-written; the questions are real |
 | `mostly-generated-answer-key` | most answers are, and the rest were written by a person |
 | `slow-scorer` | the scorer is right and asks a service per row, so checking it runs long |
@@ -224,8 +225,8 @@ python3 build.py demo --preset ready --venv ready --out ~/demos/worked-in
 
 **It costs about 220 MB per project, and about 20 seconds.** Measured twice on this machine,
 on Python 3.13.14: `du -sm` reports 220 MiB and the files themselves are 193 MB, almost all of
-it `litellm` and what it pulls in. So a thirty-one-preset bank with environments is about
-**6.8 GB** (it was 5.7 GB at twenty-six and 3.7 GB at seventeen), not the 1.7 GB an earlier "hundred megabytes per
+it `litellm` and what it pulls in. So a thirty-two-preset bank with environments is about
+**7.0 GB** (it was 6.8 GB at thirty-one and 3.7 GB at seventeen), not the 1.7 GB an earlier "hundred megabytes per
 project" implied -- worth knowing before running `suite --venv ready` on a machine with a
 few gigabytes free. That is why it is
 off by default and why `suite` takes the same flag rather than assuming it.
@@ -251,8 +252,8 @@ not by being present.
 
 ## Data that is wrong on purpose
 
-**Sixteen** of the thirty-one presets sit in this table. Fifteen ship a project whose data or
-scorer is broken, or shaped in a way the tools do not expect; the sixteenth, `split-by-database`,
+**Seventeen** of the thirty-two presets sit in this table. Sixteen ship a project whose data or
+scorer is broken, or shaped in a way the tools do not expect; the seventeenth, `split-by-database`,
 is not wrong at all -- its data is split the way a customer splits it, and it is kept here as the
 control for the family check. Real projects arrive that way, and the run's job is
 not to notice and stop -- it is to notice, repair, and carry on to a result that means
@@ -270,6 +271,7 @@ something. These are the states that make it show its work.
 | `undeclared-source` | 300 | every row's `metadata.provenance` reads `spider-dev` instead of `real`: the name of the benchmark split the rows came from, which is what a person exporting them would write, and a word outside the guide's provenance vocabulary. |
 | `mostly-undeclared-source` | 300 | the same word on 180 of the 300 rows, the other 120 still reading `real`. The guide's provenance ladder has a rung at "more than half", so this is not the state above with less of it: it is `dataset-mostly-undeclared` at a ceiling of 70 where every row reads 65. |
 | `mostly-synthetic-source` | 300 | 180 rows declare `synthetic` and 120 declare `real`. Declared rather than silent, which is the other axis of the same ladder: the card names `dataset-mostly-synthetic`, and its recommended action is `proceed` rather than a request to declare anything. |
+| `synthetic-source` | 300 | every row declares `synthetic`. The pair with the row above is the point: the guide's provenance ladder has two rungs, and declaring most of a file costs 70 where declaring all of it costs 65. |
 | `generated-answer-key` | 300 | every row adds `metadata.output_provenance: model-generated`. The questions stay real and the provenance stays `real`; what the customer is declaring is that a model wrote the answers they are about to be scored against. |
 | `mostly-generated-answer-key` | 300 | the same declaration on 180 of the 300. The answer-key ladder has its own "more than half" rung, and the card names `dataset-mostly-generated-answer-key` with the count in its reason line. |
 | `wrong-wiring` | 300 | the scorer compares the question with the recorded answer and never looks at what the model produced. It runs, it returns a number, and every row ties at zero. |
@@ -395,7 +397,7 @@ something is broken it repairs it; then it scores again, and the run carries on.
 number is not a failure -- it is the size of the gap the run has to close before it can
 measure anything, and closing it is the job.
 
-So read the table as thirty-one starting points, and the question each one asks is the same:
+So read the table as thirty-two starting points, and the question each one asks is the same:
 **can the run get from here to a real result, and does it say honestly what it had to build
 along the way?** A project that opens at 25 and reaches a genuine optimization is a better
 demonstration than one that opens at 86, because the first one shows the work.
@@ -493,7 +495,7 @@ raises, `*` for one that blocks):
 
 **Three of the five bands, and the top two are held rather than missing.** The spread is
 measured rather than arranged -- every preset and comparison the sweep names was built and
-scored, and these thirty-one presets are the ones that describe a project somebody could actually
+scored, and these thirty-two presets are the ones that describe a project somebody could actually
 arrive with. The
 agent pillar reads 100 on every project with an agent, so the numbers are what the dataset and
 evaluation pillars make them; `checked` reaches 93, inside EXCELLENT by the number. It reads

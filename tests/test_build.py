@@ -108,8 +108,10 @@ NUMBER_WORDS = {
     "twenty-nine": 29,
     "thirty": 30,
     "thirty-one": 31,
+    "thirty-two": 32,
     "thirty-seven": 37,
     "forty-seven": 47,
+    "forty-nine": 49,
 }
 # How a denominator is written. Each of these says "this is the whole collection",
 # which is exactly the claim that goes stale when the collection grows -- and the
@@ -174,6 +176,7 @@ PRESET_TABLE = {
         "none",
         "none",
     ),
+    "synthetic-source": ("ready", "fully-synthetic", "exact-match", "none", "none"),
     "generated-answer-key": (
         "ready",
         "generated-answers",
