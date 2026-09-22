@@ -187,6 +187,9 @@ EVALUATOR_FILES = {
     # A scorer that compares the lengths of the two queries and nothing else: a number
     # that moves, and never for the right reason.
     "length-blind": COMPONENTS / "evaluator" / "length_blind.py",
+    # A scorer that compares text the ordinary way and asks a service to do it, one row
+    # per call. Nothing is wrong with the comparison; what is wrong is what it costs.
+    "slow": COMPONENTS / "evaluator" / "slow.py",
     "missing": None,
 }
 DATASET_STATES = (
@@ -202,6 +205,10 @@ DATASET_STATES = (
     "raw-export",
     "torn",
     "undeclared",
+    "mostly-undeclared",
+    "mostly-synthetic",
+    "generated-answers",
+    "mostly-generated-answers",
     "missing",
 )
 CALIBRATION_STATES = ("none", "present")
@@ -242,9 +249,23 @@ DAMAGED_STATES = (
     "raw-export",
     "torn",
     "undeclared",
+    "mostly-undeclared",
+    "mostly-synthetic",
+    "generated-answers",
+    "mostly-generated-answers",
 )
 # The states that ship the whole slice. Every other labelled state is a seeded draw.
-FULL_SLICE_STATES = ("ready", "leaky", "split-by-database", "raw-export", "undeclared")
+FULL_SLICE_STATES = (
+    "ready",
+    "leaky",
+    "split-by-database",
+    "raw-export",
+    "undeclared",
+    "mostly-undeclared",
+    "mostly-synthetic",
+    "generated-answers",
+    "mostly-generated-answers",
+)
 UNLABELED_ROWS = 40
 SAMPLE_SEED = 42
 DRAW_SIZES = {
@@ -276,6 +297,24 @@ RAW_EXPORT_KEYS = {"input": "question", "output": "query"}
 # the rows were exported from, which is what somebody who exported them would write, and
 # a word outside the guide's provenance vocabulary.
 UNDECLARED_PROVENANCE = "spider-dev"
+# The share of rows the four "mostly" states touch. The guide's provenance ladder and its
+# answer-key ladder each have a rung at "more than half", so damaging every row and
+# damaging most of them are different readings, not the same one twice: 65 against 70 on
+# the provenance ladder, and a different condition and remedy on the card. 0.6 clears the
+# guide's 0.5 boundary by a margin no rounding can cross.
+MOSTLY_SHARE = 0.6
+# What a row says when the customer declares the row itself written rather than collected,
+# and what it says when they declare the ANSWER model-written while the question stays
+# real. Both are the fictional customer's own declaration about their own rows -- the same
+# in-world channel `undeclared` writes on -- and neither says anything about where this
+# repository's bytes came from. `docs/dataset.md` states that separation once, for all of
+# them.
+SYNTHETIC_PROVENANCE = "synthetic"
+GENERATED_ANSWER_PROVENANCE = "model-generated"
+# Where a row carries the second declaration. The guide reads an answer's provenance from
+# `output_provenance` at the row's top level or inside `metadata`; this repository writes
+# everything but `input` and `output` in `metadata`, so it uses that one.
+GENERATED_ANSWER_KEY = "output_provenance"
 
 # Where a project keeps the probe answers it uses to check its own scorer. The guide reads
 # this path, and a project that has one can have its evaluator validated at the opening gate
@@ -285,6 +324,13 @@ CALIBRATION_FILE = "calibration-cases.json"
 _TEXT_PROBES = COMPONENTS / "calibration" / "exact_match.json"
 CALIBRATION_SOURCES = {
     "exact-match": _TEXT_PROBES,
+    # Its own file, not the shared text probes. The slow scorer's comparison is weaker
+    # than the text comparator's -- whitespace, keyword case and a trailing semicolon,
+    # and nothing about quoting -- so it fails four of the shared `equivalent_good`
+    # probes. Shipping those would be exactly the answers-nobody-checked this module
+    # refuses elsewhere. These cases pin what it really accepts, and each was run
+    # against the shipped scorer before it was written down.
+    "slow": COMPONENTS / "calibration" / "slow.json",
     "exec-match": COMPONENTS / "calibration" / "exec_match.json",
     # The always-correct scorer is deliberately given the text comparator's probes: the
     # point is that it fails the same questions the honest one passes. One file rather than
@@ -320,6 +366,9 @@ EVALUATOR_FACTS: dict[str, dict[str, Any]] = {
     # names, and declaring the nearest one would credit the file with a comparison it
     # does not make. It imports nothing and runs nothing, so that half is known.
     "length-blind": {"method": None, "executes_candidate_output": False},
+    # A method can be declared here: the comparison really is a normalised text match,
+    # and the sleep is in how it reaches that comparison rather than in what it compares.
+    "slow": {"method": "normalized-exact", "executes_candidate_output": False},
 }
 
 PRESETS = {
@@ -386,7 +435,33 @@ PRESETS = {
         "dataset": "undeclared",
         "eval": "exact-match",
     },
+    "mostly-undeclared-source": {
+        "agent": "ready",
+        "dataset": "mostly-undeclared",
+        "eval": "exact-match",
+    },
+    "mostly-synthetic-source": {
+        "agent": "ready",
+        "dataset": "mostly-synthetic",
+        "eval": "exact-match",
+    },
+    "generated-answer-key": {
+        "agent": "ready",
+        "dataset": "generated-answers",
+        "eval": "exact-match",
+    },
+    "mostly-generated-answer-key": {
+        "agent": "ready",
+        "dataset": "mostly-generated-answers",
+        "eval": "exact-match",
+    },
     "opaque-scorer": {"agent": "ready", "dataset": "ready", "eval": "opaque"},
+    "slow-scorer": {
+        "agent": "ready",
+        "dataset": "ready",
+        "eval": "slow",
+        "calibration": "present",
+    },
     "length-blind": {
         "agent": "ready",
         "dataset": "ready",
@@ -419,7 +494,12 @@ PRESET_NOTES = {
     "split-by-database": "the held-out rows are whole databases the tuning side never sees",
     "raw-export": "the rows under Spider's own key names, as the benchmark exports them",
     "torn-lines": "two lines of the data cut short, the way a stopped export leaves them",
+    "slow-scorer": "the scorer is right and asks a service per row, so checking it runs long",
     "undeclared-source": "every row says where it came from in a word the guide does not know",
+    "mostly-undeclared-source": "most rows do, and the rest still say they were collected",
+    "mostly-synthetic-source": "most rows declare themselves written rather than collected",
+    "generated-answer-key": "every answer is declared model-written; the questions are real",
+    "mostly-generated-answer-key": "most answers are, and the rest were written by a person",
     "opaque-scorer": "a scorer that calls a grading library the project does not carry",
     "length-blind": "a scorer that compares the lengths of the two queries, and probes",
     "two-agents": "a second agent beside the first, and a note saying which one to work on",
@@ -666,6 +746,23 @@ def damage_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
             }
             for row in rows
         ]
+    if state == "mostly-undeclared":
+        return declare_on_most(rows, "provenance", UNDECLARED_PROVENANCE)
+    if state == "mostly-synthetic":
+        return declare_on_most(rows, "provenance", SYNTHETIC_PROVENANCE)
+    if state == "generated-answers":
+        return [
+            {
+                **row,
+                "metadata": {
+                    **row["metadata"],
+                    GENERATED_ANSWER_KEY: GENERATED_ANSWER_PROVENANCE,
+                },
+            }
+            for row in rows
+        ]
+    if state == "mostly-generated-answers":
+        return declare_on_most(rows, GENERATED_ANSWER_KEY, GENERATED_ANSWER_PROVENANCE)
     if state not in ("duplicated", "wrong-answers"):
         return list(rows)
     if state == "duplicated":
@@ -882,6 +979,36 @@ def project_row(row: dict[str, Any], state: str) -> dict[str, Any]:
         # No expected answer means no split to hold out and nothing to grade against.
         projected["metadata"].pop("split", None)
     return projected
+
+
+def declare_on_most(
+    rows: Sequence[dict[str, Any]], field: str, value: str
+) -> list[dict[str, Any]]:
+    """Write one declaration onto most of the rows, and leave the rest alone.
+
+    The rows that carry it are a band-balanced draw rather than the front of the
+    list, for the reason `duplicated` takes one: sorted by difficulty, the front
+    of the set is whole bands, so damaging it would ship a difficulty spread
+    nothing in the project accounts for and the guide would be reading two
+    things at once.
+
+    The row order is unchanged -- only the fields move -- so the split counts,
+    the ids and the question texts are the same as the undamaged slice's, which
+    is what makes the reading a reading of this declaration and nothing else.
+    """
+
+    touched = {
+        row["metadata"]["id"]
+        for row in band_balanced_sample(rows, round(len(rows) * MOSTLY_SHARE))
+    }
+    return [
+        (
+            {**row, "metadata": {**row["metadata"], field: value}}
+            if row["metadata"]["id"] in touched
+            else {**row, "metadata": dict(row["metadata"])}
+        )
+        for row in rows
+    ]
 
 
 def row_is_labelled(row: dict[str, Any], state: str) -> bool:
@@ -1945,6 +2072,32 @@ def damage_detail(plan: Plan, torn: Sequence[int]) -> dict[str, Any] | None:
         return {"torn_lines": list(torn), "cut_at": TORN_AT}
     if plan.dataset == "undeclared":
         return {"provenance": UNDECLARED_PROVENANCE, "slice_says": "real"}
+    if plan.dataset in ("mostly-undeclared", "mostly-synthetic"):
+        declared = (
+            UNDECLARED_PROVENANCE
+            if plan.dataset == "mostly-undeclared"
+            else SYNTHETIC_PROVENANCE
+        )
+        return {
+            "provenance": declared,
+            "slice_says": "real",
+            "declared_rows": sum(
+                1 for row in plan.rows if row["metadata"].get("provenance") == declared
+            ),
+            "of_rows": len(plan.rows),
+        }
+    if plan.dataset in ("generated-answers", "mostly-generated-answers"):
+        return {
+            "output_provenance": GENERATED_ANSWER_PROVENANCE,
+            "slice_says": "nothing -- the slice declares no answer provenance",
+            "declared_rows": sum(
+                1
+                for row in plan.rows
+                if row["metadata"].get(GENERATED_ANSWER_KEY)
+                == GENERATED_ANSWER_PROVENANCE
+            ),
+            "of_rows": len(plan.rows),
+        }
     raise BuildError(
         f"{plan.dataset} is a damaged state with no description of its damage"
     )

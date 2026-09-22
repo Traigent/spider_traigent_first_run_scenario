@@ -153,21 +153,21 @@ ceiling reads `none` discloses something without bounding the number
 |---|---|---|---|---|---|---|---|
 | `empty` | 0 | NOT READY | `get-data` | 0 | 0 | 0 | `dataset-absent` 20\* · `agent-absent` 25\* · `evaluator-absent` 40\* |
 | `logs-only` | 7 | NOT READY | `connect-agent` | 0 | 18 | 0 | `agent-absent` 25\* · `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* |
-| `agent-and-logs` | 30 | PARTIAL | `label-data` | 100 | 18 | 0 | `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* |
 | `no-data` | 20 | NOT READY | `get-data` | 100 | 0 | 33 | `dataset-absent` 20\* · `evaluator-unvalidated` 45 |
-| `no-labels` | 30 | PARTIAL | `label-data` | 100 | 18 | 33 | `dataset-no-expected-outputs` 30\* · `evaluator-unvalidated` 45 |
+| `agent-and-logs` | 30 | PARTIAL | `label-data` | 100 | 18 | 0 | `dataset-no-expected-outputs` 30\* · `evaluator-absent` 40\* |
 | `fake-ruler` | 25 | NOT READY | `repair-evaluator` | 100 | 98 | 28 | `evaluator-invalid` 25\* |
-| `no-agent` | 25 | NOT READY | `connect-agent` | 0 | 98 | 33 | `agent-absent` 25\* · `evaluator-unvalidated` 45 |
+| `no-labels` | 30 | PARTIAL | `label-data` | 100 | 18 | 33 | `dataset-no-expected-outputs` 30\* · `evaluator-unvalidated` 45 |
 | `duplicated-data` | 35 | PARTIAL | `repair-dataset` | 100 | 86 | 33 | `dataset-integrity-fail` 35\* · `evaluator-unvalidated` 45 · `dataset-repeated-rows` 89 |
 | `no-eval` | 40 | PARTIAL | `connect-evaluator` | 100 | 98 | 0 | `evaluator-absent` 40\* |
 | `no-knobs` | 45 | PARTIAL | `vary-knobs` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45\* |
 | `ready` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
+| `sql-exec-stop` | 85 | WORKABLE | `confirm-evaluator-connection` | 100 | 98 | 59 | `evaluator-calibration-refused` none |
+| `no-agent` | 25 | NOT READY | `connect-agent` | 0 | 98 | 33 | `agent-absent` 25\* · `evaluator-unvalidated` 45 |
 | `wrong-answers` | 45 | PARTIAL | `complete-calibration` | 100 | 91 | 33 | `evaluator-unvalidated` 45 |
 | `wrong-wiring` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
 | `hand-written` | 74 | WORKABLE | `add-examples` | 100 | 75 | 83 | `dataset-below-measurable-size` 74 |
-| `sql-exec-stop` | 85 | WORKABLE | `confirm-evaluator-connection` | 100 | 98 | 59 | `evaluator-calibration-refused` none |
-| `best-case` | 85 | WORKABLE | `confirm-evaluator-connection` | 100 | 98 | 59 | `evaluator-calibration-refused` none |
 | `checked` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
+| `best-case` | 85 | WORKABLE | `confirm-evaluator-connection` | 100 | 98 | 59 | `evaluator-calibration-refused` none |
 | `raw-export` | 25 | NOT READY | `read-dataset` | 100 | 0 | 33 | `dataset-shape-unrecognised` 25\* · `evaluator-unvalidated` 45 |
 | `length-blind` | 25 | NOT READY | `repair-evaluator` | 100 | 98 | 4 | `evaluator-invalid` 25\* |
 | `torn-lines` | 35 | PARTIAL | `repair-dataset` | 100 | 84 | 33 | `dataset-integrity-fail` 35\* · `evaluator-unvalidated` 45 · `dataset-coarse-resolution` 89 |
@@ -175,6 +175,10 @@ ceiling reads `none` discloses something without bounding the number
 | `holdout-only` | 45 | PARTIAL | `resplit-dataset` | 100 | 45 | 33 | `evaluator-unvalidated` 45 · `dataset-tuning-split-empty` 50\* |
 | `leaky-split` | 45 | PARTIAL | `resplit-dataset` | 100 | 88 | 33 | `evaluator-unvalidated` 45 · `dataset-tune-holdout-overlap` 50\* · `dataset-repeated-rows` 89 |
 | `undeclared-source` | 45 | PARTIAL | `complete-calibration` | 100 | 89 | 33 | `evaluator-unvalidated` 45 · `dataset-undeclared-provenance` 65 |
+| `mostly-undeclared-source` | 45 | PARTIAL | `complete-calibration` | 100 | 92 | 33 | `evaluator-unvalidated` 45 · `dataset-mostly-undeclared` 70 |
+| `mostly-synthetic-source` | 45 | PARTIAL | `complete-calibration` | 100 | 92 | 33 | `evaluator-unvalidated` 45 · `dataset-mostly-synthetic` 70 |
+| `generated-answer-key` | 45 | PARTIAL | `complete-calibration` | 100 | 93 | 33 | `evaluator-unvalidated` 45 · `dataset-generated-answer-key` 74 |
+| `mostly-generated-answer-key` | 45 | PARTIAL | `complete-calibration` | 100 | 94 | 33 | `evaluator-unvalidated` 45 · `dataset-mostly-generated-answer-key` 74 |
 | `split-by-database` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
 | `two-agents` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
 | `best-case--off-method-calibration` | refused | -- | -- | -- | -- | -- | `calibrate_evaluator.py` exit 2: the guide refuses to import a scorer that reaches a SQL engine; the committed directory is the `6ec2b9c1` card |
@@ -184,9 +188,15 @@ ceiling reads `none` discloses something without bounding the number
 | `ready--without-agent-knobs` | 25 | NOT READY | `connect-agent` | 0 | 98 | 33 | `agent-absent` 25\* · `evaluator-unvalidated` 45 |
 | `raw-export--fields-declared` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
 | `length-blind--uncalibrated` | 40 | PARTIAL | `repair-evaluator` | 100 | 98 | 0 | `evaluator-unresolved` 40\* |
+| `undeclared-source--calibrated` | 65 | WORKABLE | `declare-data-provenance` | 100 | 89 | 83 | `dataset-undeclared-provenance` 65 |
+| `mostly-undeclared-source--calibrated` | 70 | WORKABLE | `declare-data-provenance` | 100 | 92 | 83 | `dataset-mostly-undeclared` 70 |
+| `mostly-synthetic-source--calibrated` | 70 | WORKABLE | `proceed` | 100 | 92 | 83 | `dataset-mostly-synthetic` 70 |
+| `generated-answer-key--calibrated` | 74 | WORKABLE | `review-answer-key` | 100 | 93 | 83 | `dataset-generated-answer-key` 74 |
+| `mostly-generated-answer-key--calibrated` | 74 | WORKABLE | `review-answer-key` | 100 | 94 | 83 | `dataset-mostly-generated-answer-key` 74 |
+| `slow-scorer` | 45 | PARTIAL | `bound-evaluator-cost` | 100 | 98 | 33 | `evaluator-timeout` 45\* |
 | `grid-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
-| `grid-normalized-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `grid-normalized-exact--structured` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
+| `grid-normalized-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `grid-exact--structured` | 99 | WORKABLE | `review-answer-key` | 100 | 98 | 100 | none |
 
 The band boundaries the guide uses, for reading the column: NOT READY 0-29, PARTIAL 30-54,

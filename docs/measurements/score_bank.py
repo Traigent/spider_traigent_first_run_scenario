@@ -133,6 +133,10 @@ PRESETS = (
     "holdout-only",
     "leaky-split",
     "undeclared-source",
+    "mostly-undeclared-source",
+    "mostly-synthetic-source",
+    "generated-answer-key",
+    "mostly-generated-answer-key",
     "split-by-database",
     "two-agents",
 )
@@ -174,6 +178,43 @@ VARIANTS: tuple[tuple[str, tuple[str, ...], dict[str, Any]], ...] = (
         "length-blind--uncalibrated",
         ("--preset", "length-blind", "--calibration", "none"),
         {},
+    ),
+    # The four provenance states, calibrated. Uncalibrated they all read 45 --
+    # `evaluator-unvalidated` is the lower ceiling and it hides every one of
+    # them -- so the rung each state actually sits on is only visible once the
+    # scorer has been checked. That is the whole point of the pairs: the
+    # declaration a customer makes about their own rows is worth a different
+    # number depending on how much of the file it covers, and the uncalibrated
+    # runs cannot show it.
+    (
+        "undeclared-source--calibrated",
+        ("--preset", "undeclared-source", "--calibration", "present"),
+        {},
+    ),
+    (
+        "mostly-undeclared-source--calibrated",
+        ("--preset", "mostly-undeclared-source", "--calibration", "present"),
+        {},
+    ),
+    (
+        "mostly-synthetic-source--calibrated",
+        ("--preset", "mostly-synthetic-source", "--calibration", "present"),
+        {},
+    ),
+    (
+        "generated-answer-key--calibrated",
+        ("--preset", "generated-answer-key", "--calibration", "present"),
+        {},
+    ),
+    (
+        "mostly-generated-answer-key--calibrated",
+        ("--preset", "mostly-generated-answer-key", "--calibration", "present"),
+        {},
+    ),
+    (
+        "slow-scorer",
+        ("--preset", "slow-scorer"),
+        {"calibration_timeout": 5},
     ),
 )
 
@@ -510,6 +551,7 @@ def score_one(
     task_kind: str = "code-sql",
     input_field: str | None = None,
     expected_field: str | None = None,
+    calibration_timeout: int | None = None,
 ) -> dict[str, Any]:
     """Build one demo and score it the way the guide's opening gate scores it."""
     out = workspace / tag
@@ -612,7 +654,22 @@ def score_one(
                     "deterministic",
                     "--allow-execution",
                     "--json",
-                ],
+                ]
+                + (
+                    # The guide budgets a deterministic calibration at 75 seconds a
+                    # probe and caps it at 900, so a scorer that really is too slow
+                    # reaches the timeout question only after fifteen minutes of
+                    # waiting. `slow-scorer` is built to reach it, and making every
+                    # reproduction of this sweep wait a quarter of an hour to watch a
+                    # clock run out would be a poor trade for a cap that is about
+                    # cost. The budget is stated instead of endured: the scorer needs
+                    # 3 seconds a call and this allows 5 for the whole run, so the
+                    # timeout is reached for the same reason and in the same way,
+                    # and the card records the budget it was reached under.
+                    ["--timeout", str(calibration_timeout)]
+                    if calibration_timeout is not None
+                    else []
+                ),
                 project,
                 room / "03-calibration-stderr.txt",
                 room / "03-calibration.json",

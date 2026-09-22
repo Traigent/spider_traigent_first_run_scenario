@@ -744,6 +744,138 @@
       "calibration_passed": null
     },
     {
+      "tag": "mostly-undeclared-source",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 92,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-mostly-undeclared",
+          "ceiling": 70,
+          "blocks": false,
+          "action_kind": "declare-data-provenance",
+          "reason": "More than half of these rows were never observed: they are declared generated, or record no source this run can read and are scored as generated. Declare or re-label the source on any such row that was collected."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "mostly-synthetic-source",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 92,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-mostly-synthetic",
+          "ceiling": 70,
+          "blocks": false,
+          "action_kind": "connect-real-data",
+          "reason": "Most of the dataset is generated, so the result mostly measures invented examples rather than real traffic."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "generated-answer-key",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 93,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-generated-answer-key",
+          "ceiling": 74,
+          "blocks": false,
+          "action_kind": "review-answer-key",
+          "reason": "Every expected answer was written by a model, so a score measures agreement with that model rather than correctness."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "mostly-generated-answer-key",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 94,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-mostly-generated-answer-key",
+          "ceiling": 74,
+          "blocks": false,
+          "action_kind": "review-answer-key",
+          "reason": "180 of 300 expected answers were written by a model, so most of what this score is measured against is a model's opinion rather than an observed answer."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
       "tag": "split-by-database",
       "overall": 45,
       "band": "PARTIAL",
@@ -968,6 +1100,162 @@
       "declared_task_kind": "code-sql",
       "calibration_ran": false,
       "calibration_passed": null
+    },
+    {
+      "tag": "undeclared-source--calibrated",
+      "overall": 65,
+      "band": "WORKABLE",
+      "recommended_action": "declare-data-provenance",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 89,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-undeclared-provenance",
+          "ceiling": 65,
+          "blocks": false,
+          "action_kind": "declare-data-provenance",
+          "reason": "No row of this dataset was observed - every row is either declared generated, or records no source this run can read, and a row whose source it cannot read is scored as generated. Declare or re-label the source on any such row that was collected; if none was, this dataset is generated."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "mostly-undeclared-source--calibrated",
+      "overall": 70,
+      "band": "WORKABLE",
+      "recommended_action": "declare-data-provenance",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 92,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-mostly-undeclared",
+          "ceiling": 70,
+          "blocks": false,
+          "action_kind": "declare-data-provenance",
+          "reason": "More than half of these rows were never observed: they are declared generated, or record no source this run can read and are scored as generated. Declare or re-label the source on any such row that was collected."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "mostly-synthetic-source--calibrated",
+      "overall": 70,
+      "band": "WORKABLE",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 92,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-mostly-synthetic",
+          "ceiling": 70,
+          "blocks": false,
+          "action_kind": "connect-real-data",
+          "reason": "Most of the dataset is generated, so the result mostly measures invented examples rather than real traffic."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "generated-answer-key--calibrated",
+      "overall": 74,
+      "band": "WORKABLE",
+      "recommended_action": "review-answer-key",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 93,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-generated-answer-key",
+          "ceiling": 74,
+          "blocks": false,
+          "action_kind": "review-answer-key",
+          "reason": "Every expected answer was written by a model, so a score measures agreement with that model rather than correctness."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "mostly-generated-answer-key--calibrated",
+      "overall": 74,
+      "band": "WORKABLE",
+      "recommended_action": "review-answer-key",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 94,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-mostly-generated-answer-key",
+          "ceiling": 74,
+          "blocks": false,
+          "action_kind": "review-answer-key",
+          "reason": "180 of 300 expected answers were written by a model, so most of what this score is measured against is a model's opinion rather than an observed answer."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "slow-scorer",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "bound-evaluator-cost",
+      "status": "BLOCKED",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-timeout",
+          "ceiling": 45,
+          "blocks": true,
+          "action_kind": "bound-evaluator-cost",
+          "reason": "The evaluator did not finish within its timeout."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": false
     },
     {
       "tag": "grid-exact--code-sql",

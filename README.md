@@ -181,6 +181,11 @@ Presets are shorthand for the combinations worth having a name:
 | `raw-export` | the rows under Spider's own key names, as the benchmark exports them |
 | `torn-lines` | two lines of the data cut short, the way a stopped export leaves them |
 | `undeclared-source` | every row says where it came from in a word the guide does not know |
+| `mostly-undeclared-source` | most rows do, and the rest still say they were collected |
+| `mostly-synthetic-source` | most rows declare themselves written rather than collected |
+| `generated-answer-key` | every answer is declared model-written; the questions are real |
+| `mostly-generated-answer-key` | most answers are, and the rest were written by a person |
+| `slow-scorer` | the scorer is right and asks a service per row, so checking it runs long |
 | `opaque-scorer` | a scorer that calls a grading library the project does not carry |
 | `length-blind` | a scorer that compares the lengths of the two queries, and probes that catch it |
 | `two-agents` | a second agent beside the first, and a note saying which one to work on |
@@ -263,6 +268,10 @@ something. These are the states that make it show its work.
 | `raw-export` | 300 | the rows written under Spider's own names -- `question`, `query`, a top-level `db_id`, `metadata` as before -- which is what somebody who has the benchmark export as-is brings. `catalog.json` still keys on the question text. |
 | `torn-lines` | 30 | the `mini` draw with lines 10 and 20 cut off part-way -- what an export that stopped mid-write leaves. `demo.json` records which two, and `verify` checks that exactly those two fail to parse and every other line reads. |
 | `undeclared-source` | 300 | every row's `metadata.provenance` reads `spider-dev` instead of `real`: the name of the benchmark split the rows came from, which is what a person exporting them would write, and a word outside the guide's provenance vocabulary. |
+| `mostly-undeclared-source` | 300 | the same word on 180 of the 300 rows, the other 120 still reading `real`. The guide's provenance ladder has a rung at "more than half", so this is not the state above with less of it: it is `dataset-mostly-undeclared` at a ceiling of 70 where every row reads 65. |
+| `mostly-synthetic-source` | 300 | 180 rows declare `synthetic` and 120 declare `real`. Declared rather than silent, which is the other axis of the same ladder: the card names `dataset-mostly-synthetic`, and its recommended action is `proceed` rather than a request to declare anything. |
+| `generated-answer-key` | 300 | every row adds `metadata.output_provenance: model-generated`. The questions stay real and the provenance stays `real`; what the customer is declaring is that a model wrote the answers they are about to be scored against. |
+| `mostly-generated-answer-key` | 300 | the same declaration on 180 of the 300. The answer-key ladder has its own "more than half" rung, and the card names `dataset-mostly-generated-answer-key` with the count in its reason line. |
 | `wrong-wiring` | 300 | the scorer compares the question with the recorded answer and never looks at what the model produced. It runs, it returns a number, and every row ties at zero. |
 | `fake-ruler` | 300 | the scorer returns full marks for everything, so every configuration measures the same and a comparison between them separates nothing. |
 | `opaque-scorer` | 300 | the scorer hands both queries to `sqlgrade`, a grading library the project does not carry (`from sqlgrade.compare import QueryGrader`). It parses; it has never run here; no method can be declared for it, and `--calibration present` is refused for it because nothing could vouch for the probes. |
@@ -473,6 +482,11 @@ raises, `*` for one that blocks):
 | `holdout-only` | 45 | PARTIAL | `resplit-dataset` | `evaluator-unvalidated` 45 · `dataset-tuning-split-empty` 50\* | answers on the tuning side. The 45 is the evaluator ceiling; the block is the empty tuning split |
 | `leaky-split` | 45 | PARTIAL | `resplit-dataset` | `evaluator-unvalidated` 45 · `dataset-tune-holdout-overlap` 50\* · `dataset-repeated-rows` 89 | a disjoint split. The card names the six rows on both sides and offers to continue on the 300 that differ |
 | `undeclared-source` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-undeclared-provenance` 65 | the provenance word: `spider-dev` is "a word its vocabulary does not know", scored as generated, and the card asks for the source to be declared or re-labelled |
+| `mostly-undeclared-source` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-mostly-undeclared` 70 | the same word on 180 rows: the reading moves off `dataset-undeclared-provenance` onto `dataset-mostly-undeclared`, one rung up at 70. Uncalibrated the evaluator ceiling hides both -- see the calibrated pair below |
+| `mostly-synthetic-source` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-mostly-synthetic` 70 | `dataset-mostly-synthetic`, the declared arm of the same rung. The distinction between this and the row above is whether the customer said *what* the rows are or said nothing at all |
+| `generated-answer-key` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-generated-answer-key` 74 | `dataset-generated-answer-key` at 74: the questions are real and the ruler is a model's opinion |
+| `mostly-generated-answer-key` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-mostly-generated-answer-key` 74 | `dataset-mostly-generated-answer-key`, the rung the answer-key ladder gained so the cap could not turn on one row |
+| `slow-scorer` | 45 | PARTIAL | `bound-evaluator-cost` | `evaluator-timeout` 45\* | the scorer, and not because it is wrong. Calibration ran out of its budget, and the card asks for the cost to be bounded rather than for a repair |
 | `split-by-database` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 | nothing the card can see -- **`dataset-split-by-task-family` does not fire.** See below |
 | `two-agents` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 | nothing: the card is byte-identical to `ready`'s. The opening credits `agent.py`'s four settings and never mentions `sql_explainer/` or `PROJECT.md` |
 

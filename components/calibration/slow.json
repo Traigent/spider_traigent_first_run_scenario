@@ -1,0 +1,114 @@
+[
+  {
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
+    "name": "one aggregate over one table - the recorded query respaced, upper-cased and given a semicolon",
+    "score_mode": "binary",
+    "outcome_classes": [
+      "identical text scores 1.0",
+      "a whitespace/case/trailing-semicolon variant is accepted",
+      "the probe the text comparator accepts on quoting is NOT accepted here",
+      "an unrelated query is rejected"
+    ],
+    "expected": "SELECT count(DISTINCT professional_id) FROM Treatments",
+    "input_data": {
+      "question": "Find the number of professionals who have ever treated dogs."
+    },
+    "metadata": {
+      "row_id": "spider-dev-0402",
+      "db_id": "dog_kennels",
+      "split": "tuning",
+      "scoring_path": "review-service"
+    },
+    "probes": {
+      "good": "SELECT count(DISTINCT professional_id) FROM Treatments",
+      "equivalent_good": "SELECT  COUNT(DISTINCT  PROFESSIONAL_ID)  FROM  TREATMENTS ;",
+      "partial": "SELECT count(professional_id) FROM Treatments",
+      "bad": "SELECT count(DISTINCT dog_id) FROM Treatments"
+    }
+  },
+  {
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
+    "name": "two columns with a quoted value - the recorded query respaced, upper-cased and given a semicolon",
+    "score_mode": "binary",
+    "outcome_classes": [
+      "identical text scores 1.0",
+      "a whitespace/case/trailing-semicolon variant is accepted",
+      "the probe the text comparator accepts on quoting is NOT accepted here",
+      "an unrelated query is rejected"
+    ],
+    "expected": "SELECT Population ,  LifeExpectancy FROM country WHERE Name  =  \"Brazil\"",
+    "input_data": {
+      "question": "Give me Brazil’s population and life expectancies."
+    },
+    "metadata": {
+      "row_id": "spider-dev-0471",
+      "db_id": "world_1",
+      "split": "tuning",
+      "scoring_path": "review-service"
+    },
+    "probes": {
+      "good": "SELECT Population ,  LifeExpectancy FROM country WHERE Name  =  \"Brazil\"",
+      "equivalent_good": "SELECT  POPULATION  ,  LIFEEXPECTANCY  FROM  COUNTRY  WHERE  NAME  =  \"BRAZIL\" ;",
+      "partial": "SELECT Population , LifeExpectancy FROM country WHERE Name = 'brazil'",
+      "bad": "SELECT Population , LifeExpectancy FROM country WHERE Name = 'Argentina'"
+    }
+  },
+  {
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
+    "name": "two aggregates in a list - the recorded query respaced, upper-cased and given a semicolon",
+    "score_mode": "binary",
+    "outcome_classes": [
+      "identical text scores 1.0",
+      "a whitespace/case/trailing-semicolon variant is accepted",
+      "the probe the text comparator accepts on quoting is NOT accepted here",
+      "an unrelated query is rejected"
+    ],
+    "expected": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
+    "input_data": {
+      "question": "What is the total population and maximum GNP in Asia?"
+    },
+    "metadata": {
+      "row_id": "spider-dev-0362",
+      "db_id": "world_1",
+      "split": "tuning",
+      "scoring_path": "review-service"
+    },
+    "probes": {
+      "good": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
+      "equivalent_good": "SELECT  SUM(POPULATION)  ,  MAX(GNP)  FROM  COUNTRY  WHERE  CONTINENT  =  \"ASIA\" ;",
+      "partial": "SELECT sum(Population), max(GNP) FROM country WHERE Continent = 'asia'",
+      "bad": "SELECT sum(Population) FROM country WHERE Continent = 'Asia'"
+    }
+  },
+  {
+    "SPDX-FileCopyrightText": "2018 Yu et al., Spider 1.0 contributors",
+    "SPDX-License-Identifier": "Apache-2.0 AND CC-BY-SA-4.0",
+    "name": "a not-equal filter - the recorded query respaced, upper-cased and given a semicolon",
+    "score_mode": "binary",
+    "outcome_classes": [
+      "identical text scores 1.0",
+      "a whitespace/case/trailing-semicolon variant is accepted",
+      "the probe the text comparator accepts on quoting is NOT accepted here",
+      "an unrelated query is rejected"
+    ],
+    "expected": "SELECT Name FROM singer WHERE Citizenship != \"France\"",
+    "input_data": {
+      "question": "What are the names of the singers who are not French citizens?"
+    },
+    "metadata": {
+      "row_id": "spider-dev-0086",
+      "db_id": "singer",
+      "split": "tuning",
+      "scoring_path": "review-service"
+    },
+    "probes": {
+      "good": "SELECT Name FROM singer WHERE Citizenship != \"France\"",
+      "equivalent_good": "SELECT  NAME  FROM  SINGER  WHERE  CITIZENSHIP  !=  \"FRANCE\" ;",
+      "partial": "SELECT s.Name FROM singer AS s WHERE s.Citizenship <> 'France'",
+      "bad": "SELECT Name FROM singer WHERE Citizenship = 'France'"
+    }
+  }
+]

@@ -20,6 +20,21 @@ ones in the training split, so a model cannot succeed by memorising one schema.
 
 This is real recorded data. Not generated, not synthetic, not written for this repository.
 
+That sentence is about the bytes in `spider/`, and it stays true of every demo built from
+them. It is not a statement about the `provenance` field on a row. Five states write on that
+field -- `undeclared` and `mostly-undeclared` put a word there the guide does not recognise,
+`mostly-synthetic` puts `synthetic` there, and `generated-answers` and
+`mostly-generated-answers` add `output_provenance: model-generated` beside it -- and what
+they are writing is the *customer's own declaration about their own rows*, which is exactly
+the thing the guide's provenance checks read. A demo in one of those states carries rows that
+say they were written; the rows underneath are the same recorded Spider rows as every other
+state's, and `ATTRIBUTION.txt` ships with them unchanged.
+
+The distinction matters because the two claims have different audiences. The guide is being
+shown a customer who says something about their data, and the person reading this repository
+is being told where the data actually came from. Neither sentence is allowed to be written in
+the other's place.
+
 ## Licence
 
 **CC BY-SA 4.0.** The code in this repository is Apache-2.0; the data is not, and the two

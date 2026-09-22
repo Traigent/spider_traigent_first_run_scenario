@@ -113,7 +113,17 @@ class TheSweepNamesEveryPreset(unittest.TestCase):
         # module up by name while the class is being made.
         sys.modules[located.name] = builder
         located.loader.exec_module(builder)
-        self.assertEqual(set(harness.PRESETS), set(builder.PRESETS))
+        # A preset may be named by the sweep's plain list or by a variant, which is
+        # how one carries an option -- `slow-scorer` states the calibration budget it
+        # is measured under rather than making every reproduction wait fifteen minutes
+        # for the default. Either counts as named; neither is a way to go unmeasured.
+        by_variant = {
+            flags[index + 1]
+            for _, flags, _ in harness.VARIANTS
+            for index, flag in enumerate(flags)
+            if flag == "--preset" and index + 1 < len(flags)
+        }
+        self.assertEqual(set(harness.PRESETS) | by_variant, set(builder.PRESETS))
 
 
 # The cards whose readiness card is byte-identical to another's, written down so

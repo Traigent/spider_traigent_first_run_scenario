@@ -117,6 +117,35 @@ PRESET_TABLE = {
     "raw-export": ("ready", "raw-export", "exact-match", "none", "none"),
     "torn-lines": ("ready", "torn", "exact-match", "none", "none"),
     "undeclared-source": ("ready", "undeclared", "exact-match", "none", "none"),
+    "mostly-undeclared-source": (
+        "ready",
+        "mostly-undeclared",
+        "exact-match",
+        "none",
+        "none",
+    ),
+    "mostly-synthetic-source": (
+        "ready",
+        "mostly-synthetic",
+        "exact-match",
+        "none",
+        "none",
+    ),
+    "generated-answer-key": (
+        "ready",
+        "generated-answers",
+        "exact-match",
+        "none",
+        "none",
+    ),
+    "mostly-generated-answer-key": (
+        "ready",
+        "mostly-generated-answers",
+        "exact-match",
+        "none",
+        "none",
+    ),
+    "slow-scorer": ("ready", "ready", "slow", "present", "none"),
     "opaque-scorer": ("ready", "ready", "opaque", "none", "none"),
     "length-blind": ("ready", "ready", "length-blind", "present", "none"),
     "two-agents": ("two-agents", "ready", "exact-match", "none", "none"),
@@ -131,6 +160,7 @@ EVALUATOR_FILENAMES = {
     "swapped": "swapped.py",
     "opaque": "opaque.py",
     "length-blind": "length_blind.py",
+    "slow": "slow.py",
 }
 
 # And the same for the agents. Comparing the shipped file with `build.agent_file(...)` was
@@ -156,6 +186,9 @@ EXPECTED_EVALUATOR_METHOD = {
     # method, and a comparison of lengths is not one of the methods the guide names.
     "opaque": None,
     "length-blind": None,
+    # A method IS honest here: the comparison really is a normalised text match. What is
+    # wrong with this scorer is what it costs, not what it compares.
+    "slow": "normalized-exact",
 }
 # Whether each evaluator executes the model's output, as the manifest records it. `None`
 # is "unknown", and it is honest for exactly one scorer: the one whose grader is not here.
@@ -166,6 +199,8 @@ EXPECTED_EXECUTES = {
     "swapped": False,
     "opaque": None,
     "length-blind": False,
+    # It sleeps; it does not run the model's query.
+    "slow": False,
 }
 
 # The version of the agent's dependency a project environment is built with. Written out

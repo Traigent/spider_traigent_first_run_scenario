@@ -186,10 +186,12 @@ one of them a word from the blinding roster appearing in the guide's own prose:
 
 That roster -- `preset`, `fixture`, `plant`, `scenario`, `deliberate`, `is observed`,
 `generated demo`, `spider_traigent`, `first_run_scenario`, `build.py`, `demo.json`, plus every
-hyphenated preset and component name longer than six characters (twenty-six of them at
-twenty-six presets, from `agent-and-logs` to `wrong-wiring`; the nine ported presets added
-`holdout-labelled`, `holdout-only`, `leaky-split`, `length-blind`, `opaque-scorer`,
-`raw-export`, `split-by-database`, `torn-lines`, `two-agents` and `undeclared-source`) --
+hyphenated preset and component name longer than six characters (from `agent-and-logs` to
+`wrong-wiring`; the nine ported presets added `holdout-labelled`, `holdout-only`,
+`leaky-split`, `length-blind`, `opaque-scorer`, `raw-export`, `split-by-database`,
+`torn-lines`, `two-agents` and `undeclared-source`, and the five provenance and cost states
+after them added `generated-answer-key`, `mostly-generated-answer-key`,
+`mostly-synthetic-source`, `mostly-undeclared-source` and `slow-scorer`) --
 exists to catch *this repository* leaking into a project. The first-run guide is a document about running first-run evaluations, so it uses
 those words for their ordinary meaning: `readiness.py` has a `--preset`-shaped vocabulary,
 `run-safety.md` says "deliberate", `component-creation.md` says "fixture", and `hand-written`
