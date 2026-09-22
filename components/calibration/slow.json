@@ -6,8 +6,8 @@
     "score_mode": "binary",
     "outcome_classes": [
       "identical text scores 1.0",
-      "a whitespace/case/trailing-semicolon variant is accepted",
-      "the probe the text comparator accepts on quoting is NOT accepted here",
+      "a variant differing only in spacing, keyword case and a trailing semicolon is accepted",
+      "a filter on a different value is rejected, because case inside a quoted string is kept",
       "an unrelated query is rejected"
     ],
     "expected": "SELECT count(DISTINCT professional_id) FROM Treatments",
@@ -34,8 +34,8 @@
     "score_mode": "binary",
     "outcome_classes": [
       "identical text scores 1.0",
-      "a whitespace/case/trailing-semicolon variant is accepted",
-      "the probe the text comparator accepts on quoting is NOT accepted here",
+      "a variant differing only in spacing, keyword case and a trailing semicolon is accepted",
+      "a filter on a different value is rejected, because case inside a quoted string is kept",
       "an unrelated query is rejected"
     ],
     "expected": "SELECT Population ,  LifeExpectancy FROM country WHERE Name  =  \"Brazil\"",
@@ -50,7 +50,7 @@
     },
     "probes": {
       "good": "SELECT Population ,  LifeExpectancy FROM country WHERE Name  =  \"Brazil\"",
-      "equivalent_good": "SELECT  POPULATION  ,  LIFEEXPECTANCY  FROM  COUNTRY  WHERE  NAME  =  \"BRAZIL\" ;",
+      "equivalent_good": "SELECT  POPULATION  ,  LIFEEXPECTANCY  FROM  COUNTRY  WHERE  NAME  =  \"Brazil\" ;",
       "partial": "SELECT Population , LifeExpectancy FROM country WHERE Name = 'brazil'",
       "bad": "SELECT Population , LifeExpectancy FROM country WHERE Name = 'Argentina'"
     }
@@ -62,8 +62,8 @@
     "score_mode": "binary",
     "outcome_classes": [
       "identical text scores 1.0",
-      "a whitespace/case/trailing-semicolon variant is accepted",
-      "the probe the text comparator accepts on quoting is NOT accepted here",
+      "a variant differing only in spacing, keyword case and a trailing semicolon is accepted",
+      "a filter on a different value is rejected, because case inside a quoted string is kept",
       "an unrelated query is rejected"
     ],
     "expected": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
@@ -78,7 +78,7 @@
     },
     "probes": {
       "good": "SELECT sum(Population) ,  max(GNP) FROM country WHERE Continent  =  \"Asia\"",
-      "equivalent_good": "SELECT  SUM(POPULATION)  ,  MAX(GNP)  FROM  COUNTRY  WHERE  CONTINENT  =  \"ASIA\" ;",
+      "equivalent_good": "SELECT  SUM(POPULATION)  ,  MAX(GNP)  FROM  COUNTRY  WHERE  CONTINENT  =  \"Asia\" ;",
       "partial": "SELECT sum(Population), max(GNP) FROM country WHERE Continent = 'asia'",
       "bad": "SELECT sum(Population) FROM country WHERE Continent = 'Asia'"
     }
@@ -90,8 +90,8 @@
     "score_mode": "binary",
     "outcome_classes": [
       "identical text scores 1.0",
-      "a whitespace/case/trailing-semicolon variant is accepted",
-      "the probe the text comparator accepts on quoting is NOT accepted here",
+      "a variant differing only in spacing, keyword case and a trailing semicolon is accepted",
+      "a filter on a different value is rejected, because case inside a quoted string is kept",
       "an unrelated query is rejected"
     ],
     "expected": "SELECT Name FROM singer WHERE Citizenship != \"France\"",
@@ -106,7 +106,7 @@
     },
     "probes": {
       "good": "SELECT Name FROM singer WHERE Citizenship != \"France\"",
-      "equivalent_good": "SELECT  NAME  FROM  SINGER  WHERE  CITIZENSHIP  !=  \"FRANCE\" ;",
+      "equivalent_good": "SELECT  NAME  FROM  SINGER  WHERE  CITIZENSHIP  !=  \"France\" ;",
       "partial": "SELECT s.Name FROM singer AS s WHERE s.Citizenship <> 'France'",
       "bad": "SELECT Name FROM singer WHERE Citizenship = 'France'"
     }

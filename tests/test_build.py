@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import collections
+import importlib.util
 import json
 import os
 import re
@@ -92,6 +94,12 @@ EXPECTED_SPLIT_BY_BAND = {
 # which passes whatever they are changed to: `fake-ruler` shipping a working scorer, or
 # `wrong-wiring` shipping the honest one, would have been invisible. The `venv` column is
 # what `suite` builds -- none of the presets asks for an environment.
+# The budget the sweep measures `slow-scorer` under, stated here rather than read out
+# of the harness: a number taken from the thing it is checking agrees with it whatever
+# it says. `docs/measurements/score_bank.py` passes this as `--timeout`, and one call
+# of the shipped scorer has to outlast it.
+SLOW_SCORER_CALIBRATION_BUDGET_SECONDS = 5
+
 PRESET_TABLE = {
     #                    agent       dataset          eval           calibration  venv
     "agent-and-logs": ("ready", "unlabeled", "missing", "none", "none"),
@@ -2278,6 +2286,217 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                 )
                 self.assertEqual(len(rows), build.SECOND_AGENT_ROWS)
 
+    def test_a_mostly_state_declares_on_most_of_the_rows_and_not_all(self) -> None:
+        """ "Mostly" is the whole difference, and nothing was checking it.
+
+        The guide's provenance and answer-key ladders each have a rung at more
+        than half, which is why these states exist beside the all-rows ones.
+        Rewriting `mostly-undeclared` to touch all three hundred rows made it a
+        duplicate of `undeclared` with the suite green and the README still
+        reading "180 of the 300"; so did moving `MOSTLY_SHARE`, and so did
+        replacing the band-balanced draw with the front of the list.
+        """
+
+        # The share the guide's two ladders put their rung at. Written here as the
+        # guide's number, not as ours: a state has to sit above it to be read as
+        # "most", and `MOSTLY_SHARE` is only correct while it does.
+        guide_rung = 0.5
+        for state, declared_key, declared_value in (
+            ("mostly-undeclared", "provenance", build.UNDECLARED_PROVENANCE),
+            ("mostly-synthetic", "provenance", build.SYNTHETIC_PROVENANCE),
+            (
+                "mostly-generated-answers",
+                build.GENERATED_ANSWER_KEY,
+                build.GENERATED_ANSWER_PROVENANCE,
+            ),
+        ):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"mostly_{state}"
+                if not out.exists():
+                    built = run_build("demo", "--dataset", state, "--out", str(out))
+                    self.assertEqual(built.returncode, 0, built.stderr)
+                rows = [
+                    json.loads(line)
+                    for line in (out / "project" / "dataset.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                    if line.strip()
+                ]
+                touched = [
+                    row
+                    for row in rows
+                    if row["metadata"].get(declared_key) == declared_value
+                ]
+                self.assertEqual(180, len(touched), "the declared count moved")
+                self.assertEqual(300, len(rows))
+                self.assertGreater(
+                    len(touched) / len(rows),
+                    guide_rung,
+                    "below the guide's rung this is not a `mostly-` reading at all",
+                )
+                self.assertLess(
+                    len(touched),
+                    len(rows),
+                    "touching every row makes this the all-rows state under a "
+                    "different name",
+                )
+                bands = collections.Counter(
+                    row["metadata"]["difficulty"] for row in touched
+                )
+                self.assertEqual(
+                    1,
+                    len(set(bands.values())),
+                    f"the draw is meant to be band-balanced and reads {dict(bands)}",
+                )
+
+    def test_all_rows_states_really_declare_on_all_of_them(self) -> None:
+        """The other end of the same pair, for the same reason."""
+
+        out = Path(self.workspace) / "all_generated_answers"
+        if not out.exists():
+            built = run_build(
+                "demo", "--dataset", "generated-answers", "--out", str(out)
+            )
+            self.assertEqual(built.returncode, 0, built.stderr)
+        rows = [
+            json.loads(line)
+            for line in (out / "project" / "dataset.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(
+            len(rows),
+            sum(
+                1
+                for row in rows
+                if row["metadata"].get(build.GENERATED_ANSWER_KEY)
+                == build.GENERATED_ANSWER_PROVENANCE
+            ),
+        )
+
+    def test_the_answer_key_field_is_one_the_guide_reads(self) -> None:
+        """A declaration in a field nothing reads declares nothing.
+
+        `preflight.py`'s `row_output_provenance` looks at `output_provenance` and
+        `output_source`, at the row's top level or inside `metadata`. Renaming
+        this constant to anything else leaves both answer-key states writing a
+        field the guide never opens -- their cards would quietly stop reading 74
+        and nothing in the suite would notice.
+        """
+
+        self.assertIn(
+            build.GENERATED_ANSWER_KEY, ("output_provenance", "output_source")
+        )
+
+    def test_the_slow_scorer_is_slow_enough_to_reach_the_timeout(self) -> None:
+        """The state is "too slow for the budget", so the two have to relate.
+
+        `SECONDS_PER_CALL` set to zero leaves a preset called `slow-scorer` that
+        is not slow, and a committed card recording `timed_out: true` that can
+        no longer be reproduced -- with nothing red.
+        """
+
+        located = importlib.util.spec_from_file_location(
+            "_slow_timing", REPO_ROOT / "components" / "evaluator" / "slow.py"
+        )
+        assert located is not None and located.loader is not None
+        scorer = importlib.util.module_from_spec(located)
+        sys.modules[located.name] = scorer
+        located.loader.exec_module(scorer)
+        cases = json.loads(
+            (REPO_ROOT / "components" / "calibration" / "slow.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        # The guide makes at least one call per shipped probe, and more: a
+        # deterministic case gets supplemental probes on top of the four in the
+        # file. Counting only the four is the conservative direction -- if even
+        # that exceeds the budget, the real run does too.
+        calls = sum(len(case["probes"]) for case in cases)
+        self.assertGreater(
+            calls * scorer.SECONDS_PER_CALL,
+            SLOW_SCORER_CALIBRATION_BUDGET_SECONDS,
+            "checking this scorer has to outlast the budget the sweep allows, or "
+            "the timeout the committed card records is not reached",
+        )
+
+    def test_the_slow_scorer_keeps_the_case_inside_a_quoted_value(self) -> None:
+        """The rule `exact_match.py` states, applied to the scorer beside it.
+
+        "Case inside a quoted string is kept, because 'France' and 'france' are
+        different values even though SELECT and select are the same keyword."
+        The first version of the slow scorer folded the whole query in one
+        `translate`, which is the tempting one-liner and re-introduced exactly
+        the behaviour that docstring argues down -- on the same example.
+        """
+
+        located = importlib.util.spec_from_file_location(
+            "_slow", REPO_ROOT / "components" / "evaluator" / "slow.py"
+        )
+        assert located is not None and located.loader is not None
+        scorer = importlib.util.module_from_spec(located)
+        sys.modules[located.name] = scorer
+        located.loader.exec_module(scorer)
+        scorer.SECONDS_PER_CALL = 0.0
+
+        recorded = "SELECT name FROM singer WHERE country != 'France'"
+        self.assertEqual(
+            0.0,
+            scorer.score("SELECT name FROM singer WHERE country != 'france'", recorded),
+            "a filter on a different value is not the same answer",
+        )
+        self.assertEqual(
+            1.0,
+            scorer.score(
+                "select  NAME from SINGER where COUNTRY != 'France' ;", recorded
+            ),
+            "keyword case, spacing and a trailing semicolon still do not matter",
+        )
+
+    def test_a_probe_called_equivalent_returns_the_same_rows(self) -> None:
+        """A text probe's claim is checkable by running it, so run it.
+
+        `equivalent_good` asserts that a re-spelling of the recorded query is
+        the same answer. Nothing was checking that against the database, and a
+        probe file written by the same hand as the scorer agrees with the
+        scorer by construction: the first `slow.json` declared four such
+        probes, three of which returned different rows -- one of them none at
+        all, and one re-admitting the French singer a `!= 'France'` filter
+        exists to exclude. Both the scorer and its probes said 1.0.
+        """
+
+        databases = REPO_ROOT / "spider" / "databases"
+        checked = 0
+        for name in ("exact_match.json", "slow.json"):
+            cases = json.loads(
+                (REPO_ROOT / "components" / "calibration" / name).read_text(
+                    encoding="utf-8"
+                )
+            )
+            for case in cases:
+                database = case["metadata"]["db_id"]
+                path = databases / database / f"{database}.sqlite"
+                self.assertTrue(path.is_file(), f"{name}: no database for {database}")
+                connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+                try:
+                    expected = connection.execute(case["expected"]).fetchall()
+                    for probe in ("good", "equivalent_good"):
+                        with self.subTest(
+                            file=name, row=case["metadata"]["row_id"], probe=probe
+                        ):
+                            rows = connection.execute(case["probes"][probe]).fetchall()
+                            self.assertEqual(
+                                expected,
+                                rows,
+                                f"{name}: {probe} for {case['metadata']['row_id']} is "
+                                f"declared the same answer and returns different rows",
+                            )
+                            checked += 1
+                finally:
+                    connection.close()
+        self.assertGreater(checked, 0, "no probe was executed, so nothing was checked")
+
     def test_every_damage_detail_field_is_checked_against_the_rows(self) -> None:
         """A record that restates a constant can restate the wrong one.
 
@@ -2370,6 +2589,34 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                 {row["metadata"]["split"] for row in copies},
             )
 
+        for state, preset, key, value in (
+            ("mostly-undeclared", "mostly-undeclared-source", "provenance", None),
+            ("mostly-synthetic", "mostly-synthetic-source", "provenance", None),
+            ("generated-answers", "generated-answer-key", "output_provenance", None),
+            (
+                "mostly-generated-answers",
+                "mostly-generated-answer-key",
+                "output_provenance",
+                None,
+            ),
+        ):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"damage_detail_{state}"
+                if not out.exists():
+                    built = run_build("demo", "--preset", preset, "--out", str(out))
+                    self.assertEqual(built.returncode, 0, built.stderr)
+                detail = detail_of(out)
+                rows = rows_of(out)
+                declared = detail.get("provenance") or detail.get("output_provenance")
+                counted = sum(1 for row in rows if row["metadata"].get(key) == declared)
+                self.assertEqual(detail["declared_rows"], counted)
+                self.assertEqual(detail["of_rows"], len(rows))
+                self.assertNotEqual(
+                    detail["slice_says"],
+                    declared,
+                    "the record says the slice already read this, which it did not",
+                )
+
         with self.subTest(dataset="wrong-answers"):
             out = Path(self.workspace) / "damage_detail_wrong_answers"
             built = run_build("demo", "--preset", "wrong-answers", "--out", str(out))
@@ -2443,6 +2690,110 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                 self.assertIn("withholds the answer on", result.stderr)
                 self.assertIn(withheld, result.stderr)
                 self.assertFalse(out.exists(), f"{out} was left behind")
+
+    def test_every_metadata_key_is_classified_as_structure_or_declaration(
+        self,
+    ) -> None:
+        """A field in neither set is a field nobody decided about.
+
+        The second agent mirrors declarations and not structure, so the split
+        decides what a sibling file repeats. Deriving one side from the other
+        swept the row's whole CREATE TABLE block into a file with no use for
+        it; naming both sides only helps while every key is in one of them.
+        """
+
+        seen: set[str] = set()
+        for state in (
+            "ready",
+            "undeclared",
+            "mostly-undeclared",
+            "mostly-synthetic",
+            "generated-answers",
+            "mostly-generated-answers",
+        ):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"classified_{state}"
+                if not out.exists():
+                    built = run_build("demo", "--dataset", state, "--out", str(out))
+                    self.assertEqual(built.returncode, 0, built.stderr)
+                for line in (
+                    (out / "project" / "dataset.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                ):
+                    if line.strip():
+                        seen |= set(json.loads(line)["metadata"])
+        unclassified = sorted(
+            seen - build.STRUCTURAL_ROW_FIELDS - build.DECLARATION_ROW_FIELDS
+        )
+        self.assertEqual(
+            [],
+            unclassified,
+            "these metadata keys ship and are in neither named set, so nothing "
+            "has decided whether a second file should repeat them",
+        )
+        self.assertTrue(seen & build.DECLARATION_ROW_FIELDS, "nothing was read")
+
+    def test_a_second_agent_repeats_every_declaration_not_just_provenance(
+        self,
+    ) -> None:
+        """The mirror is over the class, because the class grew.
+
+        The first version of this mirror named `provenance`, which was the only
+        declaration there was. `generated-answers` then declared on
+        `output_provenance` and the contradiction came straight back: one SQL
+        string in two files, one saying a model wrote the answer and one saying
+        nothing, with `verify` reporting `ok`.
+        """
+
+        for state in (
+            "undeclared",
+            "mostly-undeclared",
+            "mostly-synthetic",
+            "generated-answers",
+            "mostly-generated-answers",
+        ):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"two_agents_declarations_{state}"
+                built = run_build(
+                    "demo",
+                    "--agent",
+                    "two-agents",
+                    "--dataset",
+                    state,
+                    "--out",
+                    str(out),
+                )
+                self.assertEqual(built.returncode, 0, built.stderr)
+                shipped = {
+                    row["metadata"]["id"]: row["metadata"]
+                    for row in (
+                        json.loads(line)
+                        for line in (out / "project" / "dataset.jsonl")
+                        .read_text(encoding="utf-8")
+                        .splitlines()
+                        if line.strip()
+                    )
+                }
+                sibling = [
+                    json.loads(line)
+                    for line in (out / "project" / "sql_explainer" / "dataset.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                    if line.strip()
+                ]
+                self.assertTrue(sibling)
+                for row in sibling:
+                    beside = shipped[row["metadata"]["id"]]
+                    for key, value in beside.items():
+                        if key not in build.DECLARATION_ROW_FIELDS:
+                            continue
+                        self.assertEqual(
+                            value,
+                            row["metadata"].get(key),
+                            f"{state}: the two files disagree about {key} for "
+                            f"{row['metadata']['id']}",
+                        )
 
     def test_a_second_agent_declares_the_provenance_the_dataset_declares(self) -> None:
         """`undeclared` rewrites every row's provenance; the sibling must follow.

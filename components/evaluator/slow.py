@@ -1,10 +1,15 @@
 """Scores a generated query by sending it to the review service, one row at a time.
 
-The comparison itself is ordinary: whitespace collapsed, keywords folded to lower
-case, a trailing semicolon dropped, and then the two queries have to read the
-same. What is not ordinary is where it happens. The desk's review service holds
-the canonical normalisation rules, so this scorer asks it rather than keeping a
-second copy that would drift, and the service answers one row at a time.
+The comparison itself is ordinary: whitespace collapsed, case folded OUTSIDE
+quoted strings, a trailing semicolon dropped, and then the two queries have to
+read the same. Case inside a quoted string is kept, because 'France' and
+'france' are different values even though SELECT and select are the same
+keyword -- the desk learned that the hard way when a report quietly started
+including a French singer a filter was written to exclude.
+
+What is not ordinary is where the comparison happens. The desk's review service
+holds the canonical rules, so this scorer asks it rather than keeping a second
+copy that would drift, and the service answers one query at a time.
 
 `SECONDS_PER_CALL` is what that round trip costs us in practice. It is the
 number to change if the service gets faster; it is not a retry or a backoff, and
@@ -20,9 +25,33 @@ _FOLD_CASE = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuv
 
 
 def _normalise(query):
-    """The query as the review service canonicalises it."""
-    folded = query.translate(_FOLD_CASE)
-    return " ".join(folded.split()).strip().rstrip(";").strip()
+    """The query as the review service canonicalises it.
+
+    Case folds outside quoted strings and is kept inside them. Folding the whole
+    string is the tempting one-liner and it is wrong: it makes a query that
+    filters on 'France' equal to one that filters on 'france', and those return
+    different rows.
+    """
+    pieces = []
+    rest = query
+    while rest:
+        quote_at = min(
+            (rest.find(q) for q in ("'", '"') if rest.find(q) != -1),
+            default=-1,
+        )
+        if quote_at == -1:
+            pieces.append(rest.translate(_FOLD_CASE))
+            break
+        pieces.append(rest[:quote_at].translate(_FOLD_CASE))
+        closing = rest[quote_at]
+        end = rest.find(closing, quote_at + 1)
+        if end == -1:
+            # Unclosed: the rest is one value, and folding it would change it.
+            pieces.append(rest[quote_at:])
+            break
+        pieces.append(rest[quote_at : end + 1])
+        rest = rest[end + 1 :]
+    return " ".join("".join(pieces).split()).strip().rstrip(";").strip()
 
 
 def _review(candidate, recorded):

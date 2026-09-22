@@ -315,6 +315,17 @@ GENERATED_ANSWER_PROVENANCE = "model-generated"
 # `output_provenance` at the row's top level or inside `metadata`; this repository writes
 # everything but `input` and `output` in `metadata`, so it uses that one.
 GENERATED_ANSWER_KEY = "output_provenance"
+# The two halves of a row's metadata. `STRUCTURAL_ROW_FIELDS` say where the row sits and
+# what it is about; `DECLARATION_ROW_FIELDS` are the customer speaking about their own
+# rows, which is what the guide's provenance and answer-key checks read.
+#
+# The split is named rather than derived, and `check_row_fields` refuses a row carrying a
+# key in neither set. Deriving it -- "a declaration is anything that is not structural" --
+# was tried and is wrong in the expensive direction: it swept `schema`, the row's whole
+# CREATE TABLE block, into a file that has no use for it. Naming both sides means a new
+# field cannot be quietly assumed into either one.
+STRUCTURAL_ROW_FIELDS = frozenset({"id", "db_id", "difficulty", "split", "schema"})
+DECLARATION_ROW_FIELDS = frozenset({"provenance", GENERATED_ANSWER_KEY})
 
 # Where a project keeps the probe answers it uses to check its own scorer. The guide reads
 # this path, and a project that has one can have its evaluator validated at the opening gate
@@ -982,7 +993,7 @@ def project_row(row: dict[str, Any], state: str) -> dict[str, Any]:
 
 
 def declare_on_most(
-    rows: Sequence[dict[str, Any]], field: str, value: str
+    rows: Sequence[dict[str, Any]], declaration: str, value: str
 ) -> list[dict[str, Any]]:
     """Write one declaration onto most of the rows, and leave the rest alone.
 
@@ -1003,7 +1014,7 @@ def declare_on_most(
     }
     return [
         (
-            {**row, "metadata": {**row["metadata"], field: value}}
+            {**row, "metadata": {**row["metadata"], declaration: value}}
             if row["metadata"]["id"] in touched
             else {**row, "metadata": dict(row["metadata"])}
         )
@@ -1654,12 +1665,24 @@ class Plan:
         if not self.ships_second_agent:
             return []
         source = self.undamaged_rows or self.rows
-        # Provenance is read from the rows AS SHIPPED, not from the undamaged draw.
-        # `undeclared` rewrites every row's provenance, and a second file still
-        # saying `real` for twenty of those ids contradicts, inside one project,
-        # the very thing that state exists to declare.
+        # Every declaration is read from the rows AS SHIPPED, not from the undamaged
+        # draw. A state that rewrites what a row says about itself and a second file
+        # still saying the old thing for twenty of those ids contradict each other
+        # inside one project, which is the opposite of what the state is for.
+        #
+        # Mirrored by the whole CLASS rather than one field at a time. The first
+        # version of this named `provenance`, which was the only declaration there
+        # was; `generated-answers` then declared on `output_provenance` and the
+        # contradiction came straight back, in a second file the reader can hold
+        # beside the first. Anything that is not structure is a declaration, so a
+        # state that invents a third field is carried without editing this.
         declared = {
-            row["metadata"]["id"]: row["metadata"]["provenance"] for row in self.rows
+            row["metadata"]["id"]: {
+                key: value
+                for key, value in row["metadata"].items()
+                if key in DECLARATION_ROW_FIELDS
+            }
+            for row in self.rows
         }
         return [
             {
@@ -1668,8 +1691,13 @@ class Plan:
                     "db_id": row["metadata"]["db_id"],
                     "difficulty": row["metadata"]["difficulty"],
                     "id": row["metadata"]["id"],
-                    "provenance": declared.get(
-                        row["metadata"]["id"], row["metadata"]["provenance"]
+                    **declared.get(
+                        row["metadata"]["id"],
+                        {
+                            key: value
+                            for key, value in row["metadata"].items()
+                            if key in DECLARATION_ROW_FIELDS
+                        },
                     ),
                 },
             }

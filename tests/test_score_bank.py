@@ -190,6 +190,44 @@ class TheCommittedCardsAreWhatTheDocumentsSay(unittest.TestCase):
         )
 
 
+class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):
+    """`slow-scorer` is measured under a stated `--timeout`, and that is a claim.
+
+    The guide budgets a deterministic calibration at 900 seconds, so reaching
+    the timeout question the default way costs a quarter of an hour of every
+    reproduction. The sweep passes a small budget instead. Deleting that branch
+    leaves the variant reading the default, the card's recorded
+    `timeout_seconds` no longer describing the run that produced it, and
+    nothing red.
+    """
+
+    def test_the_slow_scorer_variant_carries_a_timeout(self) -> None:
+        harness = load_harness()
+        options = {tag: opts for tag, _, opts in harness.VARIANTS}
+        self.assertIn("slow-scorer", options)
+        self.assertIn("calibration_timeout", options["slow-scorer"])
+        self.assertGreater(options["slow-scorer"]["calibration_timeout"], 0)
+
+    def test_the_recorded_card_was_taken_under_that_budget(self) -> None:
+        options = {tag: opts for tag, _, opts in load_harness().VARIANTS}
+        budget = options["slow-scorer"]["calibration_timeout"]
+        calibration = json.loads(
+            (
+                REPO_ROOT
+                / "docs"
+                / "measurements"
+                / "cards"
+                / "slow-scorer"
+                / "03-calibration.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(budget, calibration.get("timeout_seconds"))
+        self.assertTrue(
+            calibration.get("timed_out"),
+            "the card is the evidence that this preset reaches the timeout",
+        )
+
+
 class HarnessTestCase(unittest.TestCase):
     """A scratch guide, a scratch `cards/`, and the harness pointed at both."""
 
