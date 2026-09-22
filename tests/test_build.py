@@ -9,9 +9,9 @@ that repository makes a decision.
 
 from __future__ import annotations
 
+import collections
 import dataclasses
 import hashlib
-import collections
 import importlib.util
 import json
 import os
