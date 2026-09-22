@@ -130,7 +130,7 @@ put in, and an agent that can read that is not being tested on anything.
 with the data because the licence says it has to: CC BY-SA 4.0 requires the attribution and a
 notice that the data was modified to accompany the data wherever it goes. `build.py` copies it
 in the same branch that writes `dataset.jsonl`, `catalog.json` and `databases/`, so the four
-arrive together or not at all -- 24 of the 26 presets get it, and the two that do not are
+arrive together or not at all -- 29 of the 31 presets get it, and the two that do not are
 `empty` and `no-data`, the two with no rows.
 
 It ships alone, and that is a change worth stating. Projects used to carry `NOTICE`, `LICENSE`
@@ -147,8 +147,8 @@ passes over it and why [docs/isolation.md](docs/isolation.md) can now say what i
 | Flag | Values |
 |---|---|
 | `--agent` | `ready` · `no-knobs` · `two-agents` (the tunable agent, and an unrelated second one in `sql_explainer/` with a `PROJECT.md` saying which to work on) · `missing` |
-| `--dataset` | `ready` (300) · `mini` (30) · `tiny` (10) · `unlabeled` (40) · `duplicated` (90, from a 60-row draw) · `wrong-answers` (60) · `leaky` (306: the 300, and six tuning rows again as held-out rows) · `holdout-labelled` (30, answers on the six held-out rows only) · `split-by-database` (300, five whole databases held out) · `raw-export` (300, under Spider's own `question`/`query` keys) · `torn` (30, two lines cut short) · `undeclared` (300, every row's provenance reads `spider-dev`) · `missing` |
-| `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `opaque` (calls a grading library the project does not carry) · `length-blind` (compares the two queries' lengths) · `missing` |
+| `--dataset` | `ready` (300) · `mini` (30) · `tiny` (10) · `unlabeled` (40) · `duplicated` (90, from a 60-row draw) · `wrong-answers` (60) · `leaky` (306: the 300, and six tuning rows again as held-out rows) · `holdout-labelled` (30, answers on the six held-out rows only) · `split-by-database` (300, five whole databases held out) · `raw-export` (300, under Spider's own `question`/`query` keys) · `torn` (30, two lines cut short) · `undeclared` (300, every row's provenance reads `spider-dev`) · `mostly-undeclared` (300, 180 of them do) · `mostly-synthetic` (300, 180 rows declare `synthetic` and 120 declare `real`) · `generated-answers` (300, every row declares its answer model-written) · `mostly-generated-answers` (300, 180 of them do) · `missing` |
+| `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `opaque` (calls a grading library the project does not carry) · `length-blind` (compares the two queries' lengths) · `slow` (compares text the ordinary way and asks a service per row, so checking it outlasts the budget) · `missing` |
 | `--provider` | `openrouter` (default) · `direct` |
 | `--calibration` | `none` · `present` (probe answers for the scorer) |
 | `--guide` | `clone` (default) · `local` (with `--guide-src`) |
@@ -224,8 +224,8 @@ python3 build.py demo --preset ready --venv ready --out ~/demos/worked-in
 
 **It costs about 220 MB per project, and about 20 seconds.** Measured twice on this machine,
 on Python 3.13.14: `du -sm` reports 220 MiB and the files themselves are 193 MB, almost all of
-it `litellm` and what it pulls in. So a twenty-six-preset bank with environments is about
-**5.7 GB** (it was 3.7 GB at seventeen), not the 1.7 GB an earlier "hundred megabytes per
+it `litellm` and what it pulls in. So a thirty-one-preset bank with environments is about
+**6.8 GB** (it was 5.7 GB at twenty-six and 3.7 GB at seventeen), not the 1.7 GB an earlier "hundred megabytes per
 project" implied -- worth knowing before running `suite --venv ready` on a machine with a
 few gigabytes free. That is why it is
 off by default and why `suite` takes the same flag rather than assuming it.
@@ -251,8 +251,8 @@ not by being present.
 
 ## Data that is wrong on purpose
 
-**Twelve** of the twenty-six presets sit in this table. Eleven ship a project whose data or
-scorer is broken, or shaped in a way the tools do not expect; the twelfth, `split-by-database`,
+**Sixteen** of the thirty-one presets sit in this table. Fifteen ship a project whose data or
+scorer is broken, or shaped in a way the tools do not expect; the sixteenth, `split-by-database`,
 is not wrong at all -- its data is split the way a customer splits it, and it is kept here as the
 control for the family check. Real projects arrive that way, and the run's job is
 not to notice and stop -- it is to notice, repair, and carry on to a result that means
@@ -395,7 +395,7 @@ something is broken it repairs it; then it scores again, and the run carries on.
 number is not a failure -- it is the size of the gap the run has to close before it can
 measure anything, and closing it is the job.
 
-So read the table as twenty-six starting points, and the question each one asks is the same:
+So read the table as thirty-one starting points, and the question each one asks is the same:
 **can the run get from here to a real result, and does it say honestly what it had to build
 along the way?** A project that opens at 25 and reaches a genuine optimization is a better
 demonstration than one that opens at 86, because the first one shows the work.
@@ -469,7 +469,8 @@ by hand.
 | `best-case` | 85 | WORKABLE | `confirm-evaluator-connection` | the same, and its card is byte-identical to `sql-exec-stop`'s |
 | `checked` | 93 | WORKABLE | `review-answer-key` | nothing -- read the answers it is graded on |
 
-The nine ported on 2026-09-18, measured by the same script at the same `d07b62cd` (each
+The nine ported on 2026-09-18 and the five provenance and cost states added after them,
+measured by the same script at the same `d07b62cd` (each
 row's card is under `docs/measurements/cards/<preset>/`; the caps column names what the card
 raises, `*` for one that blocks):
 
@@ -492,7 +493,7 @@ raises, `*` for one that blocks):
 
 **Three of the five bands, and the top two are held rather than missing.** The spread is
 measured rather than arranged -- every preset and comparison the sweep names was built and
-scored, and these twenty-six presets are the ones that describe a project somebody could actually
+scored, and these thirty-one presets are the ones that describe a project somebody could actually
 arrive with. The
 agent pillar reads 100 on every project with an agent, so the numbers are what the dataset and
 evaluation pillars make them; `checked` reaches 93, inside EXCELLENT by the number. It reads
@@ -523,7 +524,7 @@ committed cards, re-taken at `d07b62cd`.
 **A dataset whose every answer answers a different question is still not noticed.**
 `wrong-answers` keeps every question and every answer and pairs them wrongly, inside each
 database, so all of them still run and still return rows. Every dataset check passes, no cap is
-raised for it, and its card is `ready`'s card with smaller numbers in it -- the three lines that
+raised for it, and its card is `ready`'s card with smaller numbers in it -- the four lines that
 differ are about draw size, not about the damage:
 
 | | `ready` | `wrong-answers` |

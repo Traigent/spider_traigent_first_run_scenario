@@ -189,9 +189,12 @@ That roster -- `preset`, `fixture`, `plant`, `scenario`, `deliberate`, `is obser
 hyphenated preset and component name longer than six characters (from `agent-and-logs` to
 `wrong-wiring`; the nine ported presets added `holdout-labelled`, `holdout-only`,
 `leaky-split`, `length-blind`, `opaque-scorer`, `raw-export`, `split-by-database`,
-`torn-lines`, `two-agents` and `undeclared-source`, and the five provenance and cost states
-after them added `generated-answer-key`, `mostly-generated-answer-key`,
-`mostly-synthetic-source`, `mostly-undeclared-source` and `slow-scorer`) --
+`torn-lines`, `two-agents` and `undeclared-source`, and the provenance and cost round after
+them added nine: the preset names `generated-answer-key`, `mostly-generated-answer-key`,
+`mostly-synthetic-source`, `mostly-undeclared-source` and `slow-scorer`, and the dataset-state
+names `generated-answers`, `mostly-generated-answers`, `mostly-synthetic` and
+`mostly-undeclared`. `slow`, the evaluator state, is four characters and below the
+threshold) --
 exists to catch *this repository* leaking into a project. The first-run guide is a document about running first-run evaluations, so it uses
 those words for their ordinary meaning: `readiness.py` has a `--preset`-shaped vocabulary,
 `run-safety.md` says "deliberate", `component-creation.md` says "fixture", and `hand-written`

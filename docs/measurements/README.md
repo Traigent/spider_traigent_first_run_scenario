@@ -13,8 +13,8 @@ byte-identical, which is the reproducibility check this directory exists for.
 The pin moved here from `5ce65540` on 2026-09-22, and the move is itself a measurement rather
 than an argument. `5ce65540..d07b62cd` is one commit, touching `.github/`, `tests/` and six
 lines of the guide's own `CLAUDE.md`; the `skills/` tree and `GUIDE.md` are byte-identical
-across it. The whole sweep was re-run at `d07b62cd` and every one of the thirty-seven cards
-came back byte-identical -- `results.json` changed by exactly one line, the revision it
+across it. The whole sweep was re-run at `d07b62cd` and all thirty-seven cards
+that existed on that day came back byte-identical -- `results.json` changed by exactly one line, the revision it
 records. That is what a pin move should cost when the tooling did not move, and running it was
 cheaper than writing the paragraph that would have argued the pin could stay.
 
@@ -80,7 +80,7 @@ answered when it could.
 | `cards/<run>/03-calibration.json` | `calibrate_evaluator.py --json` output, where calibration ran |
 | `cards/<run>/04-readiness-card.txt` | **the rendered card** -- the thing the documentation quotes |
 | `cards/<run>/05-readiness.json` | the same score machine-readable: pillars, sub-scores, caps |
-| `cards/<run>/argv.json` | every invocation, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE` |
+| `cards/<run>/argv.json` | the build, preflight and readiness invocations, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE`. A calibrated run records `calibration_ran` here and its argv in `03-calibration-stderr.txt`, which is where `slow-scorer`'s `--timeout 5` -- the flag its cap depends on -- is written down |
 | `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
 
 Two things about the rows at `d07b62cd`. A cap's `ceiling` may be `null` in `results.json`
@@ -121,11 +121,14 @@ Two things follow, and both are properties of this table rather than of the guid
 
 ## What the sweep covers
 
-Twenty-six presets, then the comparisons the documentation makes:
+Thirty presets, then the comparisons the documentation makes. One preset the sweep
+names only through a variant -- `slow-scorer`, because it carries a non-default
+calibration budget -- so this table has thirty preset runs and thirteen comparisons
+against `build.py`'s thirty-one presets:
 
 | run | what it is for |
 |---|---|
-| the 26 presets | the score tables in the README |
+| the 30 presets | the score tables in the README |
 | `best-case--off-method-calibration` | the number once reached by calibrating an executing scorer; refused by the tool since `9eaabbb2`, its `6ec2b9c1` card retained |
 | `wrong-answers--calibrated` | `--preset wrong-answers --calibration present` |
 | `wrong-wiring--calibrated` | `--preset wrong-wiring --calibration present` |
@@ -133,6 +136,12 @@ Twenty-six presets, then the comparisons the documentation makes:
 | `ready--without-agent-knobs` | the same project scored with the agent read withheld |
 | `raw-export--fields-declared` | `--preset raw-export` with `--input-field question --expected-field query` passed to preflight: what a run that had opened the file would declare |
 | `length-blind--uncalibrated` | `--preset length-blind --calibration none`: the length scorer with nothing to catch it |
+| `undeclared-source--calibrated` | the rung the provenance ladder puts a wholly undeclared file on, once the evaluator ceiling is out of the way |
+| `mostly-undeclared-source--calibrated` | the same, one rung up: most rows undeclared, the rest saying they were collected |
+| `mostly-synthetic-source--calibrated` | the declared arm of that rung, whose action is `proceed` rather than a request to declare |
+| `generated-answer-key--calibrated` | the answer-key ladder's top rung |
+| `mostly-generated-answer-key--calibrated` | the rung below it, which exists so the cap cannot turn on one row |
+| `slow-scorer` | `--preset slow-scorer` with `--timeout 5` on the calibration step. The guide budgets a deterministic calibration at 900 seconds, so reaching the timeout question the default way costs a quarter of an hour of every reproduction; the budget is stated instead, and the card records the one it was reached under |
 | `grid-*` | the four declared-method x declared-task-kind combinations, all on the same unchanged text comparator |
 
 ## Results
@@ -234,7 +243,7 @@ thing did not happen either; both are worth writing down.
 
 Worth stating because each one is a finding rather than a coincidence: where two starting
 states produce the same card, the guide's opening read did not distinguish them. Fifteen of the
-thirty-seven cards fall into the six groups below. Each is checkable directly -- the first line
+forty-seven cards fall into the six groups below. Each is checkable directly -- the first line
 of `04-readiness-card.txt` is the invocation that produced it, which names its own paths, so
 compare from the second line down:
 
@@ -263,10 +272,11 @@ came to be written down at all.
 - `checked` and `grid-normalized-exact--code-sql` -- **byte-identical**.
 - `no-agent` and `ready--without-agent-knobs` -- **byte-identical**. Both cap at
   `connect-agent`: no agent and an agent with nothing to vary read alike here.
-- `wrong-answers` and `ready` -- **not** identical, and the three differences are all about
+- `wrong-answers` and `ready` -- **not** identical, and the four differences are all about
   size rather than about the damage: dataset pillar 91 against 98, `60/60 rows` against
-  `300/300`, and the comparison-size check dropping from `OK` to `!!` because a 60-row draw is
-  48 tuning rows. Every check that could have noticed the answers are wrong passes.
+  `300/300`, `60 collected of 60` against `300 collected of 300`, and the comparison-size
+  check dropping from `OK` to `!!` because a 60-row draw is 48 tuning rows. Every check that
+  could have noticed the answers are wrong passes.
 
 ## The arithmetic at the top of the scale
 

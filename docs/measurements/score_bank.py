@@ -75,9 +75,11 @@ assistant's own read of every row; a hand-written stand-in for it would be this 
 deciding, row by row, whether each answer answers its question -- which is exactly the
 judgement the `wrong-answers` preset exists to test. Leaving it off keeps the table
 mechanical, and the omission is a property of this table rather than of the guide. The guide
-also holds the top two bands at WORKABLE until a row review has entered; no run in this bank
-reaches them, so that hold is inert here (`band_limited_by_unread_answers` is false on every
-card) and would bind first on any run that climbed past 74 without one.
+also holds the top two bands at WORKABLE until a row review has entered, and that hold is
+what caps this bank's ceiling: `band_limited_by_unread_answers` is true on six cards --
+`checked`, `wrong-answers--calibrated` and the four `grid-*` runs -- which are exactly the
+runs that climb past 74 without a review. They read WORKABLE with `review-answer-key` rather
+than STRONG, and `docs/measurements/README.md` says the same thing beside the table.
 """
 
 from __future__ import annotations

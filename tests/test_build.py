@@ -100,6 +100,38 @@ EXPECTED_SPLIT_BY_BAND = {
 # of the shipped scorer has to outlast it.
 SLOW_SCORER_CALIBRATION_BUDGET_SECONDS = 5
 
+# The number words this repository writes out, so a count in prose can be compared
+# with the collection it describes. English, because that is what the documents use.
+NUMBER_WORDS = {
+    "seventeen": 17,
+    "twenty-six": 26,
+    "twenty-nine": 29,
+    "thirty": 30,
+    "thirty-one": 31,
+    "thirty-seven": 37,
+    "forty-seven": 47,
+}
+# How a denominator is written. Each of these says "this is the whole collection",
+# which is exactly the claim that goes stale when the collection grows -- and the
+# claim no test was making, so `1945a0a` shipped a dozen of them frozen at the
+# previous round's totals.
+# Only phrasings that mean "this is the whole collection". A bare "the nine
+# presets" is a SUBSET -- the nine ported in one round -- and matching it would
+# make this gate reject a true sentence, which is the more corrosive of the two
+# ways a check can be wrong.
+DENOMINATOR_PATTERNS = (
+    r"of the ([a-z-]+|\d+) presets",
+    r"a ([a-z-]+|\d+)-preset bank",
+    r"of the ([a-z-]+|\d+) cards",
+    r"these ([a-z-]+|\d+) presets",
+    r"([a-z-]+|\d+) starting points",
+)
+# The sweep names one fewer preset than the builder has, because `slow-scorer` is
+# reached through a variant that carries its calibration budget. A sentence about the
+# sweep's list is therefore measured against the sweep, not against `build.PRESETS` --
+# keyed separately so the two cannot be silently conflated.
+SWEEP_DENOMINATOR_PATTERNS = (r"\| the ([a-z-]+|\d+) presets \|",)
+
 PRESET_TABLE = {
     #                    agent       dataset          eval           calibration  venv
     "agent-and-logs": ("ready", "unlabeled", "missing", "none", "none"),
@@ -2454,6 +2486,64 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
             "keyword case, spacing and a trailing semicolon still do not matter",
         )
 
+    def test_every_count_written_in_prose_matches_what_it_counts(self) -> None:
+        """A denominator in prose is a claim, and it goes stale silently.
+
+        The measured tables have a test; the sentences around them did not, so a
+        round that added five presets and ten runs left a dozen sentences frozen
+        at the previous totals -- including one about which projects carry the
+        CC BY-SA attribution, and one whose own table three lines below it
+        contradicted it.
+        """
+
+        located = importlib.util.spec_from_file_location(
+            "_sweep", REPO_ROOT / "docs" / "measurements" / "score_bank.py"
+        )
+        assert located is not None and located.loader is not None
+        sweep = importlib.util.module_from_spec(located)
+        sys.modules[located.name] = sweep
+        located.loader.exec_module(sweep)
+        totals = {
+            "presets": len(build.PRESETS),
+            "sweep presets": len(sweep.PRESETS),
+            "cards": sum(
+                1
+                for entry in (REPO_ROOT / "docs" / "measurements" / "cards").iterdir()
+                if entry.is_dir()
+            ),
+        }
+        documents = (
+            REPO_ROOT / "README.md",
+            REPO_ROOT / "docs" / "measurements" / "README.md",
+        )
+        checked = 0
+        for document in documents:
+            text = document.read_text(encoding="utf-8")
+            for pattern in DENOMINATOR_PATTERNS + SWEEP_DENOMINATOR_PATTERNS:
+                for match in re.finditer(pattern, text):
+                    written = match.group(1)
+                    value = NUMBER_WORDS.get(written)
+                    if value is None:
+                        value = int(written) if written.isdigit() else None
+                    if value is None:
+                        continue
+                    if pattern in SWEEP_DENOMINATOR_PATTERNS:
+                        counted = "sweep presets"
+                    elif "cards" in pattern:
+                        counted = "cards"
+                    else:
+                        counted = "presets"
+                    checked += 1
+                    line = text[: match.start()].count("\n") + 1
+                    self.assertEqual(
+                        totals[counted],
+                        value,
+                        f"{document.relative_to(REPO_ROOT)}:{line} says "
+                        f"{written!r} {counted}, "
+                        f"and there are {totals[counted]}",
+                    )
+        self.assertGreater(checked, 0, "no written count was read, so none was checked")
+
     def test_a_probe_called_equivalent_returns_the_same_rows(self) -> None:
         """A text probe's claim is checkable by running it, so run it.
 
@@ -2834,14 +2924,37 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
 
     # ------------------------------------------------------------------ all nine
 
-    def test_every_new_demo_passes_verify(self) -> None:
-        for preset, out in sorted(self.outs.items()):
+    def test_every_preset_builds_and_passes_verify(self) -> None:
+        """Every preset in the bank, not only the ones this class builds as fixtures.
+
+        The name said "every" while the loop covered the ten presets `setUpClass`
+        happens to build, so twenty-one of them -- including all five from the
+        provenance and cost round -- were never handed to `verify_demo`. Since
+        `verify` is what scans a project against the blinding roster, that gap
+        was between the claim and the thing the claim is about.
+        """
+
+        # A neutral name: `verify` scans the demo's own PATH against the roster,
+        # and a directory called "verify_every_preset" trips it on the word this
+        # repository blinds. The check catching the test's own scratch directory
+        # is the check doing its job.
+        room = Path(self.workspace) / "bank"
+        room.mkdir(exist_ok=True)
+        for preset in sorted(build.PRESETS):
             with self.subTest(preset=preset):
+                out = self.outs.get(preset)
+                if out is None:
+                    # Built under the neutral name a bank would give it, because a
+                    # directory named after the preset is itself a tell.
+                    out = room / build.bank_directory(preset)
+                    if not out.exists():
+                        built = run_build("demo", "--preset", preset, "--out", str(out))
+                        self.assertEqual(built.returncode, 0, built.stderr)
                 self.assertEqual(build.verify_demo(out), [])
 
     def test_every_new_state_name_is_a_tell(self) -> None:
         """The nine names are hyphenated, so they joined the tell roster. That a shipped
-        project carries none of them is `test_every_new_demo_passes_verify`'s job: `verify`
+        project carries none of them is `test_every_preset_builds_and_passes_verify`'s job: `verify`
         scans every file against the roster this test pins."""
         for name in (
             "leaky-split",
