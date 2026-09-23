@@ -10,6 +10,15 @@ evidence.
 
     python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 
+**`--compare` is the check, made mechanical.** It re-measures into the workspace, publishes
+nothing, and compares what it produced with the committed record byte for byte: every card of
+every run that scored, and `results.json` whole, so a run the record says was refused has to be
+refused again, at the same step and in the same words. It exits 0 only when all of that agrees,
+and it refuses to compare nothing. The cards carry the interpreter and the SDK they were
+measured with -- preflight records both -- so a comparison run anywhere else would report the
+machine rather than the guide; `--compare` checks the environment first and says what to
+install. `--recorded-environment` prints that environment for a CI job to set up.
+
 **It does not touch `cards/` unless asked.** The cards are committed evidence, and the
 commonest reason to run this script is to check them rather than to replace them, so a plain
 run writes into the workspace and says where. `--publish` is the regeneration: it replaces the
@@ -28,7 +37,9 @@ which is the whole point of this directory.
 
 **Exit status.** 0 when every run scored; 1 when the guide refused one or more of them;
 2 when the documents and the guide disagree before anything is built; 3 when something of
-*ours* broke -- our builder, our probe -- which is never a row and never publishes.
+*ours* broke -- our builder, our probe -- which is never a row and never publishes; and, with
+`--compare`, 4 when the fresh measurement differs from the committed one (a recorded refusal
+repeated exactly is agreement, not a difference).
 At HEAD one run cannot score: the guide refuses to calibrate an executing scorer, which is
 exactly what `best-case--off-method-calibration` asks it to do, so a complete and correct
 sweep ends 1 with that one run refused. Nothing should key on exit 0 alone; read the
@@ -39,7 +50,18 @@ What it decides, and why each decision is here rather than in the reader's head:
 `--evaluator-method` is taken from `demo.json`, which is the record of what the evaluator
 component actually is. A real run declares that from its own reading of the file; this
 script cannot read, so it uses the builder's record and says so. The same goes for
-`--task-kind code-sql`: every project in this bank produces SQL.
+`--task-kind code-sql`: every project in this bank produces SQL. Where the record holds no
+method -- `opaque`, whose grader is a library the project does not carry, and
+`length-blind`, whose comparison of lengths is not one of the methods the guide names --
+no `--evaluator-method` is passed at all, which is what a run that could not honestly
+declare one does; `readiness.py` answers an undeclared method with `evaluator-unresolved`
+unless calibration has spoken for the file.
+
+`--input-field` and `--expected-field` are not passed, except by one variant. The rows
+are written under `input` and `output` everywhere but `raw-export`, which uses Spider's
+own `question` and `query`; the preset is scored as the tools read it unaided, and
+`raw-export--fields-declared` scores the same project with the two names declared, which
+is what an assistant that had opened the file would pass.
 
 `--agent-knobs` is the coding assistant's own read of the agent's source, and the guide is
 explicit that the opening score requires it wherever an agent was found. No assistant is
@@ -63,15 +85,25 @@ older reading.
 assistant's own read of every row; a hand-written stand-in for it would be this script
 deciding, row by row, whether each answer answers its question -- which is exactly the
 judgement the `wrong-answers` preset exists to test. Leaving it off keeps the table
-mechanical, and the omission is a property of this table rather than of the guide. The guide
-also holds the top two bands at WORKABLE until a row review has entered; no run in this bank
-reaches them, so that hold is inert here (`band_limited_by_unread_answers` is false on every
-card) and would bind first on any run that climbed past 74 without one.
+mechanical, and the omission is a property of this table rather than of the guide. It
+also puts one condition out of this bank's reach on purpose:
+`dataset-unsound-expected-outputs` fires when a row review carries `no` verdicts past a
+share, so a table that passes no review cannot raise it, and passing one here would be
+the script answering the question `wrong-answers` asks. It is reached only where a row
+review exists -- a guided run in which an assistant has read the rows and written its
+verdicts -- which is a different kind of evidence from this table. The guide
+also holds the top two bands at WORKABLE until a row review has entered, and that hold is
+what caps this bank's ceiling: `band_limited_by_unread_answers` is true on six cards --
+`checked`, `wrong-answers--calibrated` and the four `grid-*` runs -- which are exactly the
+runs that climb past 74 without a review. They read WORKABLE with `review-answer-key` rather
+than STRONG, and `docs/measurements/README.md` says the same thing beside the table.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
+import importlib.metadata
 import json
 import pathlib
 import shutil
@@ -84,9 +116,12 @@ from typing import Any
 # re-measurement, never a side effect of somebody's checkout having moved. WORKING_REVISION is
 # the revision the documents under agent-knobs/ validate at; the two name the same commit
 # since the 2026-09-15 regeneration, so no --revision override is needed, and they are kept
-# separate for the next time the guide's document contract moves ahead of the pin.
-PINNED_REVISION = "5ce65540e42b4f6a5a36a28c80e91745848ea507"
-WORKING_REVISION = "5ce65540e42b4f6a5a36a28c80e91745848ea507"
+# separate for the next time the guide's document contract moves ahead of the pin. Both
+# moved from 5ce65540 to d07b62cd on 2026-09-22: the guide's `skills/` tree is byte-identical
+# across that commit, and the republished cards came back identical but for the revision
+# recorded in results.json, which is what made the move free to make.
+PINNED_REVISION = "d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199"
+WORKING_REVISION = "d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199"
 
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
@@ -112,6 +147,20 @@ PRESETS = (
     "hand-written",
     "checked",
     "best-case",
+    "raw-export",
+    "length-blind",
+    "torn-lines",
+    "opaque-scorer",
+    "holdout-only",
+    "leaky-split",
+    "undeclared-source",
+    "mostly-undeclared-source",
+    "mostly-synthetic-source",
+    "synthetic-source",
+    "generated-answer-key",
+    "mostly-generated-answer-key",
+    "split-by-database",
+    "two-agents",
 )
 
 # The comparisons the documentation makes, each built from flags rather than a preset so
@@ -141,6 +190,58 @@ VARIANTS: tuple[tuple[str, tuple[str, ...], dict[str, Any]], ...] = (
         "ready--without-agent-knobs",
         ("--preset", "ready"),
         {"agent_knobs": False},
+    ),
+    (
+        "raw-export--fields-declared",
+        ("--preset", "raw-export"),
+        {"input_field": "question", "expected_field": "query"},
+    ),
+    (
+        "length-blind--uncalibrated",
+        ("--preset", "length-blind", "--calibration", "none"),
+        {},
+    ),
+    # The four provenance states, calibrated. Uncalibrated they all read 45 --
+    # `evaluator-unvalidated` is the lower ceiling and it hides every one of
+    # them -- so the rung each state actually sits on is only visible once the
+    # scorer has been checked. That is the whole point of the pairs: the
+    # declaration a customer makes about their own rows is worth a different
+    # number depending on how much of the file it covers, and the uncalibrated
+    # runs cannot show it.
+    (
+        "undeclared-source--calibrated",
+        ("--preset", "undeclared-source", "--calibration", "present"),
+        {},
+    ),
+    (
+        "mostly-undeclared-source--calibrated",
+        ("--preset", "mostly-undeclared-source", "--calibration", "present"),
+        {},
+    ),
+    (
+        "mostly-synthetic-source--calibrated",
+        ("--preset", "mostly-synthetic-source", "--calibration", "present"),
+        {},
+    ),
+    (
+        "synthetic-source--calibrated",
+        ("--preset", "synthetic-source", "--calibration", "present"),
+        {},
+    ),
+    (
+        "generated-answer-key--calibrated",
+        ("--preset", "generated-answer-key", "--calibration", "present"),
+        {},
+    ),
+    (
+        "mostly-generated-answer-key--calibrated",
+        ("--preset", "mostly-generated-answer-key", "--calibration", "present"),
+        {},
+    ),
+    (
+        "slow-scorer",
+        ("--preset", "slow-scorer"),
+        {"calibration_timeout": 5},
     ),
 )
 
@@ -475,6 +576,9 @@ def score_one(
     force_execution_calibration: bool = False,
     method: str | None = None,
     task_kind: str = "code-sql",
+    input_field: str | None = None,
+    expected_field: str | None = None,
+    calibration_timeout: int | None = None,
 ) -> dict[str, Any]:
     """Build one demo and score it the way the guide's opening gate scores it."""
     out = workspace / tag
@@ -501,8 +605,18 @@ def score_one(
     name_path(pathlib.Path.home(), "$HOME")
     name_path(sys.executable, "python3")
 
+    # One command, run and recorded: `argv.json` once rebuilt this list by hand and left
+    # out the `demo` subcommand, so the command it recorded was not the one that ran.
+    build_command = [
+        sys.executable,
+        "build.py",
+        "demo",
+        *build_flags,
+        "--out",
+        str(out),
+    ]
     built = capture(
-        [sys.executable, "build.py", "demo", *build_flags, "--out", str(out)],
+        build_command,
         REPO_ROOT,
         room / "01-build.txt",
     )
@@ -534,6 +648,13 @@ def score_one(
         preflight += ["--models", ",".join(agent["models"])]
     if dataset:
         preflight += ["--dataset", dataset["path"]]
+        # Only where a variant declares them. The preset itself is scored the way the
+        # tools read a file unaided, which for `raw-export` is under names it does not
+        # use; the declaration is what a run that opened the file would add.
+        if input_field:
+            preflight += ["--input-field", input_field]
+        if expected_field:
+            preflight += ["--expected-field", expected_field]
     declared = None
     if evaluator:
         preflight += ["--evaluator", evaluator["path"]]
@@ -570,7 +691,24 @@ def score_one(
                     "deterministic",
                     "--allow-execution",
                     "--json",
-                ],
+                ]
+                + (
+                    # With no `--timeout` the guide budgets this calibration at 900
+                    # seconds, and `slow-scorer` reaches the timeout there: each authored
+                    # probe takes two minutes, so even the guide's two-case minimum runs
+                    # out. That was measured at the pin, with four cases and with two,
+                    # and each run took the whole fifteen minutes; making every
+                    # reproduction of this sweep wait that long to watch a clock run
+                    # out would be a poor trade for a cap that is about cost. So the
+                    # budget is stated instead of endured: 5 seconds, which the first
+                    # call already outlasts. The timeout is reached in the same phase
+                    # and read the same way -- the default-budget run scored the same
+                    # 45 `evaluator-timeout` -- and the card records the budget it was
+                    # reached under.
+                    ["--timeout", str(calibration_timeout)]
+                    if calibration_timeout is not None
+                    else []
+                ),
                 project,
                 room / "03-calibration-stderr.txt",
                 room / "03-calibration.json",
@@ -632,9 +770,7 @@ def score_one(
     (room / "argv.json").write_text(
         json.dumps(
             {
-                "build": portable(
-                    [sys.executable, "build.py", *build_flags, "--out", "$DEMO"]
-                ),
+                "build": portable(build_command),
                 "preflight": portable(preflight),
                 "calibration_ran": calibrated,
                 "readiness": portable(readiness),
@@ -672,6 +808,171 @@ def score_one(
     }
 
 
+def agent_requirement_version() -> str:
+    """The litellm version `build.py` pins, read from its source without importing it."""
+    tree = ast.parse((REPO_ROOT / "build.py").read_text(encoding="utf-8"))
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "AGENT_REQUIREMENT"
+                for target in node.targets
+            )
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+            and node.value.value.startswith("litellm==")
+        ):
+            return node.value.value.removeprefix("litellm==")
+    raise HarnessFault("build.py pins no `litellm==` version in AGENT_REQUIREMENT")
+
+
+def recorded_environment() -> dict[str, str]:
+    """The environment the committed cards were measured in, read from the cards.
+
+    `python` and `traigent` are what preflight printed on every card that scored, and they
+    have to agree across all of them. `litellm` is not on a card: preflight imports it for
+    its price checks without printing which version it found, so the version given is the
+    one this repository and the guide install (`build.py`'s `AGENT_REQUIREMENT`), which is
+    the version the committed cards reproduce under.
+    """
+    record = ours(CARDS / "results.json", "the committed cards/results.json")
+    if record.get("guide_revision") != PINNED_REVISION:
+        raise HarnessFault(
+            f"cards/results.json records guide {record.get('guide_revision')} and the pin "
+            f"is {PINNED_REVISION}; the record and the pin disagree"
+        )
+    seen: dict[str, set[str]] = {"python": set(), "traigent": set()}
+    for run in record.get("runs", []):
+        if run.get("refused"):
+            continue
+        preflight = ours(
+            CARDS / run["tag"] / "02-preflight.json",
+            f"the committed preflight record of {run['tag']!r}",
+        )
+        checks = {check.get("check"): check for check in preflight}
+        try:
+            seen["python"].add(str(checks["python-version"]["detail"]))
+            metrics = checks["sdk-version"].get("metrics") or {}
+        except KeyError as missing:
+            raise HarnessFault(
+                f"the committed preflight record of {run['tag']!r} has no {missing} check"
+            ) from missing
+        seen["traigent"].add(str(metrics.get("installed", "absent")))
+    for name, values in seen.items():
+        if len(values) != 1:
+            raise HarnessFault(
+                f"the committed cards do not agree on one {name}: {sorted(values)}"
+            )
+    return {
+        "guide": PINNED_REVISION,
+        "python": seen["python"].pop(),
+        "traigent": seen["traigent"].pop(),
+        "litellm": agent_requirement_version(),
+    }
+
+
+def installed(distribution: str) -> str:
+    """The installed version of a distribution in this interpreter, or `absent`."""
+    try:
+        return importlib.metadata.version(distribution)
+    except importlib.metadata.PackageNotFoundError:
+        return "absent"
+
+
+def environment_mismatch(recorded: dict[str, str]) -> list[str]:
+    """Where this interpreter differs from the one the committed cards were measured in.
+
+    The guide's scripts run under this interpreter, and preflight writes its version and the
+    SDK's into every card, so a comparison made anywhere else differs on every card for a
+    reason that has nothing to do with the guide.
+    """
+    here = {
+        "python": sys.version.split()[0],
+        "traigent": installed("traigent"),
+        "litellm": installed("litellm"),
+    }
+    return [
+        f"{name} is {here[name]} here and {recorded[name]} on the committed cards"
+        for name in ("python", "traigent", "litellm")
+        if here[name] != recorded[name]
+    ]
+
+
+def compare_with_record(staging: Path) -> tuple[list[str], int, list[str]]:
+    """What a fresh measurement under `staging` says that the committed record does not.
+
+    Returns the differences, how many cards were compared byte for byte, and the runs the
+    record says were refused. A refused run's committed directory is the older card
+    `--publish` deliberately leaves in place, so there is nothing fresh to compare it with;
+    its refusal is compared instead, as a row of `results.json`, which is compared whole.
+    """
+    record = ours(CARDS / "results.json", "the committed cards/results.json")
+    differences: list[str] = []
+    fresh_table = (staging / "results.json").read_bytes()
+    if fresh_table != (CARDS / "results.json").read_bytes():
+        differences.append(
+            "results.json: "
+            + first_difference(
+                (CARDS / "results.json").read_bytes().decode("utf-8"),
+                fresh_table.decode("utf-8"),
+            )
+        )
+    runs = [run["tag"] for run in record.get("runs", [])]
+    refused = [run["tag"] for run in record.get("runs", []) if run.get("refused")]
+    compared = 0
+    for tag in runs:
+        if tag in refused:
+            continue
+        committed, fresh = files_under(CARDS / tag), files_under(staging / tag)
+        for name in sorted(set(committed) | set(fresh)):
+            if name not in fresh:
+                differences.append(f"{tag}/{name}: committed, and not produced now")
+            elif name not in committed:
+                differences.append(f"{tag}/{name}: produced now, and not committed")
+            elif committed[name] != fresh[name]:
+                differences.append(
+                    f"{tag}/{name}: "
+                    + first_difference(
+                        committed[name].decode("utf-8", "replace"),
+                        fresh[name].decode("utf-8", "replace"),
+                    )
+                )
+        compared += 1
+    unmeasured = sorted(
+        entry.name
+        for entry in CARDS.iterdir()
+        if entry.is_dir() and entry.name not in runs
+    )
+    for name in unmeasured:
+        differences.append(f"{name}/: a committed card no run in the record produces")
+    if compared == 0 or compared != len(runs) - len(refused):
+        differences.append(
+            f"compared {compared} cards where the record has {len(runs) - len(refused)} "
+            "that scored; a comparison of nothing agrees with everything"
+        )
+    return differences, compared, refused
+
+
+def files_under(directory: Path) -> dict[str, bytes]:
+    """Every file in one card directory, by name. A missing directory holds nothing."""
+    if not directory.is_dir():
+        return {}
+    return {
+        str(found.relative_to(directory)): found.read_bytes()
+        for found in sorted(directory.rglob("*"))
+        if found.is_file()
+    }
+
+
+def first_difference(committed: str, fresh: str) -> str:
+    """The first line on which two texts differ, both sides of it, and where."""
+    old, new = committed.splitlines(), fresh.splitlines()
+    for number, (was, now) in enumerate(zip(old, new), start=1):
+        if was != now:
+            return f"line {number} was {was.strip()[:160]!r}, now {now.strip()[:160]!r}"
+    return f"{len(old)} lines committed, {len(new)} produced now"
+
+
 def harness_fault(broken: HarnessFault, staging: Path | None) -> int:
     """Say it in a sentence, publish nothing, and exit on a status of its own.
 
@@ -699,7 +1000,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--guide",
-        required=True,
         type=Path,
         help="a traigent-first-run checkout; its skills/traigent-first-run/scripts are run",
     )
@@ -715,13 +1015,37 @@ def main() -> int:
         default=Path("/tmp/readiness-bank"),
         help="where demos are built and then deleted (default: /tmp/readiness-bank)",
     )
-    parser.add_argument(
+    outcome = parser.add_mutually_exclusive_group()
+    outcome.add_argument(
         "--publish",
         action="store_true",
         help="replace the committed evidence under cards/ with what this run produced; "
         "without it the run writes to the workspace and cards/ is left alone",
     )
+    outcome.add_argument(
+        "--compare",
+        action="store_true",
+        help="compare what this run produced with the committed cards, byte for byte, "
+        "and exit 4 if they differ; publishes nothing",
+    )
+    outcome.add_argument(
+        "--recorded-environment",
+        action="store_true",
+        help="print the guide revision, Python, traigent and litellm the committed "
+        "cards were measured with, as name=value lines, and exit",
+    )
     arguments = parser.parse_args()
+
+    if arguments.recorded_environment:
+        try:
+            recorded = recorded_environment()
+        except HarnessFault as broken:
+            return harness_fault(broken, None)
+        for name, value in recorded.items():
+            print(f"{name}={value}")
+        return 0
+    if arguments.guide is None:
+        parser.error("--guide is required to measure")
 
     scripts = (
         arguments.guide.expanduser().resolve()
@@ -754,6 +1078,26 @@ def main() -> int:
             "a table scored against a moved target is not the table it claims to be."
         )
     revision = found
+
+    if arguments.compare:
+        # The record was taken at the pin, so a comparison anywhere else compares two
+        # different guides; and in another environment it compares two machines.
+        if revision != PINNED_REVISION:
+            parser.error(
+                f"--compare needs the pinned revision {PINNED_REVISION[:8]}, the one the "
+                "committed cards record"
+            )
+        try:
+            mismatch = environment_mismatch(recorded_environment())
+        except HarnessFault as broken:
+            return harness_fault(broken, None)
+        if mismatch:
+            parser.error(
+                "this interpreter is not the environment the committed cards were "
+                "measured in, so every card would differ for that reason alone:\n    "
+                + "\n    ".join(mismatch)
+                + "\n  `--recorded-environment` prints what to install."
+            )
 
     # Before anything is built: the documents this sweep hands to `readiness.py`, against
     # the contract the checkout in front of us actually reads. A mismatch here is a
@@ -859,6 +1203,31 @@ def main() -> int:
     )
     refused = [row for row in results if row.get("refused")]
     print(f"\nguide revision {revision}")
+
+    if arguments.compare:
+        try:
+            differences, compared, recorded_refusals = compare_with_record(staging)
+        except HarnessFault as broken:
+            return harness_fault(broken, staging)
+        print(
+            f"compared {compared} cards byte for byte with cards/, and results.json whole"
+            + (
+                f"; refusals compared as recorded: {', '.join(recorded_refusals)}"
+                if recorded_refusals
+                else ""
+            )
+        )
+        if differences:
+            print(
+                f"\nThe measurement differs from the committed record "
+                f"({len(differences)}):"
+            )
+            for difference in differences:
+                print(f"  {difference}")
+            print(f"What this run produced is under {staging}")
+            return 4
+        print("The committed record reproduces.")
+        return 0
 
     # Publishing is asked for, never assumed. `cards/` is committed evidence, and the
     # commonest reason to run this script is to CHECK that evidence rather than to

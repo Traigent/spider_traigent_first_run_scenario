@@ -1,0 +1,332 @@
+[
+  {
+    "check": "env-source",
+    "status": "PASS",
+    "detail": "process environment only; process values take precedence",
+    "metrics": null
+  },
+  {
+    "check": "env-file",
+    "status": "WARN",
+    "detail": ".env not found; create a minimal file before paid work",
+    "metrics": null
+  },
+  {
+    "check": "python-version",
+    "status": "PASS",
+    "detail": "3.12.3",
+    "metrics": null
+  },
+  {
+    "check": "sdk-version",
+    "status": "PASS",
+    "detail": "traigent 0.26.0; this walkthrough was measured on 0.27.0, and nothing it does needs that exact release, so the run continues. Where these notes describe what the SDK stores or sends, they describe 0.27.0",
+    "metrics": {
+      "installed": "0.26.0",
+      "tested": "0.27.0"
+    }
+  },
+  {
+    "check": "existing-traigent-use",
+    "status": "PASS",
+    "detail": "this project does not list traigent among its dependencies",
+    "metrics": {
+      "declared_in": []
+    }
+  },
+  {
+    "check": "env-shadowed-key",
+    "status": "PASS",
+    "detail": "no credential or route name is masking a different value in the shell and .env",
+    "metrics": {
+      "shadowed_variables": [],
+      "blank_process_masks": [],
+      "fingerprints": {},
+      "route_values": {}
+    }
+  },
+  {
+    "check": "provider-credentials",
+    "status": "WARN",
+    "detail": "no LLM provider credential names are present; inspect the agent route separately. Bedrock signs through the AWS credential chain, so a shared profile, an SSO session or an instance role authenticates it with nothing set here. On a route whose credential is an environment variable, do not begin paid work until that route's credential is present",
+    "metrics": null
+  },
+  {
+    "check": "traigent-key",
+    "status": "PASS",
+    "detail": "not configured yet; required only for connected execution",
+    "metrics": null
+  },
+  {
+    "check": "cost-cap",
+    "status": "PASS",
+    "detail": "no per-optimization cap set here; each paid process derives its own from the approved figures it is launched with",
+    "metrics": null
+  },
+  {
+    "check": "model-format:openrouter/qwen/qwen3-coder",
+    "status": "PASS",
+    "detail": "format accepted; liveness requires a separately approved provider check",
+    "metrics": null
+  },
+  {
+    "check": "model-pricing:openrouter/qwen/qwen3-coder",
+    "status": "PASS",
+    "detail": "local price map returned prompt=0.00022, completion=0.00095",
+    "metrics": null
+  },
+  {
+    "check": "model-format:openrouter/openai/gpt-oss-120b",
+    "status": "PASS",
+    "detail": "format accepted; liveness requires a separately approved provider check",
+    "metrics": null
+  },
+  {
+    "check": "model-pricing:openrouter/openai/gpt-oss-120b",
+    "status": "PASS",
+    "detail": "local price map returned prompt=0.00017999999999999998, completion=0.0007999999999999999",
+    "metrics": null
+  },
+  {
+    "check": "model-format:openrouter/meta-llama/llama-3.3-70b-instruct",
+    "status": "PASS",
+    "detail": "format accepted; liveness requires a separately approved provider check",
+    "metrics": null
+  },
+  {
+    "check": "model-pricing:openrouter/meta-llama/llama-3.3-70b-instruct",
+    "status": "WARN",
+    "detail": "no local price entry; do not claim a reliable estimate until pricing is resolved",
+    "metrics": null
+  },
+  {
+    "check": "dataset-integrity",
+    "status": "FAIL",
+    "detail": "24/30 rows (80.0%) are unusable; line 1 (+23 more): missing selected expected-output field 'output'",
+    "metrics": {
+      "invalid_rows": 24,
+      "malformed_rows": 0,
+      "unlabelled_rows": 24,
+      "candidate_rows": 30
+    }
+  },
+  {
+    "check": "dataset-size",
+    "status": "WARN",
+    "detail": "6 rows is a wiring check, not a credible score",
+    "metrics": null
+  },
+  {
+    "check": "dataset-first-run-rows",
+    "status": "PASS",
+    "detail": "proposed first-run subset cap: up to 6 questions; at that count, 6 scoreable rows per configuration within the 18-row tuning limit, from 6 usable rows; difficulty coverage may require fewer questions; select and record the actual row ids before baseline approval",
+    "metrics": {
+      "first_run_questions": 6,
+      "first_run_rows_fewest": 6,
+      "first_run_rows_most": 6,
+      "usable_rows": 6,
+      "first_run_distinct_rows": 6,
+      "first_run_distinct_scope": "this dataset"
+    }
+  },
+  {
+    "check": "dataset-input-shape",
+    "status": "PASS",
+    "detail": "all inputs use the same str shape",
+    "metrics": null
+  },
+  {
+    "check": "dataset-provenance",
+    "status": "PASS",
+    "detail": "declared sources: ['real']",
+    "metrics": {
+      "rows": 30,
+      "labelled_rows": 6,
+      "synthetic": false,
+      "generated_outputs": false,
+      "collected_rows": 30,
+      "synthesised_rows": 0,
+      "undeclared_rows": 0,
+      "generated_answer_rows": 0,
+      "answerable_rows": 6,
+      "sources": [
+        "real"
+      ],
+      "unrecognised_sources": []
+    }
+  },
+  {
+    "check": "dataset-ids",
+    "status": "PASS",
+    "detail": "stable ids are unique",
+    "metrics": {
+      "duplicate_ids": 0,
+      "rows_without_id": 0,
+      "generated_rows_without_id": 0,
+      "row_id_digests": [
+        "0eb4649235b89c35",
+        "255ecbeac60c7196",
+        "2565cba4ab27587d",
+        "295a337e8498d767",
+        "32475fb0c6a45912",
+        "34944e4699313ba8",
+        "428c9bfe109fd2f4",
+        "48e9179a106729c4",
+        "4b81662378641b77",
+        "5322f2ef5216b7f9",
+        "5414f27ca28399e9",
+        "55372f8ae3cf4a91",
+        "5670717f15a34d9d",
+        "58415e6bd7407336",
+        "7b8490edcf3e365c",
+        "7cb7330d585a4d1e",
+        "9d7f2aea05e3a763",
+        "a05120cedba39951",
+        "ab46ee7b56df1312",
+        "b0a89b60434dbbc1",
+        "c0226979476e0ee3",
+        "c34f2a470da27c08",
+        "c5677801fb95218b",
+        "d745e6f5913d43a2",
+        "e0cb5c36dc697e38",
+        "e28ba56c08c9b85e",
+        "e397c631743decd4",
+        "e9de0e9ee1fe38c2",
+        "f7620baf579e5beb",
+        "f7e410a7cb3e1e03"
+      ],
+      "run_row_id_digests": [
+        "0eb4649235b89c35",
+        "255ecbeac60c7196",
+        "2565cba4ab27587d",
+        "295a337e8498d767",
+        "32475fb0c6a45912",
+        "34944e4699313ba8",
+        "428c9bfe109fd2f4",
+        "48e9179a106729c4",
+        "4b81662378641b77",
+        "5322f2ef5216b7f9",
+        "5414f27ca28399e9",
+        "55372f8ae3cf4a91",
+        "5670717f15a34d9d",
+        "58415e6bd7407336",
+        "7b8490edcf3e365c",
+        "7cb7330d585a4d1e",
+        "9d7f2aea05e3a763",
+        "a05120cedba39951",
+        "ab46ee7b56df1312",
+        "b0a89b60434dbbc1",
+        "c0226979476e0ee3",
+        "c34f2a470da27c08",
+        "c5677801fb95218b",
+        "d745e6f5913d43a2",
+        "e0cb5c36dc697e38",
+        "e28ba56c08c9b85e",
+        "e397c631743decd4",
+        "e9de0e9ee1fe38c2",
+        "f7620baf579e5beb",
+        "f7e410a7cb3e1e03"
+      ]
+    }
+  },
+  {
+    "check": "dataset-duplicates",
+    "status": "PASS",
+    "detail": "no exact or normalized duplicate inputs",
+    "metrics": {
+      "distinct_rows": 6,
+      "scoreable_rows": 6
+    }
+  },
+  {
+    "check": "dataset-near-duplicates",
+    "status": "PASS",
+    "detail": "no input pair reaches 70% similarity",
+    "metrics": {
+      "near_duplicate_pairs": 0,
+      "near_duplicate_scan_complete": true
+    }
+  },
+  {
+    "check": "dataset-outputs",
+    "status": "PASS",
+    "detail": "6 distinct expected outputs",
+    "metrics": null
+  },
+  {
+    "check": "dataset-ceiling-risk",
+    "status": "SKIP",
+    "detail": "answer dominance is UNCHECKED for every expected output, not clean: 6 rows spread over 6 distinct answers is fewer than two rows per distinct answer on average, so how often the most common one appears is a listing of your answers rather than a measurement of them, and 1 in 6 is not a chance baseline to compare it against. Free text lands here because every row is its own answer; so does a label set with too few rows to fill it. No answer here reaches 90% of the rows either, which is the one thing that can be said without a baseline - and that is not the same as no answer dominating",
+    "metrics": null
+  },
+  {
+    "check": "dataset-split",
+    "status": "PASS",
+    "detail": "tuning and held-out inputs are disjoint",
+    "metrics": {
+      "kind": "tuning-and-holdout",
+      "overlapping_inputs": 0
+    }
+  },
+  {
+    "check": "dataset-split-family",
+    "status": "SKIP",
+    "detail": "recurring input forms account for under 80% of the tuning rows, so most of what the split separates has no form to read it against",
+    "metrics": {
+      "families": 6
+    }
+  },
+  {
+    "check": "dataset-tuning-size",
+    "status": "WARN",
+    "detail": "24 tuning rows, 0 scoreable is a wiring check, not a credible optimization score",
+    "metrics": {
+      "tuning_rows": 24,
+      "tuning_labelled_rows": 0,
+      "tuning_distinct_rows": 24,
+      "tuning_distinct_scoreable_rows": 0
+    }
+  },
+  {
+    "check": "dataset-holdout-resolution",
+    "status": "WARN",
+    "detail": "6 held-out rows; one example changes the score by 16.7 percentage points",
+    "metrics": {
+      "holdout_rows": 6,
+      "holdout_labelled_rows": 6
+    }
+  },
+  {
+    "check": "dataset-difficulty-coverage",
+    "status": "PASS",
+    "detail": "6 of 6 rows carry a difficulty tag; bands present: ['easy', 'hard', 'medium', 'very-hard']",
+    "metrics": {
+      "tagged_rows": 6,
+      "total_rows": 6,
+      "candidate_rows": 30,
+      "bands": [
+        "easy",
+        "hard",
+        "medium",
+        "very-hard"
+      ],
+      "missing_bands": []
+    }
+  },
+  {
+    "check": "dataset-difficulty",
+    "status": "PASS",
+    "detail": "all four difficulty bands are represented",
+    "metrics": null
+  },
+  {
+    "check": "evaluator-shape",
+    "status": "PASS",
+    "detail": "evaluator.py parses as valid Python; this proves nothing about its scoring behavior, which is not executed here",
+    "metrics": {
+      "exists": true,
+      "parses": true,
+      "executes": false
+    }
+  }
+]

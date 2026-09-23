@@ -20,6 +20,23 @@ ones in the training split, so a model cannot succeed by memorising one schema.
 
 This is real recorded data. Not generated, not synthetic, not written for this repository.
 
+That sentence is about the bytes in `spider/`, and it stays true of every demo built from
+them. It is not a statement about what a row declares about itself. Six states write such a
+declaration: `undeclared` and `mostly-undeclared` put a word in the row's `provenance` field
+that the guide does not recognise, `mostly-synthetic` and `fully-synthetic` put `synthetic`
+there, and `generated-answers` and `mostly-generated-answers` leave `provenance` alone and add
+a second field, `output_provenance: model-generated`. What they write is the *customer's own
+declaration about their own rows*, which is exactly the thing the guide's provenance and
+answer-key checks read. A demo in one of those states carries rows that declare a source the
+guide cannot place, rows that declare themselves written rather than collected, or answers
+declared model-written; the rows underneath are the same recorded Spider rows as every other
+state's, and `ATTRIBUTION.txt` ships with them unchanged.
+
+The distinction matters because the two claims have different audiences. The guide is being
+shown a customer who says something about their data, and the person reading this repository
+is being told where the data actually came from. Neither sentence is allowed to be written in
+the other's place.
+
 ## Licence
 
 **CC BY-SA 4.0.** The code in this repository is Apache-2.0; the data is not, and the two
@@ -116,7 +133,7 @@ similarity check reads it.
 | `schema` | that database's `CREATE TABLE` text, checked to match the database actually shipped. |
 | `split` | `tuning` (240) or `holdout` (60). |
 | `difficulty` | `easy`, `medium`, `hard` or `very-hard`. |
-| `provenance` | `real`. These are recorded human-written rows, and saying so is what makes the readiness score treat them as evidence rather than as a demonstration. |
+| `provenance` | `real`. These are recorded human-written rows, and saying so is what makes the readiness score treat them as evidence rather than as a demonstration. The word is chosen for the guide's vocabulary, which reads `real` as collected; `--dataset undeclared` rewrites it to `spider-dev` on the way into a project -- the name of the benchmark split the rows came from, which is what a person exporting them would write -- and the guide reads that as a word it does not know. The committed slice is not touched. |
 
 ## How the 300 were chosen
 

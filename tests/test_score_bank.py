@@ -30,6 +30,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -86,6 +87,20 @@ def load_harness() -> types.ModuleType:
     return module
 
 
+def build_module() -> types.ModuleType:
+    """`build.py` as a module, by path, registered before it runs.
+
+    A dataclass looks its module up by name while the class is being made, which is why
+    the registration comes first, as in `load_harness`.
+    """
+    located = importlib.util.spec_from_file_location("_build", REPO_ROOT / "build.py")
+    assert located is not None and located.loader is not None
+    builder = importlib.util.module_from_spec(located)
+    sys.modules[located.name] = builder
+    located.loader.exec_module(builder)
+    return builder
+
+
 def fingerprint(tree: Path) -> dict[str, str]:
     """Every file under a directory, by relative path and content digest."""
     return {
@@ -93,6 +108,338 @@ def fingerprint(tree: Path) -> dict[str, str]:
         for found in sorted(tree.rglob("*"))
         if found.is_file()
     }
+
+
+class TheSweepNamesEveryPreset(unittest.TestCase):
+    """A preset the builder has and the sweep does not name is a card that never exists.
+
+    The nine ported presets were added to both by hand; this pins the two lists to each
+    other so the next preset cannot land in one without the other.
+    """
+
+    def test_the_sweep_and_the_builder_agree_on_the_presets(self) -> None:
+        harness = load_harness()
+        builder = build_module()
+        # A preset may be named by the sweep's plain list or by a variant, which is
+        # how one carries an option -- `slow-scorer` states the calibration budget it
+        # is measured under rather than making every reproduction wait fifteen minutes
+        # for the default. Either counts as named; neither is a way to go unmeasured.
+        by_variant = {
+            flags[index + 1]
+            for _, flags, _ in harness.VARIANTS
+            for index, flag in enumerate(flags)
+            if flag == "--preset" and index + 1 < len(flags)
+        }
+        self.assertEqual(set(harness.PRESETS) | by_variant, set(builder.PRESETS))
+
+
+# The cards whose readiness card is byte-identical to another's, written down so
+# the set is a claim the suite checks rather than a paragraph somebody remembers
+# to edit. Each one is a finding -- "the guide notices nothing here" -- and the
+# documents say so in prose; this is the same statement in a form that goes red.
+IDENTICAL_CARDS = (
+    ("best-case", "sql-exec-stop"),
+    ("checked", "grid-normalized-exact--code-sql"),
+    ("fake-ruler", "wrong-wiring--calibrated"),
+    (
+        "fake-ruler--uncalibrated",
+        "raw-export--fields-declared",
+        "ready",
+        "two-agents",
+        "wrong-wiring",
+    ),
+    ("length-blind--uncalibrated", "opaque-scorer"),
+    ("no-agent", "ready--without-agent-knobs"),
+)
+
+
+class TheCommittedCardsAreWhatTheDocumentsSay(unittest.TestCase):
+    """The two claims about `cards/` that prose was carrying alone.
+
+    Both were stale at once: a preset could land with no card directory and no
+    README row with the whole suite green, and the section that catalogues
+    identical cards listed two pairs where there were six -- including a pair
+    this repository's own nine-preset round created.
+    """
+
+    def card_bodies(self) -> dict[str, str]:
+        cards = REPO_ROOT / "docs" / "measurements" / "cards"
+        return {
+            directory.name: (directory / "04-readiness-card.txt").read_text(
+                encoding="utf-8"
+            )
+            for directory in sorted(cards.iterdir())
+            if directory.is_dir() and (directory / "04-readiness-card.txt").is_file()
+        }
+
+    def test_every_preset_the_sweep_names_has_a_committed_card(self) -> None:
+        harness = load_harness()
+        published = {
+            directory.name
+            for directory in (REPO_ROOT / "docs" / "measurements" / "cards").iterdir()
+            if directory.is_dir()
+        }
+        missing = sorted(set(harness.PRESETS) - published)
+        self.assertEqual([], missing, "presets the sweep names with no card")
+
+    def test_the_identical_cards_are_the_ones_written_down(self) -> None:
+        bodies = self.card_bodies()
+        by_body: dict[str, list[str]] = {}
+        for name, body in bodies.items():
+            by_body.setdefault(body, []).append(name)
+        found = sorted(
+            tuple(sorted(names)) for names in by_body.values() if len(names) > 1
+        )
+        self.assertEqual(
+            sorted(tuple(sorted(group)) for group in IDENTICAL_CARDS),
+            found,
+            "the cards that are identical to another are not the ones recorded",
+        )
+
+
+# The presets whose own committed card cannot carry the condition `build.PRESET_CAPS` says
+# they were built for, each with the run that does show it (or None) and the reason. Written
+# down so each exception is a claim the suite checks in both directions: the preset's card
+# must still NOT carry the condition -- the day it does, the reason here and the prose that
+# repeats it are out of date -- and a run named as showing it must carry it.
+NOT_ON_THEIR_OWN_CARD: dict[str, tuple[str | None, str]] = {
+    "wrong-answers": (
+        None,
+        "the condition fires on the `no` verdicts of a row review, and the sweep passes "
+        "no row review: writing one would be the sweep answering the question this "
+        "preset asks (see score_bank.py)",
+    ),
+    "wrong-wiring": (
+        "wrong-wiring--calibrated",
+        "only probe answers expose a scorer that never reads the output, and the preset "
+        "ships none; the calibrated variant does",
+    ),
+    "split-by-database": (
+        None,
+        "a finding about the guide: its family check reads the leading words of each "
+        "question, which span every database, so a split along databases is not one it "
+        "sees (docs/measurements/README.md)",
+    ),
+}
+
+
+# What each preset built for no condition is expected to carry, exactly. "Built for nothing"
+# does not mean "an empty card": `two-agents` is `ready` with a second agent beside it, and
+# carries `ready`'s unvalidated-scorer ceiling. Held with equality, so a guide revision that
+# adds a condition to either -- or starts noticing the second agent -- fails by name.
+BUILT_FOR_NOTHING_CARRIES: dict[str, frozenset[str]] = {
+    "checked": frozenset(),
+    "two-agents": frozenset({"evaluator-unvalidated"}),
+}
+
+
+def card_conditions(tag: str) -> set[str]:
+    """The conditions a committed card carries, read from the card the guide printed."""
+    reading = json.loads(
+        (
+            REPO_ROOT / "docs" / "measurements" / "cards" / tag / "05-readiness.json"
+        ).read_text(encoding="utf-8")
+    )
+    return {cap["condition"] for cap in reading["caps"]}
+
+
+class EveryPresetOpensOnTheStateItWasBuiltFor(unittest.TestCase):
+    """The committed card of each preset, against what the preset was built to be.
+
+    Re-measuring at a later guide revision republishes every card, and a preset that
+    stopped reading as its state -- `mostly-synthetic-source` no longer raising
+    `dataset-mostly-synthetic` because the guide moved its rung, say -- would arrive as
+    one changed score among forty-nine. Here it is a named failure instead.
+    """
+
+    def test_every_preset_carries_the_conditions_it_was_built_for(self) -> None:
+        revision = json.loads(
+            (REPO_ROOT / "docs" / "measurements" / "cards" / "results.json").read_text(
+                encoding="utf-8"
+            )
+        )["guide_revision"][:8]
+        checked = 0
+        for preset, conditions in sorted(build_module().PRESET_CAPS.items()):
+            if not conditions or preset in NOT_ON_THEIR_OWN_CARD:
+                continue
+            with self.subTest(preset=preset):
+                carried = card_conditions(preset)
+                self.assertLessEqual(
+                    set(conditions),
+                    carried,
+                    f"{preset} was built for {sorted(conditions)}; its card at "
+                    f"{revision} carries {sorted(carried)}",
+                )
+                checked += 1
+        self.assertGreater(checked, 0, "no card was read, so none was checked")
+
+    def test_a_preset_built_for_nothing_carries_exactly_what_is_declared(self) -> None:
+        caps = build_module().PRESET_CAPS
+        self.assertEqual(
+            {name for name, conditions in caps.items() if not conditions},
+            set(BUILT_FOR_NOTHING_CARRIES),
+            "every preset built for no condition declares what its card carries",
+        )
+        for preset, expected in sorted(BUILT_FOR_NOTHING_CARRIES.items()):
+            with self.subTest(preset=preset):
+                self.assertEqual(set(expected), card_conditions(preset))
+
+    def test_every_exception_still_holds_and_says_where_it_shows(self) -> None:
+        caps = build_module().PRESET_CAPS
+        for preset, (shown_on, reason) in sorted(NOT_ON_THEIR_OWN_CARD.items()):
+            with self.subTest(preset=preset):
+                self.assertTrue(caps[preset], f"{preset} is built for no condition")
+                self.assertTrue(reason.strip())
+                self.assertFalse(
+                    set(caps[preset]) & card_conditions(preset),
+                    f"{preset}'s own card now carries {caps[preset]}, so the reason it "
+                    f"was excused -- {reason!r} -- and the prose repeating it are stale",
+                )
+                if shown_on is not None:
+                    self.assertLessEqual(set(caps[preset]), card_conditions(shown_on))
+
+
+SCORE_ROW = re.compile(
+    r"^\| `(?P<run>[a-z-]+)` \| (?P<score>\d+|refused) \| (?P<band>[A-Z ]+|--) \| "
+    r"(?:`(?P<action>[a-z-]+)`|--) \|",
+    re.MULTILINE,
+)
+
+
+def score_rows(document: Path, heading: str) -> list[tuple[str, str, str, str | None]]:
+    """The (run, score, band, action) rows of the score tables in one section."""
+    text = document.read_text(encoding="utf-8")
+    section = text.split(heading, 1)[1]
+    section = re.split(r"\n#{1,6} ", section, maxsplit=1)[0]
+    return [
+        (row["run"], row["score"], row["band"], row["action"])
+        for row in SCORE_ROW.finditer(section)
+    ]
+
+
+class TheScoreTablesAreTheCards(unittest.TestCase):
+    """Every score a table prints is read back off `results.json`, and every row is there.
+
+    The README's tables were written by hand from the cards and checked by nothing: the
+    round that added `synthetic-source` measured it, committed its cards, and left it out
+    of the README while the text beside the tables still said thirty-two.
+    """
+
+    def results(self) -> dict[str, dict[str, object]]:
+        record = json.loads(
+            (REPO_ROOT / "docs" / "measurements" / "cards" / "results.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        return {run["tag"]: run for run in record["runs"]}
+
+    def assert_rows_match(self, rows: list[tuple[str, str, str, str | None]]) -> None:
+        results = self.results()
+        for run, score, band, action in rows:
+            with self.subTest(run=run):
+                measured = results[run]
+                if measured.get("refused"):
+                    self.assertEqual(("refused", "--", None), (score, band, action))
+                else:
+                    self.assertEqual(
+                        (
+                            measured["overall"],
+                            measured["band"],
+                            measured["recommended_action"],
+                        ),
+                        (int(score), band, action),
+                    )
+
+    def test_the_readme_tables_hold_every_preset_once_as_measured(self) -> None:
+        rows = score_rows(
+            REPO_ROOT / "README.md",
+            "## Where each preset starts, and what the run has to do about it",
+        )
+        names = [run for run, _, _, _ in rows]
+        self.assertEqual(len(names), len(set(names)), "a preset is listed twice")
+        self.assertEqual(set(build_module().PRESETS), set(names))
+        self.assert_rows_match(rows)
+
+    def test_the_measurements_table_holds_every_run_once_as_measured(self) -> None:
+        rows = score_rows(
+            REPO_ROOT / "docs" / "measurements" / "README.md", "## Results"
+        )
+        names = [run for run, _, _, _ in rows]
+        self.assertEqual(len(names), len(set(names)), "a run is listed twice")
+        self.assertEqual(set(self.results()), set(names))
+        self.assert_rows_match(rows)
+
+
+class EveryCardRecordsTheBuildThatRan(unittest.TestCase):
+    """`argv.json` is the command a reader re-runs, so it has to be the one that ran.
+
+    It was rebuilt by hand beside the command that ran and left out the `demo`
+    subcommand: every card recorded a build that exits 2, while `01-build.txt` beside it
+    had the right one. The refused run is the one card the sweep deliberately leaves as
+    it was -- an older reading it could not reproduce -- and is named, not skipped.
+    """
+
+    def test_every_recorded_build_is_the_transcripts_and_parses(self) -> None:
+        cards = REPO_ROOT / "docs" / "measurements" / "cards"
+        runs = json.loads((cards / "results.json").read_text(encoding="utf-8"))["runs"]
+        parser = build_module().build_parser()
+        checked = 0
+        for run in runs:
+            if run.get("refused"):
+                continue
+            with self.subTest(run=run["tag"]):
+                recorded = json.loads(
+                    (cards / run["tag"] / "argv.json").read_text(encoding="utf-8")
+                )["build"]
+                transcript = (cards / run["tag"] / "01-build.txt").read_text(
+                    encoding="utf-8"
+                )
+                self.assertEqual("$ " + " ".join(recorded), transcript.splitlines()[0])
+                self.assertEqual(["python3", "build.py"], recorded[:2])
+                parsed = parser.parse_args(recorded[2:])
+                self.assertEqual("demo", parsed.command)
+                checked += 1
+        self.assertEqual(checked, len([run for run in runs if not run.get("refused")]))
+        self.assertGreater(checked, 0)
+
+
+class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):
+    """`slow-scorer` is measured under a stated `--timeout`, and that is a claim.
+
+    With no `--timeout` the guide budgets this calibration at 900 seconds, and
+    the scorer reaches that only when all fifteen minutes have run -- which every
+    reproduction of the sweep would then wait out. The sweep passes a small budget
+    instead. Deleting that branch
+    leaves the variant reading the default, the card's recorded
+    `timeout_seconds` no longer describing the run that produced it, and
+    nothing red.
+    """
+
+    def test_the_slow_scorer_variant_carries_a_timeout(self) -> None:
+        harness = load_harness()
+        options = {tag: opts for tag, _, opts in harness.VARIANTS}
+        self.assertIn("slow-scorer", options)
+        self.assertIn("calibration_timeout", options["slow-scorer"])
+        self.assertGreater(options["slow-scorer"]["calibration_timeout"], 0)
+
+    def test_the_recorded_card_was_taken_under_that_budget(self) -> None:
+        options = {tag: opts for tag, _, opts in load_harness().VARIANTS}
+        budget = options["slow-scorer"]["calibration_timeout"]
+        calibration = json.loads(
+            (
+                REPO_ROOT
+                / "docs"
+                / "measurements"
+                / "cards"
+                / "slow-scorer"
+                / "03-calibration.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(budget, calibration.get("timeout_seconds"))
+        self.assertTrue(
+            calibration.get("timed_out"),
+            "the card is the evidence that this preset reaches the timeout",
+        )
 
 
 class HarnessTestCase(unittest.TestCase):
@@ -151,7 +498,7 @@ class HarnessTestCase(unittest.TestCase):
         self.workspace = self.room / "workspace"
 
     def run_sweep(
-        self, score_one: object, publish: bool = False
+        self, score_one: object, publish: bool = False, *extra: str
     ) -> tuple[int, str, str]:
         """`main()` with the per-run measurement replaced, and its output captured."""
         self.harness.score_one = score_one
@@ -166,6 +513,7 @@ class HarnessTestCase(unittest.TestCase):
         ]
         if publish:
             argv.append("--publish")
+        argv.extend(extra)
         out, err = io.StringIO(), io.StringIO()
         original, sys.argv = sys.argv, argv
         try:
@@ -174,6 +522,30 @@ class HarnessTestCase(unittest.TestCase):
         finally:
             sys.argv = original
         return status, out.getvalue(), err.getvalue()
+
+    def refusing(self, refuse: str) -> object:
+        """A measurement that refuses one tag and scores every other."""
+
+        def score_one(
+            tag: str,
+            flags: tuple[str, ...],
+            scripts: Path,
+            workspace: Path,
+            staging: Path,
+            **options: object,
+        ) -> dict[str, object]:
+            room = staging / tag
+            room.mkdir(parents=True, exist_ok=True)
+            (room / "01-build.txt").write_text("built\n", encoding="utf-8")
+            if tag == refuse:
+                raise self.harness.GuideRefused(
+                    "calibrate_evaluator.py", 2, "Refusing to calibrate: ..."
+                )
+            (room / "04-readiness-card.txt").write_text("a card\n", encoding="utf-8")
+            (room / "argv.json").write_text("{}\n", encoding="utf-8")
+            return self.scored(tag)
+
+        return score_one
 
     def scored(self, tag: str) -> dict[str, object]:
         """The shape `score_one` returns for a run that scored."""
@@ -254,30 +626,6 @@ class AFaultOfOursPublishesNothing(HarnessTestCase):
 
 class AGuideRefusalIsOneRow(HarnessTestCase):
     """The other half: the guide declining is a finding, and costs one row."""
-
-    def refusing(self, refuse: str) -> object:
-        """A measurement that refuses one tag and scores every other."""
-
-        def score_one(
-            tag: str,
-            flags: tuple[str, ...],
-            scripts: Path,
-            workspace: Path,
-            staging: Path,
-            **options: object,
-        ) -> dict[str, object]:
-            room = staging / tag
-            room.mkdir(parents=True, exist_ok=True)
-            (room / "01-build.txt").write_text("built\n", encoding="utf-8")
-            if tag == refuse:
-                raise self.harness.GuideRefused(
-                    "calibrate_evaluator.py", 2, "Refusing to calibrate: ..."
-                )
-            (room / "04-readiness-card.txt").write_text("a card\n", encoding="utf-8")
-            (room / "argv.json").write_text("{}\n", encoding="utf-8")
-            return self.scored(tag)
-
-        return score_one
 
     def test_without_publish_the_committed_cards_are_untouched(self) -> None:
         before = fingerprint(self.cards)
@@ -373,6 +721,148 @@ class TheContractCheckStopsBeforeAnythingIsBuilt(HarnessTestCase):
             return self.scored(tag)
 
         return score_one
+
+
+class TheComparisonIsWithTheWholeRecord(HarnessTestCase):
+    """`--compare`: agreement with every card and with the refusals, or exit 4.
+
+    The committed record here is made the way the real one is -- a `--publish` of a sweep
+    in which one run is refused -- and then measured again.
+    """
+
+    REFUSED = "best-case--off-method-calibration"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.harness.PINNED_REVISION = self.revision
+        self.harness.recorded_environment = lambda: {"guide": self.revision}
+        self.harness.environment_mismatch = lambda recorded: []
+        status, _, _ = self.run_sweep(self.refusing(self.REFUSED), publish=True)
+        self.assertEqual(status, 1, "the record is made with one refused run")
+
+    def test_a_measurement_that_reproduces_the_record_agrees(self) -> None:
+        before = fingerprint(self.cards)
+        status, said, _ = self.run_sweep(
+            self.refusing(self.REFUSED), False, "--compare"
+        )
+        self.assertEqual(status, 0, said)
+        runs = json.loads((self.cards / "results.json").read_text(encoding="utf-8"))[
+            "runs"
+        ]
+        self.assertIn(f"compared {len(runs) - 1} cards byte for byte", said)
+        self.assertIn(f"refusals compared as recorded: {self.REFUSED}", said)
+        self.assertEqual(fingerprint(self.cards), before, "a comparison published")
+
+    def test_a_changed_card_is_a_difference_and_is_named(self) -> None:
+        (self.cards / "ready" / "04-readiness-card.txt").write_text(
+            "a card someone edited\n", encoding="utf-8"
+        )
+        status, said, _ = self.run_sweep(
+            self.refusing(self.REFUSED), False, "--compare"
+        )
+        self.assertEqual(status, 4)
+        self.assertIn(
+            "ready/04-readiness-card.txt: line 1 was 'a card someone edited', "
+            "now 'a card'",
+            said,
+        )
+
+    def test_a_refusal_the_record_does_not_hold_is_a_difference(self) -> None:
+        status, said, _ = self.run_sweep(self.refusing("ready"), False, "--compare")
+        self.assertEqual(status, 4)
+        self.assertIn("results.json: line", said)
+        self.assertIn(
+            "ready/04-readiness-card.txt: committed, and not produced now", said
+        )
+
+    def test_a_card_no_run_produces_is_a_difference(self) -> None:
+        (self.cards / "a-run-nobody-measures").mkdir()
+        status, said, _ = self.run_sweep(
+            self.refusing(self.REFUSED), False, "--compare"
+        )
+        self.assertEqual(status, 4)
+        self.assertIn("a-run-nobody-measures/: a committed card no run", said)
+
+    def test_comparing_nothing_is_not_agreement(self) -> None:
+        empty = '{"guide_revision": "x", "runs": []}\n'
+        staging = self.room / "empty-staging"
+        staging.mkdir()
+        (staging / "results.json").write_text(empty, encoding="utf-8")
+        for entry in list(self.cards.iterdir()):
+            if entry.is_dir():
+                shutil.rmtree(entry)
+        (self.cards / "results.json").write_text(empty, encoding="utf-8")
+        differences, compared, _ = self.harness.compare_with_record(staging)
+        self.assertEqual(compared, 0)
+        self.assertIn(
+            "compared 0 cards where the record has 0 that scored; a comparison of "
+            "nothing agrees with everything",
+            differences,
+        )
+
+
+class TheComparisonNeedsTheRecordedEnvironment(HarnessTestCase):
+    """Preflight writes the interpreter and the SDK into every card."""
+
+    def record(self, python: str, traigent: str | None) -> None:
+        self.harness.PINNED_REVISION = self.revision
+        runs = [
+            {"tag": "ready"},
+            {"tag": "empty"},
+            {"tag": "x", "refused": {"step": "calibrate_evaluator.py"}},
+        ]
+        (self.cards / "results.json").write_text(
+            json.dumps({"guide_revision": self.revision, "runs": runs}),
+            encoding="utf-8",
+        )
+        for tag, version in (("ready", python), ("empty", "3.12.3")):
+            (self.cards / tag / "02-preflight.json").write_text(
+                json.dumps(
+                    [
+                        {"check": "python-version", "detail": version},
+                        {
+                            "check": "sdk-version",
+                            "metrics": {"installed": traigent} if traigent else None,
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+    def test_the_environment_is_read_from_the_cards(self) -> None:
+        self.record("3.12.3", "0.26.0")
+        recorded = self.harness.recorded_environment()
+        self.assertEqual(recorded["python"], "3.12.3")
+        self.assertEqual(recorded["traigent"], "0.26.0")
+        self.assertEqual(recorded["guide"], self.revision)
+        self.assertEqual(
+            "litellm==" + recorded["litellm"], build_module().AGENT_REQUIREMENT
+        )
+
+    def test_cards_that_disagree_about_it_are_ours_to_fix(self) -> None:
+        self.record("3.11.9", "0.26.0")
+        with self.assertRaises(self.harness.HarnessFault) as caught:
+            self.harness.recorded_environment()
+        self.assertIn("do not agree on one python", str(caught.exception))
+
+    def test_another_interpreter_is_refused_before_anything_is_built(self) -> None:
+        self.record("3.12.3", "0.26.0")
+        self.harness.recorded_environment = lambda: {
+            "guide": self.revision,
+            "python": "0.0.0",
+            "traigent": "0.26.0",
+            "litellm": "1.93.0",
+        }
+        attempted: list[str] = []
+
+        def unreachable(tag: str, *rest: object, **options: object) -> object:
+            attempted.append(tag)  # pragma: no cover - the point is that it never runs
+            return self.scored(tag)
+
+        with self.assertRaises(SystemExit) as caught:
+            self.run_sweep(unreachable, False, "--compare")
+        self.assertEqual(caught.exception.code, 2)
+        self.assertEqual(attempted, [])
 
 
 if __name__ == "__main__":

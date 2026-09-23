@@ -24,9 +24,10 @@ import sqlite3
 import subprocess
 import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, TypeGuard
 
 REPO_ROOT = Path(__file__).resolve().parent
 COMPONENTS = REPO_ROOT / "components"
@@ -77,13 +78,31 @@ GUIDE_REQUIRED = ("GUIDE.md", "skills")
 # setting only from values it can see there. Hence one agent per vendor rather than one
 # agent reading a roster from somewhere else.
 PROVIDERS = ("openrouter", "direct")
-AGENT_STATES = ("ready", "no-knobs", "missing")
+AGENT_STATES = ("ready", "no-knobs", "two-agents", "missing")
+# `two-agents` ships the tunable agent at `agent.py` and, beside it, a second agent that
+# has nothing to do with it -- the shape of a project that has grown a side tool. The
+# second one lives in a directory of its own with its own rows and its own scorer, and
+# which of the two a run should work on is written down by the customer in PROJECT.md,
+# a file none of the guide's tools read.
+SECOND_AGENT_DIRECTORY = "sql_explainer"
+SECOND_AGENT_ROWS = 20
+EXPLAINER = COMPONENTS / "explainer"
+PROJECT_NOTE = "PROJECT.md"
 
 
 def agent_file(state: str, provider: str) -> Path | None:
     if state == "missing":
         return None
+    if state == "two-agents":
+        # `agent.py` is the tunable agent, byte for byte. What the state adds is beside
+        # it, not in it.
+        state = "ready"
     return COMPONENTS / "agent" / provider / f"agent_{state.replace('-', '_')}.py"
+
+
+def second_agent_file(provider: str) -> Path:
+    """The second agent's own source, per vendor for the same reason the first is."""
+    return EXPLAINER / provider / "agent.py"
 
 
 def agent_models(agent_source: Path | None) -> list[str]:
@@ -163,6 +182,15 @@ EVALUATOR_FILES = {
     "exec-match": COMPONENTS / "evaluator" / "exec_match.py",
     "broken": COMPONENTS / "evaluator" / "broken.py",
     "swapped": COMPONENTS / "evaluator" / "swapped.py",
+    # A scorer that hands both queries to a grading library the project does not carry.
+    # It parses, it names a method nothing here can read, and it has never been run.
+    "opaque": COMPONENTS / "evaluator" / "opaque.py",
+    # A scorer that compares the lengths of the two queries and nothing else: a number
+    # that moves, and never for the right reason.
+    "length-blind": COMPONENTS / "evaluator" / "length_blind.py",
+    # A scorer that compares text the ordinary way and asks a service to do it, one row
+    # per call. Nothing is wrong with the comparison; what is wrong is what it costs.
+    "slow": COMPONENTS / "evaluator" / "slow.py",
     "missing": None,
 }
 DATASET_STATES = (
@@ -172,6 +200,17 @@ DATASET_STATES = (
     "unlabeled",
     "duplicated",
     "wrong-answers",
+    "leaky",
+    "holdout-labelled",
+    "split-by-database",
+    "raw-export",
+    "torn",
+    "undeclared",
+    "mostly-undeclared",
+    "mostly-synthetic",
+    "fully-synthetic",
+    "generated-answers",
+    "mostly-generated-answers",
     "missing",
 )
 CALIBRATION_STATES = ("none", "present")
@@ -200,9 +239,103 @@ TINY_ROWS = 10
 # this repository's.
 DAMAGED_ROWS = 60
 DUPLICATED_SHARE = 0.5
-DAMAGED_STATES = ("duplicated", "wrong-answers")
+# Every state whose rows leave here other than as the slice holds them. The questions and
+# answers are Spider's throughout; what each state does to them on the way out is this
+# repository's, and the manifest names it (`damage`) and describes it (`damage_detail`).
+DAMAGED_STATES = (
+    "duplicated",
+    "wrong-answers",
+    "leaky",
+    "holdout-labelled",
+    "split-by-database",
+    "raw-export",
+    "torn",
+    "undeclared",
+    "mostly-undeclared",
+    "mostly-synthetic",
+    "fully-synthetic",
+    "generated-answers",
+    "mostly-generated-answers",
+)
+# The states that ship the whole slice. Every other labelled state is a seeded draw.
+FULL_SLICE_STATES = (
+    "ready",
+    "leaky",
+    "split-by-database",
+    "raw-export",
+    "undeclared",
+    "mostly-undeclared",
+    "mostly-synthetic",
+    "fully-synthetic",
+    "generated-answers",
+    "mostly-generated-answers",
+)
 UNLABELED_ROWS = 40
 SAMPLE_SEED = 42
+DRAW_SIZES = {
+    "mini": MINI_ROWS,
+    "tiny": TINY_ROWS,
+    "unlabeled": UNLABELED_ROWS,
+    "duplicated": DAMAGED_ROWS,
+    "holdout-labelled": MINI_ROWS,
+    "torn": MINI_ROWS,
+}
+# How many tuning rows `leaky` emits a second time under the held-out label, and how a
+# copy's id differs from its original's. The copy repeats the row's text and nothing else:
+# a copy that kept the id would be two rows with one name, which is a different defect
+# and one the guide catches first, hiding the leak behind it.
+LEAKED_ROWS = 6
+LEAK_ID_SUFFIX = "-holdout"
+# The share of rows `split-by-database` holds out as whole databases, and how far from it
+# a cut made of whole databases is allowed to land.
+DATABASE_HOLDOUT_SHARE = 0.2
+DATABASE_HOLDOUT_TOLERANCE = 0.1
+# How many lines `torn` cuts short, and where along the line each cut falls.
+TORN_LINES = 2
+TORN_AT = 0.6
+# The key names a row is written under. `raw-export` uses Spider's own, the way a
+# benchmark export carries them; everything else uses the two the first-run tooling reads.
+DATASET_KEYS = {"input": "input", "output": "output"}
+RAW_EXPORT_KEYS = {"input": "question", "output": "query"}
+# What `undeclared` writes where the slice says `real`: the name of the benchmark split
+# the rows were exported from, which is what somebody who exported them would write, and
+# a word outside the guide's provenance vocabulary.
+UNDECLARED_PROVENANCE = "spider-dev"
+# The share of rows the three "mostly" states touch. The guide's provenance ladder and its
+# answer-key ladder each have a rung at "more than half", so damaging every row and
+# damaging most of them are different readings, not the same one twice: 65 against 70 on
+# the provenance ladder, and a different condition and remedy on the card. 0.6 clears the
+# guide's 0.5 boundary by a margin no rounding can cross.
+MOSTLY_SHARE = 0.6
+# What a row says when the customer declares the row itself written rather than collected,
+# and what it says when they declare the ANSWER model-written while the question stays
+# real. Both are the fictional customer's own declaration about their own rows -- the same
+# in-world channel `undeclared` writes on -- and neither says anything about where this
+# repository's bytes came from. `docs/dataset.md` states that separation once, for all of
+# them.
+SYNTHETIC_PROVENANCE = "synthetic"
+GENERATED_ANSWER_PROVENANCE = "model-generated"
+# Where a row carries the second declaration. The guide reads an answer's provenance from
+# `output_provenance` at the row's top level or inside `metadata`; this repository writes
+# everything but `input` and `output` in `metadata`, so it uses that one.
+GENERATED_ANSWER_KEY = "output_provenance"
+# What `damage_detail.slice_says` records for the answer key: the slice declares no
+# answer provenance at all, so the rows that do not declare one carry no such key.
+SLICE_DECLARES_NO_ANSWER_PROVENANCE = (
+    "nothing -- the slice declares no answer provenance"
+)
+# The two halves of a row's metadata. `STRUCTURAL_ROW_FIELDS` say where the row sits and
+# what it is about; `DECLARATION_ROW_FIELDS` are the customer speaking about their own
+# rows, which is what the guide's provenance and answer-key checks read.
+#
+# The split is named rather than derived, and the suite fails when a shipped row carries a
+# key in neither set (`test_every_metadata_key_is_classified_as_structure_or_declaration`).
+# Deriving it -- "a declaration is anything that is not structural" -- was tried and is
+# wrong in the expensive direction: it swept `schema`, the row's whole CREATE TABLE block,
+# into a file that has no use for it. Naming both sides means a new field cannot be quietly
+# assumed into either one.
+STRUCTURAL_ROW_FIELDS = frozenset({"id", "db_id", "difficulty", "split", "schema"})
+DECLARATION_ROW_FIELDS = frozenset({"provenance", GENERATED_ANSWER_KEY})
 
 # Where a project keeps the probe answers it uses to check its own scorer. The guide reads
 # this path, and a project that has one can have its evaluator validated at the opening gate
@@ -212,6 +345,13 @@ CALIBRATION_FILE = "calibration-cases.json"
 _TEXT_PROBES = COMPONENTS / "calibration" / "exact_match.json"
 CALIBRATION_SOURCES = {
     "exact-match": _TEXT_PROBES,
+    # Its own file, not the shared text probes. The slow scorer's comparison is weaker
+    # than the text comparator's -- whitespace, keyword case and a trailing semicolon,
+    # and nothing about quoting -- so it fails four of the shared `equivalent_good`
+    # probes. Shipping those would be exactly the answers-nobody-checked this module
+    # refuses elsewhere. These cases pin what it really accepts, and each was run
+    # against the shipped scorer before it was written down.
+    "slow": COMPONENTS / "calibration" / "slow.json",
     "exec-match": COMPONENTS / "calibration" / "exec_match.json",
     # The always-correct scorer is deliberately given the text comparator's probes: the
     # point is that it fails the same questions the honest one passes. One file rather than
@@ -220,6 +360,13 @@ CALIBRATION_SOURCES = {
     # The mis-wired scorer never looks at the answer, so it fails the same probes for the
     # opposite reason: it marks the right answer wrong instead of the wrong answer right.
     "swapped": _TEXT_PROBES,
+    # The length comparison gets the same probes and fails them differently again: the
+    # recorded answer scores 1.0, a re-spelling of it scores less, and a wrong answer of
+    # about the same length scores nearly full marks. Not constant, and not a ruler.
+    "length-blind": _TEXT_PROBES,
+    # `opaque` has no entry on purpose. Its grader is a library the project does not
+    # carry, so nothing here has ever run it, and probe answers for it would be answers
+    # nobody has checked -- `--calibration present` is refused for it.
 }
 # The guide reserves this as its fallback; on that route it stops if one is already there,
 # so a demo must never pre-empt it.
@@ -227,11 +374,22 @@ FORBIDDEN_VENV_NAME = ".venv-traigent"
 
 # Which evaluator method and task kind each evaluator honestly is. Recorded in the manifest
 # so a run can be described without re-deriving it, and reported by `list`.
-EVALUATOR_FACTS = {
+EVALUATOR_FACTS: dict[str, dict[str, Any]] = {
     "exact-match": {"method": "normalized-exact", "executes_candidate_output": False},
     "exec-match": {"method": "execution", "executes_candidate_output": True},
     "broken": {"method": "normalized-exact", "executes_candidate_output": False},
     "swapped": {"method": "normalized-exact", "executes_candidate_output": False},
+    # No method, because none can be declared honestly. The grader the file calls is not
+    # here to read, so whether it executes anything is unknown too: `None` on both, which
+    # is the same answer as "not declared" and never more than the file supports.
+    "opaque": {"method": None, "executes_candidate_output": None},
+    # No method either. A comparison of lengths is not one of the methods the guide
+    # names, and declaring the nearest one would credit the file with a comparison it
+    # does not make. It imports nothing and runs nothing, so that half is known.
+    "length-blind": {"method": None, "executes_candidate_output": False},
+    # A method can be declared here: the comparison really is a normalised text match,
+    # and the sleep is in how it reaches that comparison rather than in what it compares.
+    "slow": {"method": "normalized-exact", "executes_candidate_output": False},
 }
 
 PRESETS = {
@@ -280,6 +438,63 @@ PRESETS = {
         "eval": "exec-match",
         "calibration": "present",
     },
+    "leaky-split": {"agent": "ready", "dataset": "leaky", "eval": "exact-match"},
+    "holdout-only": {
+        "agent": "ready",
+        "dataset": "holdout-labelled",
+        "eval": "exact-match",
+    },
+    "split-by-database": {
+        "agent": "ready",
+        "dataset": "split-by-database",
+        "eval": "exact-match",
+    },
+    "raw-export": {"agent": "ready", "dataset": "raw-export", "eval": "exact-match"},
+    "torn-lines": {"agent": "ready", "dataset": "torn", "eval": "exact-match"},
+    "undeclared-source": {
+        "agent": "ready",
+        "dataset": "undeclared",
+        "eval": "exact-match",
+    },
+    "mostly-undeclared-source": {
+        "agent": "ready",
+        "dataset": "mostly-undeclared",
+        "eval": "exact-match",
+    },
+    "mostly-synthetic-source": {
+        "agent": "ready",
+        "dataset": "mostly-synthetic",
+        "eval": "exact-match",
+    },
+    "synthetic-source": {
+        "agent": "ready",
+        "dataset": "fully-synthetic",
+        "eval": "exact-match",
+    },
+    "generated-answer-key": {
+        "agent": "ready",
+        "dataset": "generated-answers",
+        "eval": "exact-match",
+    },
+    "mostly-generated-answer-key": {
+        "agent": "ready",
+        "dataset": "mostly-generated-answers",
+        "eval": "exact-match",
+    },
+    "opaque-scorer": {"agent": "ready", "dataset": "ready", "eval": "opaque"},
+    "slow-scorer": {
+        "agent": "ready",
+        "dataset": "ready",
+        "eval": "slow",
+        "calibration": "present",
+    },
+    "length-blind": {
+        "agent": "ready",
+        "dataset": "ready",
+        "eval": "length-blind",
+        "calibration": "present",
+    },
+    "two-agents": {"agent": "two-agents", "dataset": "ready", "eval": "exact-match"},
 }
 
 PRESET_NOTES = {
@@ -300,6 +515,71 @@ PRESET_NOTES = {
     "wrong-answers": "every answer runs, and answers a different question",
     "hand-written": "ten examples, and probes kept for the scorer",
     "best-case": "tunable, complete, probes kept, and scored by running the SQL",
+    "leaky-split": "six tuning rows appear a second time as held-out rows",
+    "holdout-only": "answers on the held-out rows only; nothing to tune on",
+    "split-by-database": "the held-out rows are whole databases the tuning side never sees",
+    "raw-export": "the rows under Spider's own key names, as the benchmark exports them",
+    "torn-lines": "two lines of the data cut short, the way a stopped export leaves them",
+    "slow-scorer": (
+        "the scorer is right and asks a service per row; a guided run waits the full "
+        "fifteen-minute calibration budget before it can read the card"
+    ),
+    "undeclared-source": "every row says where it came from in a word the guide does not know",
+    "mostly-undeclared-source": "most rows do, and the rest still say they were collected",
+    "mostly-synthetic-source": "most rows declare themselves written rather than collected",
+    "synthetic-source": "every row declares itself written rather than collected",
+    "generated-answer-key": "every answer is declared model-written; the questions are real",
+    "mostly-generated-answer-key": "most answers are, and the rest were written by a person",
+    "opaque-scorer": "a scorer that calls a grading library the project does not carry",
+    "length-blind": "a scorer that compares the lengths of the two queries, and probes",
+    "two-agents": "a second agent beside the first, and a note saying which one to work on",
+}
+
+# The readiness conditions each preset was built to put on the guide's opening card -- the
+# state it stands for, in the guide's own vocabulary. Declared once, here beside the presets,
+# so that the committed measurement of each one can be held to it: a re-measurement at a
+# later guide revision that moves a preset off the state it was built for fails the suite
+# instead of being published as an ordinary change of score.
+#
+# Two presets are built for no condition. `checked` is the complete project with nothing
+# wrong in it, and `two-agents` asks which agent a run selects, which the opening card does
+# not record; `tests/test_score_bank.py` declares exactly what each one's card carries.
+# Three are built for a condition their own card does not carry -- one needs probes the
+# preset does not ship, one a row review the measurement never passes, and one is a
+# finding about the guide -- and `tests/test_score_bank.py` names each with its reason.
+PRESET_CAPS: dict[str, tuple[str, ...]] = {
+    "ready": ("evaluator-unvalidated",),
+    "checked": (),
+    "no-eval": ("evaluator-absent",),
+    "no-labels": ("dataset-no-expected-outputs",),
+    "no-knobs": ("agent-no-varying-knobs",),
+    "sql-exec-stop": ("evaluator-calibration-refused",),
+    "fake-ruler": ("evaluator-invalid",),
+    "agent-and-logs": ("dataset-no-expected-outputs", "evaluator-absent"),
+    "logs-only": ("agent-absent", "dataset-no-expected-outputs", "evaluator-absent"),
+    "no-agent": ("agent-absent",),
+    "no-data": ("dataset-absent",),
+    "empty": ("agent-absent", "dataset-absent", "evaluator-absent"),
+    "wrong-wiring": ("evaluator-invalid",),
+    "duplicated-data": ("dataset-integrity-fail", "dataset-repeated-rows"),
+    "wrong-answers": ("dataset-unsound-expected-outputs",),
+    "hand-written": ("dataset-below-measurable-size",),
+    "best-case": ("evaluator-calibration-refused",),
+    "leaky-split": ("dataset-tune-holdout-overlap",),
+    "holdout-only": ("dataset-tuning-split-empty",),
+    "split-by-database": ("dataset-split-by-task-family",),
+    "raw-export": ("dataset-shape-unrecognised",),
+    "torn-lines": ("dataset-integrity-fail",),
+    "undeclared-source": ("dataset-undeclared-provenance",),
+    "mostly-undeclared-source": ("dataset-mostly-undeclared",),
+    "mostly-synthetic-source": ("dataset-mostly-synthetic",),
+    "synthetic-source": ("dataset-fully-synthetic",),
+    "generated-answer-key": ("dataset-generated-answer-key",),
+    "mostly-generated-answer-key": ("dataset-mostly-generated-answer-key",),
+    "opaque-scorer": ("evaluator-unresolved",),
+    "slow-scorer": ("evaluator-timeout",),
+    "length-blind": ("evaluator-invalid",),
+    "two-agents": (),
 }
 
 
@@ -467,16 +747,11 @@ def select_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
     `wrong-answers` draws differently, because the damage it ships constrains which rows can
     be drawn at all -- see `deranged_draw`.
     """
-    if state == "ready":
+    if state in FULL_SLICE_STATES:
         return list(rows)
     if state == "wrong-answers":
         return deranged_draw(rows, DAMAGED_ROWS)
-    wanted = {
-        "mini": MINI_ROWS,
-        "tiny": TINY_ROWS,
-        "duplicated": DAMAGED_ROWS,
-        "wrong-answers": DAMAGED_ROWS,
-    }.get(state, UNLABELED_ROWS)
+    wanted = DRAW_SIZES[state]
     by_band: dict[str, dict[str, list[dict[str, Any]]]] = {}
     for row in rows:
         band = by_band.setdefault(
@@ -528,7 +803,53 @@ def damage_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
     Both claims are checked here rather than asserted in prose: no row keeps the answer it
     came with, and every answer that ships still runs against its own database and still
     returns rows.
+
+    `leaky` appends a few tuning rows a second time under the held-out label, `split-by-
+    database` moves the split line so that it falls between databases, and `undeclared`
+    rewrites what every row says about where it came from. The remaining damaged states --
+    `holdout-labelled`, `raw-export` and `torn` -- change nothing about which rows ship or
+    what they hold; what they change is how the rows are written, which is `project_row`'s
+    and `write_dataset`'s business, so they pass through here untouched.
     """
+    if state == "leaky":
+        return leak_rows(rows)
+    if state == "split-by-database":
+        return resplit_by_database(rows)
+    if state == "undeclared":
+        return [
+            {
+                **row,
+                "metadata": {**row["metadata"], "provenance": UNDECLARED_PROVENANCE},
+            }
+            for row in rows
+        ]
+    if state == "mostly-undeclared":
+        return declare_on_most(rows, "provenance", UNDECLARED_PROVENANCE)
+    if state == "mostly-synthetic":
+        return declare_on_most(rows, "provenance", SYNTHETIC_PROVENANCE)
+    if state == "fully-synthetic":
+        return [
+            {
+                **row,
+                "metadata": {**row["metadata"], "provenance": SYNTHETIC_PROVENANCE},
+            }
+            for row in rows
+        ]
+    if state == "generated-answers":
+        return [
+            {
+                **row,
+                "metadata": {
+                    **row["metadata"],
+                    GENERATED_ANSWER_KEY: GENERATED_ANSWER_PROVENANCE,
+                },
+            }
+            for row in rows
+        ]
+    if state == "mostly-generated-answers":
+        return declare_on_most(rows, GENERATED_ANSWER_KEY, GENERATED_ANSWER_PROVENANCE)
+    if state not in ("duplicated", "wrong-answers"):
+        return list(rows)
     if state == "duplicated":
         # A band-balanced draw, not the front of the list. Sorted by `(difficulty, input)`,
         # the front of a 60-row set is every easy row and every hard row, which ships a
@@ -559,6 +880,114 @@ def damage_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
     check_every_answer_moved(rows, damaged)
     check_answers_run(damaged)
     return damaged
+
+
+def leak_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The slice, with a few tuning rows emitted a second time as held-out rows.
+
+    The shape of a holdout somebody drew from the file they were already tuning on: the
+    same question and the same answer on both sides of the line, so the check that is
+    supposed to catch a winner tuned to its own test has nothing to catch it with. The rows
+    are drawn across the difficulty bands, seeded, and appended the way an export appends
+    rather than sorted in beside their originals.
+
+    Each copy carries its own id, and that is a decision rather than an oversight. A copy
+    that kept the original's id is two rows with one name -- the `duplicated` defect -- and
+    the guide reports that one first and holds the score below where this one would bind,
+    so the leak would never be measured on its own. The copy repeats the row's text; the
+    text is the leak.
+    """
+    tuning = [row for row in rows if row["metadata"].get("split") == "tuning"]
+    leaked = band_balanced_sample(tuning, LEAKED_ROWS)
+    if len(leaked) != LEAKED_ROWS:
+        raise BuildError(
+            f"the tuning side supplies {len(leaked)} rows for the leak and {LEAKED_ROWS} "
+            "are needed"
+        )
+    copies = [
+        {
+            **row,
+            "metadata": {
+                **row["metadata"],
+                "split": "holdout",
+                "id": f"{row['metadata']['id']}{LEAK_ID_SUFFIX}",
+            },
+        }
+        for row in leaked
+    ]
+    return list(rows) + copies
+
+
+def leaked_ids(rows: Sequence[dict[str, Any]]) -> list[str]:
+    """The ids of the rows a `leaky` dataset emits twice, read off the rows that ship."""
+    return [
+        row["metadata"]["id"][: -len(LEAK_ID_SUFFIX)]
+        for row in rows
+        if row["metadata"]["id"].endswith(LEAK_ID_SUFFIX)
+    ]
+
+
+def resplit_by_database(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The slice, re-split so that the held-out rows are whole databases.
+
+    A split a customer actually makes: hold a few databases back and tune on the rest, so
+    the winner is checked on schemas it never saw. The databases are taken in a seeded
+    order and kept while the held-out side stays under the share the slice holds out plus
+    the tolerance, so the cut lands as near one row in five as whole databases allow; it is
+    refused if whole databases cannot get within the tolerance at all.
+    """
+    sizes: Counter[str] = Counter(row["metadata"]["db_id"] for row in rows)
+    order = sorted(sizes)
+    random.Random(SAMPLE_SEED).shuffle(order)
+    target = len(rows) * DATABASE_HOLDOUT_SHARE
+    ceiling = target * (1 + DATABASE_HOLDOUT_TOLERANCE)
+    held: list[str] = []
+    count = 0
+    for db_id in order:
+        if count + sizes[db_id] <= ceiling:
+            held.append(db_id)
+            count += sizes[db_id]
+    if count < target * (1 - DATABASE_HOLDOUT_TOLERANCE):
+        raise BuildError(
+            f"whole databases cannot hold out about {DATABASE_HOLDOUT_SHARE:.0%} of "
+            f"{len(rows)} rows: the nearest cut holds {count}"
+        )
+    held_out = set(held)
+    return [
+        {
+            **row,
+            "metadata": {
+                **row["metadata"],
+                "split": (
+                    "holdout" if row["metadata"]["db_id"] in held_out else "tuning"
+                ),
+            },
+        }
+        for row in rows
+    ]
+
+
+def held_out_databases(rows: Sequence[dict[str, Any]]) -> list[str]:
+    """The databases every one of whose rows is held out, read off the rows that ship."""
+    sides: dict[str, set[str]] = {}
+    for row in rows:
+        sides.setdefault(row["metadata"]["db_id"], set()).add(row["metadata"]["split"])
+    return sorted(db_id for db_id, splits in sides.items() if splits == {"holdout"})
+
+
+def torn_line_numbers(count: int) -> list[int]:
+    """Which lines `torn` cuts short, one-based, for a file of `count` lines.
+
+    `TORN_LINES` cuts spaced evenly through the file -- for two, a third and two thirds
+    of the way in: never the first line, which is the one a reader opens the file on,
+    and never the last, which is where a stopped export is expected to be ragged. A file
+    too short to hold that many distinct cuts away from both ends is refused rather than
+    cut somewhere else.
+    """
+    cuts = [count * step // (TORN_LINES + 1) for step in range(1, TORN_LINES + 1)]
+    if len(set(cuts)) != TORN_LINES or cuts[0] < 2 or cuts[-1] >= count:
+        raise BuildError(f"{count} rows is too few to tear {TORN_LINES} lines out of")
+    return cuts
 
 
 def check_every_answer_moved(
@@ -618,8 +1047,19 @@ def project_row(row: dict[str, Any], state: str) -> dict[str, Any]:
     whole CREATE TABLE block inside the row's identity and corrupts its duplicate and split
     analysis. Everything else rides in `metadata`, where the evaluator can still reach it.
     """
+    if state == "raw-export":
+        # Spider's own key names, the way the benchmark's export carries them: the
+        # question under `question`, the gold query under `query`, the database at the
+        # top level as well as in `metadata`. Nothing about the row is changed except
+        # what it is called.
+        return {
+            RAW_EXPORT_KEYS["input"]: row["input"],
+            RAW_EXPORT_KEYS["output"]: row["output"],
+            "db_id": row["metadata"]["db_id"],
+            "metadata": dict(row["metadata"]),
+        }
     projected: dict[str, Any] = {"input": row["input"]}
-    if state != "unlabeled":
+    if row_is_labelled(row, state):
         projected["output"] = row["output"]
     projected["metadata"] = dict(row["metadata"])
     if state == "unlabeled":
@@ -628,10 +1068,87 @@ def project_row(row: dict[str, Any], state: str) -> dict[str, Any]:
     return projected
 
 
+def declare_on_most(
+    rows: Sequence[dict[str, Any]], declaration: str, value: str
+) -> list[dict[str, Any]]:
+    """Write one declaration onto most of the rows, and leave the rest alone.
+
+    The rows that carry it are a band-balanced draw rather than the front of the
+    list, for the reason `duplicated` takes one: sorted by difficulty, the front
+    of the set is whole bands, so damaging it would ship a difficulty spread
+    nothing in the project accounts for and the guide would be reading two
+    things at once.
+
+    The row order is unchanged -- only the fields move -- so the split counts,
+    the ids and the question texts are the same as the undamaged slice's, which
+    is what makes the reading a reading of this declaration and nothing else.
+    """
+
+    touched = {
+        row["metadata"]["id"]
+        for row in band_balanced_sample(rows, round(len(rows) * MOSTLY_SHARE))
+    }
+    return [
+        (
+            {**row, "metadata": {**row["metadata"], declaration: value}}
+            if row["metadata"]["id"] in touched
+            else {**row, "metadata": dict(row["metadata"])}
+        )
+        for row in rows
+    ]
+
+
+def row_is_labelled(row: dict[str, Any], state: str) -> bool:
+    """Whether this row ships with its answer.
+
+    `holdout-labelled` keeps the answer on the held-out rows only -- the state of a team
+    that wrote out the answers it meant to grade on and never the ones it meant to tune
+    on -- so what is labelled is a property of the row and not only of the state.
+    """
+    if state == "unlabeled":
+        return False
+    if state == "holdout-labelled":
+        return bool(row["metadata"].get("split") == "holdout")
+    return True
+
+
+def dataset_keys(state: str) -> dict[str, str]:
+    """Under which names a row's question and answer are written in this state."""
+    return RAW_EXPORT_KEYS if state == "raw-export" else DATASET_KEYS
+
+
 def write_jsonl(path: Path, rows: Sequence[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def write_dataset(path: Path, rows: Sequence[dict[str, Any]], state: str) -> list[int]:
+    """The rows as the state writes them, and which lines, if any, were cut short.
+
+    `torn` writes every row and then cuts two of the lines part-way through, which is
+    what an export that stopped mid-write leaves behind: most of the file is fine, two
+    lines are not JSON, and nothing announces which. The cut lines are chosen by position,
+    so the same build tears the same lines everywhere, and each cut is checked to have
+    made the line unreadable -- a cut that happened to leave valid JSON would ship a file
+    with nothing wrong with it under a record saying two lines are torn.
+    """
+    write_jsonl(path, rows)
+    if state != "torn":
+        return []
+    torn = torn_line_numbers(len(rows))
+    lines = path.read_text(encoding="utf-8").split("\n")
+    for number in torn:
+        line = lines[number - 1]
+        cut = line[: int(len(line) * TORN_AT)]
+        try:
+            json.loads(cut)
+        except ValueError:
+            lines[number - 1] = cut
+            continue
+        raise BuildError(f"cutting line {number} at {TORN_AT:.0%} left it readable")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return torn
 
 
 def write_catalog(path: Path, rows: Sequence[dict[str, Any]]) -> None:
@@ -848,6 +1365,17 @@ def guide_revision(guide_src: Path) -> str:
 def check_calibration_source(evaluator_state: str) -> None:
     """Refuse a calibration request that has no cases to ship, before anything is written."""
     source = CALIBRATION_SOURCES.get(evaluator_state)
+    if source is None and EVALUATOR_FILES.get(evaluator_state) is not None:
+        # A scorer that exists and has no probes is not the same refusal as no scorer.
+        # `opaque` hands the answer to a library the project does not carry, so nothing
+        # here has ever run it, and probe answers for it would be answers nobody checked.
+        # The message stays general: the next scorer without probes may lack them for a
+        # reason of its own, and its docstring is where that reason lives.
+        raise BuildError(
+            f"no probe answers ship for --eval {evaluator_state}: nothing in this "
+            "repository has run that scorer, so nothing could vouch for the probes; its "
+            "docstring says why"
+        )
     if source is None:
         raise BuildError(
             f"--calibration present needs an evaluator to calibrate, and "
@@ -928,7 +1456,9 @@ def inventory(project: Path) -> list[dict[str, Any]]:
 
 
 FILE_DESCRIPTIONS = {
+    PROJECT_NOTE: "which of the two agents here this project is about.",
     "agent.py": "writes the SQL. `run(question, config)` returns a query as text.",
+    f"{SECOND_AGENT_DIRECTORY}/": None,  # filled in from what the directory holds
     "dataset.jsonl": None,  # filled in from what the rows actually carry
     "catalog.json": "which database each question is about, and that database's structure.",
     "databases/": None,
@@ -969,6 +1499,8 @@ def render_readme(
     rows: Sequence[dict[str, Any]],
     databases: Sequence[str],
     agent_state: str,
+    keys: dict[str, str] | None = None,
+    second_agent_rows: int = 0,
 ) -> str:
     """The project's own README, describing only what this project actually contains.
 
@@ -977,6 +1509,9 @@ def render_readme(
     a project deliberately built with something missing, hands over the very thing the run is
     supposed to discover.
     """
+    # `DATASET_KEYS` is a module constant, and a constant used as a default
+    # argument is one shared object every caller could mutate through.
+    keys = DATASET_KEYS if keys is None else keys
     table = ["| File | |", "|---|---|"]
     for name in shipped:
         if name not in FILE_DESCRIPTIONS:
@@ -986,17 +1521,31 @@ def render_readme(
             )
         description = FILE_DESCRIPTIONS[name]
         if name == "dataset.jsonl":
-            labelled = bool(rows) and "output" in rows[0]
+            labelled = sum(1 for row in rows if keys["output"] in row)
             # Counts what the file holds. `rows` is lines, and a set that repeats a question
             # has more lines than questions -- calling every line a question said "90
-            # questions" of a file holding 60 of them.
-            description = (
-                f"{len(rows)} rows, each a question with the query that answers it."
-                if labelled
-                else f"{len(rows)} rows, each a question."
-            )
+            # questions" of a file holding 60 of them. And a file whose answers sit on some
+            # rows and not others says how many, because "each a question with the query
+            # that answers it" is false of a file where most rows have no answer.
+            if labelled == len(rows):
+                description = (
+                    f"{len(rows)} rows, each a question with the query that answers it."
+                )
+            elif labelled:
+                description = (
+                    f"{len(rows)} rows, each a question; {labelled} of them carry the "
+                    "query that answers it."
+                )
+            else:
+                description = f"{len(rows)} rows, each a question."
         elif name == "databases/":
             description = f"{len(databases)} SQLite databases, one directory each."
+        elif name == f"{SECOND_AGENT_DIRECTORY}/":
+            description = (
+                "a second agent, unrelated to the first: turns a query into a plain-English "
+                f"description of what it returns, with {second_agent_rows} queries to run "
+                "it on and a rough check of its own."
+            )
         if not description:
             # Dropping the row would leave a file in the project that the README does not
             # mention, which is the one thing this table exists to prevent.
@@ -1011,7 +1560,7 @@ def render_readme(
     # and the opening claimed the project answers questions in projects holding no agent.
     if agent_state != "missing":
         opening = "\nAnswers questions about a database by writing the SQL that gets the answer.\n"
-    elif rows and "output" in rows[0]:
+    elif rows and any(keys["output"] in row for row in rows):
         opening = "\nQuestions about a database, and the SQL that answers them.\n"
     elif rows:
         opening = "\nQuestions about a database.\n"
@@ -1024,7 +1573,9 @@ def render_readme(
         # The question only. Printing the row's answer beside it put whatever that row holds
         # on the first screen -- which, in a project whose answers have been re-paired, is
         # the damage itself, announced in the opening paragraph.
-        opening += f"\nOne of the questions it is given: *\"{rows[0]['input']}\"*\n"
+        opening += (
+            f"\nOne of the questions it is given: *\"{rows[0][keys['input']]}\"*\n"
+        )
 
     data_section = ""
     if rows:
@@ -1143,6 +1694,9 @@ class Plan:
     models: tuple[str, ...] = ()
     probe_databases: frozenset[str] = frozenset()
     guide_sha: str | None = None
+    # The rows as drawn, before any damage. Empty when nothing was damaged: `rows` is then
+    # the same list, and a second copy of three hundred rows would only invite drift.
+    undamaged_rows: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def project(self) -> Path:
@@ -1169,6 +1723,70 @@ class Plan:
         return EVALUATOR_FILES[self.evaluator]
 
     @property
+    def ships_second_agent(self) -> bool:
+        return self.agent == "two-agents"
+
+    @property
+    def second_agent_rows(self) -> list[dict[str, Any]]:
+        """The queries the second agent is given: gold queries of the slice, unlabelled.
+
+        Drawn across the difficulty bands from the rows as the project drew them, before
+        any damage, seeded, so the same project carries the same twenty. The damage is the
+        first agent's dataset's, and it is recorded against that dataset; a draw from the
+        damaged rows handed the second agent a repeated id or a `-holdout` copy that no
+        record mentioned. Each carries the query as its input, no expected answer --
+        nobody wrote the descriptions down -- and enough of the row's other fields to say
+        where the query came from.
+        """
+        if not self.ships_second_agent:
+            return []
+        source = self.undamaged_rows or self.rows
+        # Every declaration is read from the rows AS SHIPPED, not from the undamaged
+        # draw. A state that rewrites what a row says about itself and a second file
+        # still saying the old thing for twenty of those ids contradict each other
+        # inside one project, which is the opposite of what the state is for.
+        #
+        # Mirrored by the whole CLASS rather than one field at a time. The first
+        # version of this named `provenance`, which was the only declaration there
+        # was; `generated-answers` then declared on `output_provenance` and the
+        # contradiction came straight back, in a second file the reader can hold
+        # beside the first. The class is `DECLARATION_ROW_FIELDS`, by name: a state
+        # that declares on a third field is carried here once that field is added
+        # there, and a field added to neither set fails the suite rather than being
+        # guessed into one side -- see the comment on the two sets.
+        declared = {
+            row["metadata"]["id"]: {
+                key: value
+                for key, value in row["metadata"].items()
+                if key in DECLARATION_ROW_FIELDS
+            }
+            for row in self.rows
+        }
+        return [
+            {
+                "input": row["output"],
+                "metadata": {
+                    "db_id": row["metadata"]["db_id"],
+                    "difficulty": row["metadata"]["difficulty"],
+                    "id": row["metadata"]["id"],
+                    **declared.get(
+                        row["metadata"]["id"],
+                        {
+                            key: value
+                            for key, value in row["metadata"].items()
+                            if key in DECLARATION_ROW_FIELDS
+                        },
+                    ),
+                },
+            }
+            for row in band_balanced_sample(source, SECOND_AGENT_ROWS)
+        ]
+
+    @property
+    def keys(self) -> dict[str, str]:
+        return dataset_keys(self.dataset)
+
+    @property
     def ships_calibration(self) -> bool:
         return self.calibration == "present"
 
@@ -1180,8 +1798,12 @@ class Plan:
         writer that puts them there, so the two cannot disagree about what ships.
         """
         names: list[str] = []
+        if self.ships_second_agent:
+            names.append(PROJECT_NOTE)
         if self.agent_source is not None:
             names.append("agent.py")
+        if self.ships_second_agent:
+            names.append(f"{SECOND_AGENT_DIRECTORY}/")
         if self.evaluator_source is not None:
             names.append("evaluator.py")
         if self.rows:
@@ -1215,6 +1837,40 @@ def check_plan(plan: Plan) -> None:
     check_readme_template(template)
     if plan.rows and not ATTRIBUTION_SOURCE.is_file():
         raise BuildError(f"component missing: {ATTRIBUTION_SOURCE}")
+    if plan.ships_second_agent:
+        for source in second_agent_components(plan.provider):
+            if not source.is_file():
+                raise BuildError(f"component missing: {source}")
+        if not plan.rows:
+            raise BuildError(
+                "--agent two-agents gives the second agent queries drawn from the rows, "
+                "and --dataset missing ships none"
+            )
+        # The second agent's input IS a row's gold query, under that row's id. So it
+        # may carry only a query the dataset itself ships as that row's answer. One
+        # the dataset withholds (an unlabelled row, a torn line) or replaces (a
+        # rotated answer) would sit in a file beside it under the same id, and the
+        # project would be blind to nothing at all. Compared on the answers as they
+        # ship rather than keyed on a list of states -- the first version asked only
+        # whether a row was labelled, and `wrong-answers` shipped the true query for
+        # a third of its rotated rows.
+        disclosed = answers_a_second_agent_discloses(plan)
+        if disclosed:
+            raise BuildError(
+                "--agent two-agents gives the second agent the rows' gold queries as "
+                f"its input, and --dataset {plan.dataset} withholds or replaces the "
+                f"answer on {disclosed} of the {len(plan.second_agent_rows)} it would "
+                "carry: the project would ship the answers it is meant to be missing, "
+                "in a file beside them, under the same ids"
+            )
+        if len(plan.second_agent_rows) != SECOND_AGENT_ROWS:
+            raise BuildError(
+                f"the rows supply {len(plan.second_agent_rows)} queries for the second "
+                f"agent and {SECOND_AGENT_ROWS} are needed"
+            )
+    if plan.dataset == "torn":
+        # Refused here, before the directory exists, rather than by the writer.
+        torn_line_numbers(len(plan.rows))
     # Rendered, and the result thrown away. It is a function of the Plan and nothing else, so
     # rendering it here is how its refusals happen before anything is on disk; the writer
     # renders the same text from the same Plan.
@@ -1225,6 +1881,37 @@ def check_plan(plan: Plan) -> None:
         rows=[project_row(row, plan.dataset) for row in plan.rows],
         databases=plan.databases,
         agent_state=plan.agent,
+        keys=plan.keys,
+        second_agent_rows=len(plan.second_agent_rows),
+    )
+
+
+def answers_a_second_agent_discloses(plan: Plan) -> int:
+    """How many of the second agent's queries are not the answer its row ships.
+
+    Read off the rows as the dataset file will hold them: a row that is unlabelled or
+    on a torn line ships no answer, and a damaged row ships whatever the damage left.
+    """
+    torn = set(torn_line_numbers(len(plan.rows))) if plan.dataset == "torn" else set()
+    shipped: dict[str, set[str | None]] = {}
+    for line, row in enumerate(plan.rows, start=1):
+        labelled = row_is_labelled(row, plan.dataset) and line not in torn
+        shipped.setdefault(row["metadata"]["id"], set()).add(
+            row["output"] if labelled else None
+        )
+    return sum(
+        1
+        for query in plan.second_agent_rows
+        if shipped.get(query["metadata"]["id"]) != {query["input"]}
+    )
+
+
+def second_agent_components(provider: str) -> tuple[Path, Path, Path]:
+    """The three files the second agent brings: its source, its scorer, the note."""
+    return (
+        second_agent_file(provider),
+        EXPLAINER / "evaluator.py",
+        EXPLAINER / PROJECT_NOTE,
     )
 
 
@@ -1268,7 +1955,9 @@ def plan_demo(args: argparse.Namespace) -> Plan:
         check_calibration_source(evaluator)
 
     rows = select_rows(read_dataset(), dataset) if dataset != "missing" else []
+    undamaged_rows: list[dict[str, Any]] = []
     if dataset in DAMAGED_STATES:
+        undamaged_rows = list(rows)
         # Damaged here rather than in the writer: what the damage does to the rows is one of
         # the things a Plan has decided, and the checks on it -- that no row kept its own
         # answer, that every answer still runs -- are checks on the rows that go on disk.
@@ -1292,6 +1981,7 @@ def plan_demo(args: argparse.Namespace) -> Plan:
         models=tuple(agent_models(agent_file(agent, provider))),
         probe_databases=frozenset(calibration_databases(evaluator, calibration)),
         guide_sha=guide_sha,
+        undamaged_rows=undamaged_rows,
     )
     check_plan(plan)
     return plan
@@ -1333,11 +2023,32 @@ def write_demo(plan: Plan) -> dict[str, Any]:
     if plan.agent_source is not None:
         shutil.copy2(plan.agent_source, project / "agent.py")
 
+    second_agent_record = None
+    if plan.ships_second_agent:
+        agent_source, evaluator_source, note = second_agent_components(plan.provider)
+        sibling = project / SECOND_AGENT_DIRECTORY
+        sibling.mkdir()
+        shutil.copy2(agent_source, sibling / "agent.py")
+        shutil.copy2(evaluator_source, sibling / "evaluator.py")
+        write_jsonl(sibling / "dataset.jsonl", plan.second_agent_rows)
+        shutil.copy2(note, project / PROJECT_NOTE)
+        second_agent_record = {
+            "directory": SECOND_AGENT_DIRECTORY,
+            "path": f"{SECOND_AGENT_DIRECTORY}/agent.py",
+            "evaluator": f"{SECOND_AGENT_DIRECTORY}/evaluator.py",
+            "dataset": f"{SECOND_AGENT_DIRECTORY}/dataset.jsonl",
+            "rows": len(plan.second_agent_rows),
+            "labelled": False,
+            "models": agent_models(agent_source),
+            "note": PROJECT_NOTE,
+        }
+
     if plan.evaluator_source is not None:
         shutil.copy2(plan.evaluator_source, project / "evaluator.py")
 
+    torn: list[int] = []
     if plan.rows:
-        write_jsonl(project / "dataset.jsonl", projected)
+        torn = write_dataset(project / "dataset.jsonl", projected, plan.dataset)
         write_catalog(project / "catalog.json", plan.rows)
         copy_databases(databases, project / "databases")
         # The rows are CC BY-SA, and what they are and what may be done with them travels
@@ -1364,6 +2075,7 @@ def write_demo(plan: Plan) -> dict[str, Any]:
     splits = Counter(
         row["metadata"]["split"] for row in projected if "split" in row["metadata"]
     )
+    labelled = sum(1 for row in projected if plan.keys["output"] in row)
 
     readme = render_readme(
         COMPONENTS / "readme" / "DEMO_README.md.tmpl",
@@ -1372,6 +2084,8 @@ def write_demo(plan: Plan) -> dict[str, Any]:
         rows=projected,
         databases=databases,
         agent_state=plan.agent,
+        keys=plan.keys,
+        second_agent_rows=len(plan.second_agent_rows),
     )
     (project / "README.md").write_text(readme, encoding="utf-8")
 
@@ -1391,16 +2105,26 @@ def write_demo(plan: Plan) -> dict[str, Any]:
                 "path": "agent.py" if plan.agent_source else None,
                 "provider": plan.provider,
                 "models": list(plan.models),
+                # The other agent in the project, where the state ships one. Recorded
+                # beside the first rather than as a second component, because the first
+                # is the one every tool is pointed at and this one is what sits next to it.
+                "second_agent": second_agent_record,
             },
             "dataset": {
                 "state": plan.dataset,
                 "path": "dataset.jsonl" if plan.rows else None,
                 "rows": len(projected),
-                "labelled": plan.dataset not in ("unlabeled", "missing"),
+                # Under which names a row's question and answer are written. The tooling
+                # reads `input` and `output`; `raw-export` writes Spider's own names.
+                "fields": plan.keys,
+                "labelled": bool(plan.rows) and labelled == len(projected),
+                "labelled_rows": labelled,
                 # The questions and answers are Spider's. Damage is this repository's, and
                 # saying which is which is the difference between a fixture and a false
-                # claim about the benchmark.
+                # claim about the benchmark. `damage` names the state; `damage_detail`
+                # says what it did to these rows, in terms a reader can check on disk.
                 "damage": plan.dataset if plan.dataset in DAMAGED_STATES else None,
+                "damage_detail": damage_detail(plan, torn),
                 "difficulty_counts": dict(sorted(bands.items())),
                 "split_counts": dict(sorted(splits.items())),
                 "databases": databases,
@@ -1440,6 +2164,109 @@ def write_demo(plan: Plan) -> dict[str, Any]:
         "created": created,
         "handoff": plan.handoff,
     }
+
+
+# The fields each damaged state records in `damage_detail`, and so the ones `verify` will
+# accept for it. `tests/test_verify.py` holds this to what `damage_detail` actually writes
+# for every damaged state.
+DAMAGE_DETAIL_FIELDS: dict[str, frozenset[str]] = {
+    "duplicated": frozenset({"repeated_ids"}),
+    "wrong-answers": frozenset({"rotated_within", "rows_keeping_their_answer"}),
+    "leaky": frozenset({"leaked_ids", "copy_split", "copy_id_suffix"}),
+    "holdout-labelled": frozenset({"labelled_split"}),
+    "split-by-database": frozenset({"held_out_databases"}),
+    "raw-export": frozenset({"keys", "top_level"}),
+    "torn": frozenset({"torn_lines", "cut_at"}),
+    "undeclared": frozenset({"provenance", "slice_says"}),
+    "fully-synthetic": frozenset(
+        {"provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+    "mostly-undeclared": frozenset(
+        {"provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+    "mostly-synthetic": frozenset(
+        {"provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+    "generated-answers": frozenset(
+        {"output_provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+    "mostly-generated-answers": frozenset(
+        {"output_provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+}
+
+
+def damage_detail(plan: Plan, torn: Sequence[int]) -> dict[str, Any] | None:
+    """What a damaged state did to the rows, said in terms checkable against the file.
+
+    Read off the rows that ship wherever that is possible, rather than restated from the
+    constants that produced them: the leaked ids are the ids that carry the suffix, the
+    held-out databases are the ones with no tuning row, the torn lines are the ones the
+    writer reports having cut.
+    """
+    if plan.dataset not in DAMAGED_STATES:
+        return None
+    if plan.dataset == "duplicated":
+        repeated = Counter(row["metadata"]["id"] for row in plan.rows)
+        return {"repeated_ids": sorted(i for i, n in repeated.items() if n > 1)}
+    if plan.dataset == "wrong-answers":
+        return {"rotated_within": "db_id", "rows_keeping_their_answer": 0}
+    if plan.dataset == "leaky":
+        return {
+            "leaked_ids": leaked_ids(plan.rows),
+            "copy_split": "holdout",
+            "copy_id_suffix": LEAK_ID_SUFFIX,
+        }
+    if plan.dataset == "holdout-labelled":
+        return {"labelled_split": "holdout"}
+    if plan.dataset == "split-by-database":
+        return {"held_out_databases": held_out_databases(plan.rows)}
+    if plan.dataset == "raw-export":
+        return {"keys": dict(RAW_EXPORT_KEYS), "top_level": ["db_id"]}
+    if plan.dataset == "torn":
+        return {"torn_lines": list(torn), "cut_at": TORN_AT}
+    if plan.dataset == "undeclared":
+        return {"provenance": UNDECLARED_PROVENANCE, "slice_says": "real"}
+    if plan.dataset == "fully-synthetic":
+        return {
+            "provenance": SYNTHETIC_PROVENANCE,
+            "slice_says": "real",
+            "declared_rows": sum(
+                1
+                for row in plan.rows
+                if row["metadata"].get("provenance") == SYNTHETIC_PROVENANCE
+            ),
+            "of_rows": len(plan.rows),
+        }
+    if plan.dataset in ("mostly-undeclared", "mostly-synthetic"):
+        declared = (
+            UNDECLARED_PROVENANCE
+            if plan.dataset == "mostly-undeclared"
+            else SYNTHETIC_PROVENANCE
+        )
+        return {
+            "provenance": declared,
+            "slice_says": "real",
+            "declared_rows": sum(
+                1 for row in plan.rows if row["metadata"].get("provenance") == declared
+            ),
+            "of_rows": len(plan.rows),
+        }
+    if plan.dataset in ("generated-answers", "mostly-generated-answers"):
+        return {
+            "output_provenance": GENERATED_ANSWER_PROVENANCE,
+            "slice_says": SLICE_DECLARES_NO_ANSWER_PROVENANCE,
+            "declared_rows": sum(
+                1
+                for row in plan.rows
+                if row["metadata"].get(GENERATED_ANSWER_KEY)
+                == GENERATED_ANSWER_PROVENANCE
+            ),
+            "of_rows": len(plan.rows),
+        }
+    raise BuildError(
+        f"{plan.dataset} is a damaged state with no description of its damage"
+    )
 
 
 # The name of the record a bank keeps of itself, and the prefix of the directories inside it.
@@ -1699,7 +2526,16 @@ def verify_demo(root: Path) -> list[str]:
         return [f"no build record at {record}"]
     if not project.is_dir():
         return [f"no project at {project}"]
-    manifest = json.loads(record.read_text(encoding="utf-8"))
+    try:
+        manifest = json.loads(record.read_text(encoding="utf-8"))
+    except (ValueError, RecursionError, OSError) as error:
+        return [f"the build record cannot be read: {error!r}"]
+    # The checks below read the record as the builder writes it. A record of another
+    # shape is a problem to report -- never a traceback, which ends `verify` for this demo
+    # and, before `cmd_verify` contained each one, for every demo after it in a bank.
+    malformed = record_shape_problems(manifest)
+    if malformed:
+        return malformed
 
     if (project / record.name).exists():
         problems.append("the build record is inside the project the agent reads")
@@ -1764,30 +2600,76 @@ def verify_demo(root: Path) -> list[str]:
     for extra in sorted(on_disk - recorded):
         problems.append(f"{extra} is on disk and not in the record")
 
-    # Parsed, never run. These two files are handed to an agent that has not been told what
-    # they are; running them would call a model. Compiling proves the project can start.
-    for name in ("agent.py", "evaluator.py"):
-        source = project / name
-        if not source.is_file():
+    # Parsed, never run. Every Python file the project ships is handed to an agent that has
+    # not been told what it is; running one would call a model. Compiling proves the
+    # project can start. The two the guide is pointed at are `agent.py` and `evaluator.py`;
+    # a second agent's files sit in a directory of their own and are read the same way.
+    for source in sorted(project.rglob("*.py")):
+        relative = source.relative_to(project)
+        if {PROJECT_VENV, FORBIDDEN_VENV_NAME, GUIDE_DIRECTORY} & set(relative.parts):
             continue
         try:
-            compile(source.read_text(encoding="utf-8"), name, "exec")
-        except (OSError, UnicodeDecodeError, SyntaxError, ValueError) as error:
-            problems.append(f"{name} does not compile: {error}")
+            compile(source.read_text(encoding="utf-8"), relative.as_posix(), "exec")
+        except (
+            OSError,
+            UnicodeDecodeError,
+            SyntaxError,
+            ValueError,
+            RecursionError,
+            MemoryError,
+        ) as error:
+            problems.append(f"{relative.as_posix()} does not compile: {error}")
 
     # Everything below reads files that may be malformed -- which is one of the things worth
     # reporting. A checker that raises on bad input fails exactly when it is needed, and a
     # traceback is the one result a reader cannot act on.
+    #
+    # Two states write the file other than the way the tooling reads it, and the record
+    # says so: `raw-export` names its fields differently, and `torn` ships lines that are
+    # not JSON. A torn line is checked against the record exactly -- every line the record
+    # says is torn must fail to parse, and every other line must parse -- so a torn demo
+    # verifies clean while a demo torn somewhere the record does not say still does not.
     dataset = project / "dataset.jsonl"
+    recorded_dataset = manifest["components"].get("dataset") or {}
     if dataset.is_file():
+        keys = recorded_dataset.get("fields") or DATASET_KEYS
+        detail = recorded_dataset.get("damage_detail") or {}
+        # Only a torn dataset may hold a line that does not parse, and only where the
+        # record says: a `torn_lines` under any other state is a record that excuses
+        # damage the state does not do.
+        torn = set(detail.get("torn_lines") or [])
+        if torn and recorded_dataset.get("damage") != "torn":
+            problems.append(
+                f"the record names torn lines for --dataset {recorded_dataset.get('state')}"
+            )
+            torn = set()
         try:
-            rows = [
-                json.loads(line) for line in dataset.read_text().splitlines() if line
-            ]
-            catalog = json.loads((project / "catalog.json").read_text())
-            questions = [row["input"] for row in rows]
+            lines = dataset.read_text(encoding="utf-8").split("\n")
+            if lines and lines[-1] == "":
+                lines.pop()
+            beyond = sorted(number for number in torn if number > len(lines))
+            if beyond:
+                problems.append(
+                    f"the record says lines {beyond} are torn and the file has "
+                    f"{len(lines)} lines"
+                )
+            rows: list[dict[str, Any]] = []
+            for number, line in enumerate(lines, 1):
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    if number not in torn:
+                        raise
+                    continue
+                if number in torn:
+                    problems.append(
+                        f"line {number} is recorded as torn and reads as a whole row"
+                    )
+                rows.append(row)
+            catalog = json.loads((project / "catalog.json").read_text(encoding="utf-8"))
+            questions = [row[keys["input"]] for row in rows]
             databases = sorted({row["metadata"]["db_id"] for row in rows})
-        except (ValueError, KeyError, TypeError, OSError) as error:
+        except (ValueError, KeyError, TypeError, RecursionError, OSError) as error:
             problems.append(f"the rows or the catalog cannot be read: {error}")
         else:
             if any(question not in catalog for question in questions):
@@ -1797,7 +2679,517 @@ def verify_demo(root: Path) -> list[str]:
                     problems.append(
                         f"the rows name database {db_id}, which is not here"
                     )
+            # Each check reports what it cannot read rather than stopping the others:
+            # a traceback here would discard every problem already found.
+            contained(
+                "the dataset record",
+                problems,
+                partial(dataset_record_problems, recorded_dataset, lines, rows, torn),
+            )
+            contained(
+                "the second agent",
+                problems,
+                partial(
+                    second_agent_problems,
+                    project,
+                    manifest["components"]["agent"],
+                    rows,
+                    keys,
+                ),
+            )
+    elif manifest["components"]["agent"].get("second_agent"):
+        problems.append("the record has a second agent and the project has no rows")
     return problems
+
+
+def record_shape_problems(manifest: object) -> list[str]:
+    """Where a build record is not the shape `verify_demo` reads, one problem each.
+
+    Only the fields verify reads, and only their types: whether the values are true is
+    what the rest of `verify` checks, against the project.
+    """
+    if not isinstance(manifest, dict):
+        return ["the build record is not an object"]
+    problems: list[str] = []
+    files = manifest.get("files")
+    if not isinstance(files, list) or not all(
+        isinstance(entry, dict)
+        and isinstance(entry.get("path"), str)
+        and isinstance(entry.get("sha256"), str)
+        for entry in files
+    ):
+        problems.append("the build record's `files` is not a list of paths and hashes")
+    components = manifest.get("components")
+    if not isinstance(components, dict):
+        return problems + ["the build record's `components` is not an object"]
+    agent = components.get("agent")
+    if not isinstance(agent, dict):
+        problems.append("the build record's `components.agent` is not an object")
+    elif agent.get("second_agent") is not None and not isinstance(
+        agent["second_agent"], dict
+    ):
+        problems.append("the build record's `second_agent` is not an object")
+    dataset = components.get("dataset")
+    if dataset is None:
+        return problems
+    if not isinstance(dataset, dict):
+        return problems + ["the build record's `components.dataset` is not an object"]
+    fields = dataset.get("fields")
+    if fields is not None and not (
+        isinstance(fields, dict)
+        and all(isinstance(fields.get(key), str) for key in ("input", "output"))
+    ):
+        problems.append("the build record's dataset `fields` are not two names")
+    detail = dataset.get("damage_detail")
+    if detail is not None and not isinstance(detail, dict):
+        problems.append("the build record's `damage_detail` is not an object")
+    elif isinstance(detail, dict) and "torn_lines" in detail:
+        torn = detail["torn_lines"]
+        if not isinstance(torn, list) or not all(
+            isinstance(number, int) and not isinstance(number, bool) and number > 0
+            for number in torn
+        ):
+            problems.append(
+                "the build record's `torn_lines` is not a list of line numbers"
+            )
+    return problems
+
+
+def contained(
+    name: str, problems: list[str], check: Callable[[list[str]], object]
+) -> None:
+    """Run a check that writes into `problems`, and never end in a traceback.
+
+    What the check found before it failed stays in `problems`, and the failure is added
+    as one more problem naming what could not be read.
+    """
+    try:
+        check(problems)
+    # Any exception, deliberately. The checks read records and files a customer or a
+    # broken build can make arbitrarily malformed, and every new shape of input found
+    # another exception type; the contract is that verify never ends in a traceback.
+    # This fails closed: the failure is reported, so the demo does not verify.
+    except Exception as error:  # noqa: BLE001
+        problems.append(f"{name} cannot be checked: {error!r}")
+
+
+def is_count(value: Any) -> TypeGuard[int]:
+    """A record's count: a non-negative integer, and not a boolean.
+
+    `True == 1` and `1.0 == 1` in Python, so a comparison with `==` alone would let a
+    boolean or a float stand in for a count and agree with the rows.
+    """
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def dataset_record_problems(
+    record: dict[str, Any],
+    lines: Sequence[str],
+    rows: Sequence[dict[str, Any]],
+    torn: set[int],
+    problems: list[str] | None = None,
+) -> list[str]:
+    """What `demo.json` says about the dataset, checked against the rows on disk.
+
+    The record is the one account of what was done to the rows, so every claim in it is
+    read back out of the file: how many rows and how many carry their answer, and every
+    field of `damage_detail`. A field this function has no check for is itself a problem,
+    so a damage description cannot grow a claim nothing reads.
+
+    Problems go into `problems` as they are found, so a caller that has to contain a
+    failure part-way through still has every problem found before it.
+    """
+    problems = [] if problems is None else problems
+    keys = record.get("fields") or DATASET_KEYS
+    state = record.get("state")
+    if not is_count(record.get("rows")) or record.get("rows") != len(lines):
+        problems.append(
+            f"the record says {record.get('rows')!r} rows and the file has {len(lines)}"
+        )
+    labelled = sum(1 for row in rows if keys["output"] in row)
+    recorded_labelled = record.get("labelled_rows")
+    if not is_count(recorded_labelled):
+        problems.append(
+            f"the record's count of rows that carry their answer is "
+            f"{recorded_labelled!r}, not a count"
+        )
+    # A torn line's answer cannot be read, so it can be neither counted nor ruled out.
+    elif not labelled <= recorded_labelled <= labelled + len(torn):
+        problems.append(
+            f"the record says {record.get('labelled_rows')} rows carry their answer "
+            f"and {labelled} readable rows do"
+        )
+    if not isinstance(record.get("labelled"), bool) or record.get("labelled") != (
+        bool(lines) and record.get("labelled_rows") == len(lines)
+    ):
+        problems.append(
+            "the record's `labelled` disagrees with its own `labelled_rows`"
+        )
+    damaged = state in DAMAGED_STATES
+    if record.get("damage") != (state if damaged else None):
+        problems.append(f"the record names damage {record.get('damage')!r} for {state}")
+    detail = record.get("damage_detail")
+    if bool(detail) != damaged:
+        problems.append(
+            f"damage_detail is {'missing' if damaged else 'present'} for {state}"
+        )
+    if not detail:
+        return problems
+
+    ids = [row["metadata"]["id"] for row in rows]
+    unchecked = set(detail)
+    # A field describes damage one state does; on any other state it is a claim about
+    # damage the rows were never given, and several would pass there vacuously.
+    recorded_fields = DAMAGE_DETAIL_FIELDS.get(str(state), frozenset())
+    for name in sorted(set(detail) - recorded_fields):
+        unchecked.discard(name)
+        problems.append(f"damage_detail.{name} is not a claim --dataset {state} makes")
+    for name in sorted(recorded_fields - set(detail)):
+        problems.append(f"damage_detail has no {name}, which --dataset {state} records")
+    detail = {name: value for name, value in detail.items() if name in recorded_fields}
+
+    def claim(field: str, found: Any) -> None:
+        unchecked.discard(field)
+        if detail[field] != found:
+            problems.append(
+                f"damage_detail.{field} says {detail[field]!r} and the rows say {found!r}"
+            )
+
+    if "repeated_ids" in detail:
+        counted = Counter(ids)
+        claim("repeated_ids", sorted(i for i, n in counted.items() if n > 1))
+    if "rotated_within" in detail:
+        # Every answer is a gold query from the slice, borrowed from a row that shares
+        # the named field -- the field a rotation stays inside.
+        field = detail["rotated_within"]
+        slice_rows = read_dataset()
+        gold = {row["metadata"]["id"]: row["output"] for row in slice_rows}
+        within: dict[Any, set[str]] = {}
+        for row in slice_rows:
+            within.setdefault(row["metadata"].get(field), set()).add(row["output"])
+        unchecked.discard("rotated_within")
+        strays = [
+            row["metadata"]["id"]
+            for row in rows
+            if field not in row["metadata"]
+            or row.get(keys["output"]) not in within.get(row["metadata"][field], set())
+        ]
+        if strays:
+            problems.append(
+                f"damage_detail.rotated_within says {field!r}, and {len(strays)} "
+                f"answers are not a gold query of a row sharing it ({strays[0]}, ...)"
+            )
+        kept = sum(
+            1
+            for row in rows
+            if row.get(keys["output"]) == gold.get(row["metadata"]["id"])
+        )
+        if rows and kept == len(rows):
+            problems.append(
+                "damage_detail.rotated_within says the answers were rotated, and every "
+                "row keeps its own"
+            )
+        if "rows_keeping_their_answer" in detail:
+            if not is_count(detail["rows_keeping_their_answer"]):
+                problems.append(
+                    "damage_detail.rows_keeping_their_answer is "
+                    f"{detail['rows_keeping_their_answer']!r}, not a count"
+                )
+            claim("rows_keeping_their_answer", kept)
+    if "copy_id_suffix" in detail:
+        suffix = detail["copy_id_suffix"]
+        unchecked.discard("copy_id_suffix")
+        copies = [row for row in rows if row["metadata"]["id"].endswith(suffix)]
+        if not suffix or not copies:
+            problems.append(
+                f"damage_detail.copy_id_suffix is {suffix!r}, and no row is a copy "
+                "carrying it"
+            )
+        if "leaked_ids" in detail:
+            claim(
+                "leaked_ids", [row["metadata"]["id"][: -len(suffix)] for row in copies]
+            )
+        originals = {row["metadata"]["id"]: row for row in rows}
+        for copy in copies:
+            original = originals.get(copy["metadata"]["id"][: -len(suffix)])
+            if original is None or (
+                original[keys["input"]],
+                original.get(keys["output"]),
+            ) != (
+                copy[keys["input"]],
+                copy.get(keys["output"]),
+            ):
+                problems.append(
+                    f"{copy['metadata']['id']} is not a copy of its original"
+                )
+        if "copy_split" in detail:
+            claim(
+                "copy_split",
+                (
+                    copies[0]["metadata"].get("split")
+                    if copies and len({c["metadata"].get("split") for c in copies}) == 1
+                    else None
+                ),
+            )
+    if "labelled_split" in detail:
+        splits = {row["metadata"].get("split") for row in rows if keys["output"] in row}
+        claim(
+            "labelled_split",
+            splits.pop() if len(splits) == 1 else sorted(map(str, splits)),
+        )
+        if any(
+            row["metadata"].get("split") == detail["labelled_split"]
+            and keys["output"] not in row
+            for row in rows
+        ):
+            problems.append("a row in the labelled split ships without its answer")
+    if "held_out_databases" in detail:
+        claim("held_out_databases", held_out_databases(rows))
+    if "keys" in detail:
+        claim("keys", dict(keys))
+        missing = [
+            row["metadata"]["id"] for row in rows if not set(keys.values()) <= set(row)
+        ]
+        if missing:
+            problems.append(
+                f"{len(missing)} rows lack the recorded keys ({missing[0]}, ...)"
+            )
+    if "top_level" in detail:
+        unchecked.discard("top_level")
+        if not detail["top_level"]:
+            problems.append("damage_detail.top_level names no field")
+        for name in detail["top_level"]:
+            if any(
+                name not in row or row[name] != row["metadata"].get(name)
+                for row in rows
+            ):
+                problems.append(f"{name} is not at the top level of every row")
+    if "torn_lines" in detail:
+        unchecked.discard("torn_lines")
+    if "cut_at" in detail:
+        unchecked.discard("cut_at")
+        cut_at = detail["cut_at"]
+        if not torn:
+            problems.append(
+                "damage_detail.cut_at says where lines were cut, and none is"
+            )
+        elif not (isinstance(cut_at, (int, float)) and 0 < cut_at < 1):
+            problems.append(
+                f"damage_detail.cut_at is {cut_at!r}, not a share of a line"
+            )
+        else:
+            contained(
+                "the torn lines",
+                problems,
+                partial(torn_line_problems, lines, torn, float(cut_at), keys),
+            )
+    for field in ("provenance", "output_provenance"):
+        if field not in detail:
+            continue
+        key = "provenance" if field == "provenance" else GENERATED_ANSWER_KEY
+        declaring = [row for row in rows if row["metadata"].get(key) == detail[field]]
+        unchecked.discard(field)
+        if "declared_rows" in detail:
+            claim("declared_rows", len(declaring))
+        elif len(declaring) != len(rows):
+            problems.append(f"damage_detail.{field} is not on every row")
+        if "of_rows" in detail:
+            claim("of_rows", len(rows))
+        if "slice_says" in detail:
+            unchecked.discard("slice_says")
+            # What the rows that do not declare still say: the slice's own value, or,
+            # for the answer key, nothing at all.
+            said = detail["slice_says"]
+            if not isinstance(said, str):
+                problems.append(
+                    f"damage_detail.slice_says is {said!r}; what the slice says has "
+                    "to be stated in words"
+                )
+            expected = None if said == SLICE_DECLARES_NO_ANSWER_PROVENANCE else said
+            slice_values = {row["metadata"].get(key) for row in read_dataset()}
+            if slice_values != {expected}:
+                problems.append(
+                    f"damage_detail.slice_says is {said!r} and the slice says "
+                    f"{sorted(map(str, slice_values))}"
+                )
+            if detail[field] == expected:
+                problems.append(
+                    f"damage_detail.{field} is {detail[field]!r}, what the slice "
+                    "already says, so it names no damage"
+                )
+            declared_here = {id(row) for row in declaring}
+            others = {
+                row["metadata"].get(key) for row in rows if id(row) not in declared_here
+            }
+            if others - {expected}:
+                problems.append(
+                    f"rows outside damage_detail.{field} say {sorted(map(str, others))}"
+                )
+    # Every claim above compares the record with the rows, so a record describing no
+    # damage passes against rows that were never damaged. Each state has to show some.
+    if detail.get("repeated_ids") == []:
+        problems.append("damage_detail.repeated_ids names no repeated row")
+    if detail.get("held_out_databases") == []:
+        problems.append("damage_detail.held_out_databases names no held-out database")
+    if "labelled_split" in detail and not isinstance(detail["labelled_split"], str):
+        problems.append(
+            f"damage_detail.labelled_split is {detail['labelled_split']!r}, not the "
+            "name of one split"
+        )
+    # A count that is not one (a boolean, a float, a negative) would compare equal to
+    # the rows' own count through `claim` and skip the rule below; it is reported,
+    # as `labelled_rows` is, instead of left to pass.
+    for name in ("declared_rows", "of_rows"):
+        if name in detail and not is_count(detail[name]):
+            problems.append(f"damage_detail.{name} is {detail[name]!r}, not a count")
+    declared, of_rows = detail.get("declared_rows"), detail.get("of_rows")
+    if is_count(declared) and is_count(of_rows):
+        # In integers: a count too large for a float is still a count to compare.
+        if str(state).startswith("mostly-"):
+            if not of_rows < 2 * declared < 2 * of_rows:
+                problems.append(
+                    f"--dataset {state} declares {declared} of {of_rows} rows; the "
+                    "state declares more than half of them and not all"
+                )
+        elif not 0 < declared == of_rows:
+            problems.append(
+                f"--dataset {state} declares {declared} of {of_rows} rows; the "
+                "state declares every row"
+            )
+    for field in sorted(unchecked):
+        problems.append(f"damage_detail.{field} is a claim verify has no check for")
+    return problems
+
+
+def torn_line_problems(
+    lines: Sequence[str],
+    torn: set[int],
+    cut_at: float,
+    keys: dict[str, str],
+    problems: list[str] | None = None,
+) -> list[str]:
+    """Each torn line is the start of a row of the slice, cut where the record says.
+
+    The question is the first key of every line, so a cut line still names the row it
+    was: that row is written again the way the builder writes it, and the torn line has
+    to be exactly its first `cut_at` of characters.
+
+    Problems go into `problems` as they are found, and a line that cannot be read at all
+    is one problem about that line, so the lines after it are still checked.
+    """
+    problems = [] if problems is None else problems
+    by_question = {row["input"]: row for row in read_dataset()}
+    for number in sorted(torn):
+        if number > len(lines):
+            continue
+        line = lines[number - 1]
+        opened = re.match(
+            r'\{"%s": ("(?:[^"\\]|\\.)*")' % re.escape(keys["input"]), line
+        )
+        try:
+            question = json.loads(opened.group(1)) if opened else None
+        except ValueError as error:
+            problems.append(f"torn line {number} cannot be read: {error}")
+            continue
+        row = by_question.get(question) if isinstance(question, str) else None
+        if row is None:
+            problems.append(
+                f"torn line {number} does not begin with a question of the slice"
+            )
+            continue
+        whole = json.dumps(project_row(row, "torn"), ensure_ascii=False, sort_keys=True)
+        if line != whole[: int(len(whole) * cut_at)]:
+            problems.append(f"torn line {number} is not its row cut at {cut_at:.0%}")
+    return problems
+
+
+def second_agent_problems(
+    project: Path,
+    agent: dict[str, Any],
+    rows: Sequence[dict[str, Any]],
+    keys: dict[str, str],
+    problems: list[str] | None = None,
+) -> list[str]:
+    """The second agent the record describes, against the files and the first dataset.
+
+    It has to be there as described, its rows have to be the count recorded and carry no
+    answer, and each of its queries -- which is a gold query under the id of a row of the
+    first dataset -- has to be the answer that row already ships. A query the dataset
+    withholds or replaces would hand the agent the thing the project is missing.
+
+    Problems go into `problems` as they are found, as `dataset_record_problems` does.
+    """
+    problems = [] if problems is None else problems
+    record = agent.get("second_agent")
+    if agent.get("state") != "two-agents":
+        if record is not None:
+            problems.append("the record has a second agent the state does not ship")
+        return problems
+    if not record:
+        problems.append("--agent two-agents is recorded with no second agent")
+        return problems
+    absent = [
+        f"{record[name]} is in the second agent's record and not on disk"
+        for name in ("path", "evaluator", "dataset", "note")
+        if not (project / record[name]).is_file()
+    ]
+    if absent:
+        problems += absent
+        return problems
+    queries = [
+        json.loads(line)
+        for line in (project / record["dataset"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    if not is_count(record.get("rows")) or record.get("rows") != len(queries):
+        problems.append(
+            f"the second agent is recorded with {record.get('rows')!r} rows and has "
+            f"{len(queries)}"
+        )
+    if record.get("labelled") is not False or any(
+        "output" in query for query in queries
+    ):
+        problems.append("the second agent's rows carry an expected answer")
+    try:
+        listed = agent_models(project / record["path"])
+    except BuildError:
+        # A source that does not parse is reported by the compile check; there is no
+        # roster to compare, and raising here would end `verify` with a traceback.
+        listed = record.get("models")
+    if record.get("models") != listed:
+        problems.append(
+            "the second agent's recorded models are not the ones its source lists"
+        )
+    shipped: dict[str, set[Any]] = {}
+    for row in rows:
+        shipped.setdefault(row["metadata"]["id"], set()).add(row.get(keys["output"]))
+    disclosed = [
+        query["metadata"]["id"]
+        for query in queries
+        if shipped.get(query["metadata"]["id"]) != {query["input"]}
+    ]
+    if disclosed:
+        problems.append(
+            f"{len(disclosed)} of the second agent's queries are not the answer their row "
+            f"ships ({disclosed[0]}, ...), so the project discloses answers it withholds"
+        )
+    return problems
+
+
+def verified(root: Path) -> list[str]:
+    """`verify_demo` for one demo of a bank, whose failure is that demo's problem.
+
+    A check that raises on a demo nobody foresaw is still a demo that did not verify, and
+    the rest of the bank still has to be looked at. Fails closed: the demo is reported,
+    never passed.
+    """
+    try:
+        return verify_demo(root)
+    # Any exception, for the reason `contained` gives: the demo is reported, never passed.
+    except Exception as error:  # noqa: BLE001
+        return [f"verify could not finish on this demo: {error!r}"]
 
 
 def cmd_verify(args: argparse.Namespace) -> dict[str, Any]:
@@ -1815,7 +3207,7 @@ def cmd_verify(args: argparse.Namespace) -> dict[str, Any]:
     )
     if not roots:
         raise BuildError(f"{root} holds no built demo")
-    checked = [{"demo": r.name, "problems": verify_demo(r)} for r in roots]
+    checked = [{"demo": r.name, "problems": verified(r)} for r in roots]
     return {
         "ok": all(not entry["problems"] for entry in checked),
         "root": str(root),
@@ -1859,6 +3251,9 @@ def cmd_check(args: argparse.Namespace) -> dict[str, Any]:
     component_paths.update(EVALUATOR_FILES)
     for provider in PROVIDERS:
         component_paths[f"env/{provider}"] = env_file(provider)
+        component_paths[f"explainer/{provider}"] = second_agent_file(provider)
+    component_paths["explainer/evaluator"] = EXPLAINER / "evaluator.py"
+    component_paths["explainer/note"] = EXPLAINER / PROJECT_NOTE
     for state, path in component_paths.items():
         if path is None:
             continue
@@ -1987,15 +3382,38 @@ def render_demo(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_list(result: dict[str, Any]) -> str:
-    lines = [
-        "PRESET           AGENT      DATASET    EVAL           CALIB    WHAT IT IS"
+def columns(rows: Sequence[Sequence[str]], indent: str = "") -> list[str]:
+    """Rows of cells aligned in columns as wide as their widest cell.
+
+    Widths written in by hand were right for the names of the day they were written and
+    wrong for every longer name added after, which then pushed the rest of its row out
+    of line. The last column is left ragged; nothing follows it.
+    """
+    widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
+    return [
+        indent
+        + " ".join(cell.ljust(width) for cell, width in zip(row[:-1], widths))
+        + " "
+        + row[-1]
+        for row in rows
     ]
-    for preset in result["presets"]:
-        lines.append(
-            f"{preset['name']:<17} {preset['agent']:<10} {preset['dataset']:<14} "
-            f"{preset['eval']:<13} {preset['calibration']:<8} {preset['note']}"
-        )
+
+
+def render_list(result: dict[str, Any]) -> str:
+    lines = columns(
+        [["PRESET", "AGENT", "DATASET", "EVAL", "CALIB", "WHAT IT IS"]]
+        + [
+            [
+                preset["name"],
+                preset["agent"],
+                preset["dataset"],
+                preset["eval"],
+                preset["calibration"],
+                preset["note"],
+            ]
+            for preset in result["presets"]
+        ]
+    )
     lines.append("")
     for name, values in result["states"].items():
         lines.append(f"--{name}: {', '.join(values)}")
@@ -2003,19 +3421,37 @@ def render_list(result: dict[str, Any]) -> str:
 
 
 def render_suite(result: dict[str, Any]) -> str:
+    table = [["DIRECTORY", "PRESET", "AGENT", "DATASET", "EVAL", ""]]
+    for entry in result["built"]:
+        parts = entry["components"]
+        table.append(
+            [
+                entry["directory"],
+                entry["preset"],
+                parts["agent"],
+                parts["dataset"],
+                parts["eval"],
+                f"{entry['rows']:>4} rows",
+            ]
+        )
+    for entry in result["failed"]:
+        table.append(["--", entry["preset"], "", "", "", f"FAILED: {entry['error']}"])
     lines = [
         f"Built {len(result['built'])} projects under {result['root']}",
         "",
-        "  DIRECTORY          PRESET            AGENT    DATASET        EVAL",
+        *(line.rstrip() for line in columns(table, indent="  ")),
     ]
-    for entry in result["built"]:
-        parts = entry["components"]
-        lines.append(
-            f"  {entry['directory']:<18} {entry['preset']:<17} {parts['agent']:<8} "
-            f"{parts['dataset']:<14} {parts['eval']:<12} {entry['rows']:>4} rows"
-        )
-    for entry in result["failed"]:
-        lines.append(f"  {'--':<18} {entry['preset']:<17} FAILED: {entry['error']}")
+    if not result["built"]:
+        # Every preset failed, so there is no project to point an agent at. The
+        # handoff below tells a reader to hand one over, and printing it under a
+        # bank of nothing reads as success with a missing directory rather than
+        # as the refusal it is.
+        lines += [
+            "",
+            "No project was built, so there is nothing to hand to an agent. Each",
+            "preset's refusal is above and in the record; fix those and run again.",
+        ]
+        return "\n".join(lines)
     lines += [
         "",
         f"  {result['record']}  which directory is which; it names the state each demo was",
@@ -2071,6 +3507,22 @@ RENDERERS: dict[str, Callable[[dict[str, Any]], str]] = {
 # --------------------------------------------------------------------------- cli
 
 
+def enumerated(choices: Sequence[str], glosses: dict[str, str]) -> str:
+    """Help text naming every choice, from the same sequence the parser accepts.
+
+    Written out by hand, the `--eval` help listed every scorer but the newest one; a list
+    built from the choices cannot fall behind them. A gloss for a name that is not a choice
+    is the same drift in the other direction, and is refused rather than printed.
+    """
+    unknown = sorted(set(glosses) - set(choices))
+    if unknown:
+        raise BuildError(f"help describes {', '.join(unknown)}, which are not choices")
+    return " | ".join(
+        f"{choice} ({glosses[choice]})" if choice in glosses else choice
+        for choice in choices
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="build.py",
@@ -2122,18 +3574,37 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument(
         "--agent",
         choices=AGENT_STATES,
-        help="ready (tunable) | no-knobs (nothing to search) | missing",
+        help=enumerated(
+            AGENT_STATES,
+            {
+                "ready": "tunable",
+                "no-knobs": "nothing to search",
+                "two-agents": "a second agent beside it",
+            },
+        ),
     )
     demo.add_argument(
         "--dataset",
         choices=DATASET_STATES,
-        help="ready (300) | mini (30) | unlabeled (no expected answers) | missing",
+        help=enumerated(
+            DATASET_STATES,
+            {
+                "ready": "the whole slice",
+                "mini": f"{MINI_ROWS} rows",
+                "tiny": f"{TINY_ROWS} rows",
+                "unlabeled": "no expected answers",
+            },
+        )
+        + "; `list` describes the damaged ones",
     )
     demo.add_argument(
         "--eval",
         dest="eval",
         choices=sorted(EVALUATOR_FILES),
-        help="exact-match (does not execute) | exec-match (runs the SQL) | broken | missing",
+        help=enumerated(
+            sorted(EVALUATOR_FILES),
+            {"exact-match": "does not execute", "exec-match": "runs the SQL"},
+        ),
     )
     demo.add_argument(
         "--provider",

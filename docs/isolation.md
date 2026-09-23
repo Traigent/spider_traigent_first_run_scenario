@@ -34,8 +34,15 @@ first, once.
 ```
 
 `demo.json` records which state each component was put in, every file's SHA-256, and the
-handoff prompt. An agent that reads it knows the answer before it starts. Keep it out of the
-working directory, out of the prompt, and out of anything pasted into the session.
+handoff prompt -- and, for a damaged dataset, what was done to it: which six rows `leaky`
+emits twice, which lines `torn` cut, which databases `split-by-database` holds out. An agent
+that reads it knows the answer before it starts. Keep it out of the working directory, out of
+the prompt, and out of anything pasted into the session.
+
+One project carries a note the customer wrote. `--agent two-agents` ships `PROJECT.md` at the
+project root, saying which of the two agents to work on; it is in the customer's voice, it is
+part of the project, and the agent is meant to read it. It names no state and no generator,
+and `verify` reads it like any other file.
 
 The same goes for the rest of this repository. If the agent can see `components/`, it can
 read the file it was given next to the three it was not, and the difference between them is
@@ -80,8 +87,8 @@ modification to travel with the data.
 It is also the reason the first paragraph of this file is true today and was not before.
 Projects used to ship `NOTICE`, `LICENSE` and `LICENSE-DATA` as well. All three named this
 repository by name, and `NOTICE` described the directory it was sitting in as a generated demo
--- so every project in every one of the seventeen states arrived telling the agent exactly what
-it was looking at, before it read a line of code. `ATTRIBUTION.txt` carries the same
+-- so every project in every one of the seventeen states there were then arrived telling the
+agent exactly what it was looking at, before it read a line of code. `ATTRIBUTION.txt` carries the same
 obligations and names nothing: the original work, the licence and its URI, the kinds of
 modification made, and a warning not to report a score measured on a modified subset as a
 Spider score. No generator, no preset, no state. `verify` reads it like any other file and
@@ -179,8 +186,16 @@ one of them a word from the blinding roster appearing in the guide's own prose:
 
 That roster -- `preset`, `fixture`, `plant`, `scenario`, `deliberate`, `is observed`,
 `generated demo`, `spider_traigent`, `first_run_scenario`, `build.py`, `demo.json`, plus every
-hyphenated preset and component name -- exists to catch *this repository* leaking into a
-project. The first-run guide is a document about running first-run evaluations, so it uses
+hyphenated preset and component name longer than six characters (from `agent-and-logs` to
+`wrong-wiring`; the nine ported presets added `holdout-labelled`, `holdout-only`,
+`leaky-split`, `length-blind`, `opaque-scorer`, `raw-export`, `split-by-database`,
+`torn-lines`, `two-agents` and `undeclared-source`, and the provenance and cost round after
+them added nine: the preset names `generated-answer-key`, `mostly-generated-answer-key`,
+`mostly-synthetic-source`, `mostly-undeclared-source` and `slow-scorer`, and the dataset-state
+names `generated-answers`, `mostly-generated-answers`, `mostly-synthetic` and
+`mostly-undeclared`. `slow`, the evaluator state, is four characters and below the
+threshold) --
+exists to catch *this repository* leaking into a project. The first-run guide is a document about running first-run evaluations, so it uses
 those words for their ordinary meaning: `readiness.py` has a `--preset`-shaped vocabulary,
 `run-safety.md` says "deliberate", `component-creation.md` says "fixture", and `hand-written`
 and `exact-match` -- two of this repository's preset and component names -- appear in the

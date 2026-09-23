@@ -1,0 +1,32 @@
+$ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --evaluator-origin brought --evaluator-method normalized-exact --task-kind code-sql --color never --ascii
+TRAIGENT OPTIMIZATION READINESS        45/100  PARTIAL
+Action: Complete the evaluator check before paid work.
+
+  LIMITED TO 45 An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.
+  WOULD LIMIT TO 65 No row of this dataset was observed - every row is either declared generated, or records no source this run can read, and a row whose source it cannot read is scored as generated. Declare or re-label the source on any such row that was collected; if none was, this dataset is generated.
+
+  AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
+    ? whether it ends, and on what                     not independently verified: one call per input, so it ends
+    ? whether the answer's shape is pinned down        not independently verified: the answer's shape is constrained
+    ? what the model is told, and shown                not independently verified: a prompt, no worked examples in it
+    OK how many settings-combinations there are to try  static source verification established possible settings model, prompt_style, schema_context, temperature; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 36 distinct configurations; this read carries no trial budget, so nothing here says how much of it a run would compare
+    ? tools it declares, and can reach                 the document declares no tools, so tool wiring was not checked here.
+    not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
+
+  DATASET     ##################--  89/100  (4 of 5 checks measured)
+    OK range of difficulty           bands present: easy, hard, medium, very-hard
+    ? repeated or dominant answers  not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean
+    OK answers to score against      300/300 rows carry an expected output
+    OK examples to compare on        240 to tune on / 60 held back; 240 examples - substantial comparison set
+    !! where the rows came from      300 undeclared of 300 rows (undeclared means the row names no real source this run can read - no provenance field at all, a non-answer such as n/a, or a word its vocabulary does not know - so this run scores it as generated); declared sources: spider-dev; provenance tokens this run could not verify, scored as undeclared rather than as collected: spider-dev
+
+  EVALUATION  #######-------------  33/100  (2 of 4 checks measured)
+    ? tried on answers already known right and wrong  no calibration result was provided to this score; it costs points until a complete calibration is measured
+    ? separates good answers from bad                 not yet measured how far apart it scores a right and a wrong answer - this is measured at calibration, later in the run, and no points are deducted for it here
+    OK same answer every time                          deterministic scoring rule
+    !! right kind of check for this output             normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output
+
+  The detailed readiness report carries the source observations and settings-check guidance.
+
+  Local pre-run planning estimate, not a probability or measured optimization result.
+exit=0

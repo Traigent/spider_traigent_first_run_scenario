@@ -9,9 +9,13 @@ that repository makes a decision.
 
 from __future__ import annotations
 
+import argparse
+import collections
 import dataclasses
 import hashlib
+import importlib.util
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -21,6 +25,7 @@ import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
@@ -86,6 +91,40 @@ EXPECTED_SPLIT_BY_BAND = {
     },
 }
 
+# The budget the sweep measures `slow-scorer` under, stated here rather than read out
+# of the harness: a number taken from the thing it is checking agrees with it whatever
+# it says. `docs/measurements/score_bank.py` passes this as `--timeout`, and one call
+# of the shipped scorer has to outlast it.
+SLOW_SCORER_CALIBRATION_BUDGET_SECONDS = 5
+
+# How the guide budgets a calibration nobody passed `--timeout` to -- the one a real
+# guided run gets -- read from `skills/traigent-first-run/scripts/calibrate_evaluator.py`
+# at the revision below. `slow-scorer` claims to reach the timeout in that run, so the
+# claim is checked against these and not against the sweep's own shorter budget, which
+# agrees with the scorer whatever the scorer does. `TheSweepPinsTheGuide` holds the
+# revision to the sweep's pin, so moving the pin sends someone back here to read them
+# again.
+GUIDE_CALIBRATION_BUDGET = {
+    "read_at": "d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199",
+    # Line 71: the authored probes per case. Only these can time the calibration out:
+    # lines 3104-3118 run the authored worker against the deadline and write the
+    # timeout record when it passes, while a supplemental probe that runs out of time
+    # afterwards is marked unavailable instead.
+    "PROBES_PER_CASE": 4,
+    # Line 72: supplemental calls the default budget reserves for, per case.
+    "DETERMINISTIC_SUPPLEMENTAL_PROBES_PER_CASE": 8,
+    # Line 73: seconds budgeted per possible deterministic call.
+    "DETERMINISTIC_SECONDS_PER_PROBE": 75,
+    # Line 103: the ceiling the whole default budget is clamped to.
+    "CALIBRATION_TIMEOUT_CEILING_SECONDS": 900,
+    # Line 2268: the fewest cases `--cases` accepts. An assistant adapting the
+    # shipped matrix can trim it this far, so the state has to hold there too.
+    # The calibrator's single-case flags accept one case, which this scorer
+    # finishes in 480s; the guide's instructions never use them, only
+    # `--cases`, so the state is held for every case set those can pass.
+    "MINIMUM_CASES": 2,
+}
+
 # Which starting state each preset is, written out here and imported from nowhere.
 # `test_every_preset_passes` used to check build.py's presets against build.py's presets,
 # which passes whatever they are changed to: `fake-ruler` shipping a working scorer, or
@@ -110,6 +149,45 @@ PRESET_TABLE = {
     "sql-exec-stop": ("ready", "ready", "exec-match", "none", "none"),
     "wrong-answers": ("ready", "wrong-answers", "exact-match", "none", "none"),
     "wrong-wiring": ("ready", "ready", "swapped", "none", "none"),
+    "leaky-split": ("ready", "leaky", "exact-match", "none", "none"),
+    "holdout-only": ("ready", "holdout-labelled", "exact-match", "none", "none"),
+    "split-by-database": ("ready", "split-by-database", "exact-match", "none", "none"),
+    "raw-export": ("ready", "raw-export", "exact-match", "none", "none"),
+    "torn-lines": ("ready", "torn", "exact-match", "none", "none"),
+    "undeclared-source": ("ready", "undeclared", "exact-match", "none", "none"),
+    "mostly-undeclared-source": (
+        "ready",
+        "mostly-undeclared",
+        "exact-match",
+        "none",
+        "none",
+    ),
+    "mostly-synthetic-source": (
+        "ready",
+        "mostly-synthetic",
+        "exact-match",
+        "none",
+        "none",
+    ),
+    "synthetic-source": ("ready", "fully-synthetic", "exact-match", "none", "none"),
+    "generated-answer-key": (
+        "ready",
+        "generated-answers",
+        "exact-match",
+        "none",
+        "none",
+    ),
+    "mostly-generated-answer-key": (
+        "ready",
+        "mostly-generated-answers",
+        "exact-match",
+        "none",
+        "none",
+    ),
+    "slow-scorer": ("ready", "ready", "slow", "present", "none"),
+    "opaque-scorer": ("ready", "ready", "opaque", "none", "none"),
+    "length-blind": ("ready", "ready", "length-blind", "present", "none"),
+    "two-agents": ("two-agents", "ready", "exact-match", "none", "none"),
 }
 
 # The file each `--eval` state ships, so that a preset naming one scorer and shipping another
@@ -119,6 +197,9 @@ EVALUATOR_FILENAMES = {
     "exec-match": "exec_match.py",
     "broken": "broken.py",
     "swapped": "swapped.py",
+    "opaque": "opaque.py",
+    "length-blind": "length_blind.py",
+    "slow": "slow.py",
 }
 
 # And the same for the agents. Comparing the shipped file with `build.agent_file(...)` was
@@ -128,6 +209,8 @@ EVALUATOR_FILENAMES = {
 AGENT_FILENAMES = {
     "ready": "agent_ready.py",
     "no-knobs": "agent_no_knobs.py",
+    # The tunable agent, byte for byte; what the state adds sits beside it.
+    "two-agents": "agent_ready.py",
 }
 
 # What each evaluator honestly is. Recorded in every manifest by build.py and, until now,
@@ -138,6 +221,25 @@ EXPECTED_EVALUATOR_METHOD = {
     "exec-match": "execution",
     "broken": "normalized-exact",
     "swapped": "normalized-exact",
+    # None, on purpose, for both: a grader the project does not carry cannot be given a
+    # method, and a comparison of lengths is not one of the methods the guide names.
+    "opaque": None,
+    "length-blind": None,
+    # A method IS honest here: the comparison really is a normalised text match. What is
+    # wrong with this scorer is what it costs, not what it compares.
+    "slow": "normalized-exact",
+}
+# Whether each evaluator executes the model's output, as the manifest records it. `None`
+# is "unknown", and it is honest for exactly one scorer: the one whose grader is not here.
+EXPECTED_EXECUTES = {
+    "exact-match": False,
+    "exec-match": True,
+    "broken": False,
+    "swapped": False,
+    "opaque": None,
+    "length-blind": False,
+    # It sleeps; it does not run the model's query.
+    "slow": False,
 }
 
 # The version of the agent's dependency a project environment is built with. Written out
@@ -146,13 +248,83 @@ EXPECTED_EVALUATOR_METHOD = {
 EXPECTED_AGENT_REQUIREMENT = "litellm==1.93.0"
 
 
-def run_build(*args: str) -> subprocess.CompletedProcess[str]:
+def run_build(
+    *args: str, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(REPO_ROOT / "build.py"), *args],
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
+
+
+def load_scorer(name: str, keep_timing: bool = False) -> Any:
+    """One of the shipped evaluators, by file name, with any round trip made free.
+
+    `slow.py` sleeps per call to model a review service; its comparison is what is under
+    test, so the sleep is set to zero here rather than waited out -- unless the timing is
+    what is under test.
+    """
+    located = importlib.util.spec_from_file_location(
+        f"_scorer_{name}", REPO_ROOT / "components" / "evaluator" / f"{name}.py"
+    )
+    assert located is not None and located.loader is not None
+    scorer = importlib.util.module_from_spec(located)
+    sys.modules[located.name] = scorer
+    located.loader.exec_module(scorer)
+    if hasattr(scorer, "SECONDS_PER_CALL") and not keep_timing:
+        scorer.SECONDS_PER_CALL = 0.0
+    return scorer
+
+
+def declaring_states() -> list[str]:
+    """The dataset states whose rows say something different about themselves.
+
+    Read off what `build.damage_rows` actually does to the declaration fields, not listed:
+    two tests here each kept their own list of these states, and neither learned about
+    `fully-synthetic` when it arrived.
+    """
+    rows = build.read_dataset()
+
+    def declared(row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in row["metadata"].items()
+            if key in build.DECLARATION_ROW_FIELDS
+        }
+
+    return [
+        state
+        for state in build.DATASET_STATES
+        if state != "missing"
+        and any(
+            declared(original) != declared(shipped)
+            for original, shipped in zip(
+                build.select_rows(rows, state),
+                build.damage_rows(build.select_rows(rows, state), state),
+            )
+        )
+    ]
+
+
+def ascii_locale_env() -> dict[str, str]:
+    """The environment of a container nobody set `LANG` in.
+
+    Python then picks ASCII for `open()` without an explicit encoding, so any
+    file reader that forgot one fails on the first non-ASCII byte. Two rows of
+    the committed slice carry a typographic apostrophe, which makes this the
+    ordinary shape of a fresh machine rather than an exotic one.
+    """
+
+    return {
+        **os.environ,
+        "LC_ALL": "C",
+        "LANG": "C",
+        "PYTHONUTF8": "0",
+        "PYTHONCOERCECLOCALE": "0",
+    }
 
 
 def build_or_raise(*args: str) -> subprocess.CompletedProcess[str]:
@@ -705,6 +877,9 @@ class Calibration(unittest.TestCase):
         for args, expected in (
             (("--eval", "missing"), "evaluator"),
             (("--dataset", "missing"), "databases"),
+            # A scorer that exists and has no probes is refused in its own words: its
+            # grader is not here, so nothing could vouch for probe answers shipped for it.
+            (("--eval", "opaque"), "nothing could vouch for the probes"),
         ):
             with self.subTest(args=args):
                 # Named after the flag, not its value. Both subtests pass "missing", so
@@ -1127,7 +1302,7 @@ class TheBankOfStartingStates(unittest.TestCase):
                     recorded["method"], EXPECTED_EVALUATOR_METHOD[evaluator]
                 )
                 self.assertEqual(
-                    recorded["executes_candidate_output"], evaluator == "exec-match"
+                    recorded["executes_candidate_output"], EXPECTED_EXECUTES[evaluator]
                 )
 
     def test_every_preset_passes(self) -> None:
@@ -1174,8 +1349,8 @@ class TheBankOfStartingStates(unittest.TestCase):
 
         `holdout`, `tuning` and `difficulty` are real properties of the rows and occur
         thousands of times across a bank. If any of them became a tell, `verify` would fail
-        all seventeen presets at once -- which is the same as having no check, because the
-        only way to get a green run back would be to stop believing it.
+        every preset at once -- which is the same as having no check, because the only way
+        to get a green run back would be to stop believing it.
         """
         occurrences = 0
         for path in sorted(self.root.rglob("*")):
@@ -1529,6 +1704,9 @@ class WhatEachProjectHandsTheAgent(unittest.TestCase):
             ("no-agent", ("--preset", "no-agent")),
             ("empty", ("--preset", "empty")),
             ("logs-only", ("--preset", "logs-only")),
+            ("two-agents", ("--preset", "two-agents")),
+            ("holdout-only", ("--preset", "holdout-only")),
+            ("raw-export", ("--preset", "raw-export")),
         ):
             out = Path(cls.workspace) / name
             build_or_raise("demo", "--out", str(out), *args)
@@ -1615,8 +1793,11 @@ class WhatEachProjectHandsTheAgent(unittest.TestCase):
                             on_disk,
                             f"the README lists {entry} and it is not there",
                         )
+                # A directory entry stands for everything under it, the way
+                # `databases/` always has and `sql_explainer/` now does.
+                directories = tuple(entry for entry in listed if entry.endswith("/"))
                 for path in sorted(on_disk):
-                    if path.startswith("databases/"):
+                    if path.startswith(directories):
                         continue
                     self.assertIn(
                         path,
@@ -1690,6 +1871,32 @@ class WhatEachProjectHandsTheAgent(unittest.TestCase):
         self.assertIn("rows, each a question.", logs_only)
         self.assertNotIn("the query that answers it", logs_only)
         self.assertNotIn("metadata.split", logs_only)
+
+        # Answers on some rows and not others: how many, and not "each".
+        holdout_only = (self.projects["holdout-only"] / "README.md").read_text()
+        self.assertIn(
+            "30 rows, each a question; 6 of them carry the query that answers it.",
+            holdout_only,
+        )
+        self.assertNotIn("each a question with the query", holdout_only)
+
+        # Rows under Spider's own key names: the question quoted in the opening is read
+        # from the key the rows actually use, not from one they do not carry.
+        raw_export = (self.projects["raw-export"] / "README.md").read_text()
+        first = rows_of(self.projects["raw-export"])[0]
+        self.assertIn(first["question"], raw_export.split("## What is here")[0])
+        self.assertIn('"question":', raw_export)
+        self.assertIn('"query":', raw_export)
+
+        # Two agents: the note and the second directory are in the table, and the
+        # opening still describes the first agent, which is the one the note names.
+        two_agents = (self.projects["two-agents"] / "README.md").read_text()
+        self.assertIn("| `PROJECT.md` |", two_agents)
+        self.assertIn("| `sql_explainer/` |", two_agents)
+        self.assertIn("20 queries to run it on", two_agents)
+        self.assertIn(
+            "Answers questions about a database by writing the SQL", two_agents
+        )
 
     def test_the_first_question_shown_is_shown_without_its_answer(self) -> None:
         """A project whose answers have been re-paired would announce the damage.
@@ -1768,6 +1975,1147 @@ class TheCalibrationCasesNameRealRows(unittest.TestCase):
                     )
 
 
+class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
+    """Each of the nine ported starting states, read off the bytes that ship.
+
+    Every one of these is a state whose whole point is one specific thing being wrong or
+    unusual, and build.py records that thing in `demo.json`. A record is a claim; these
+    read the file beside it and check the claim is true of what an agent would open.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workspace = tempfile.mkdtemp()
+        cls.outs = {}
+        for preset in (
+            "leaky-split",
+            "holdout-only",
+            "split-by-database",
+            "raw-export",
+            "torn-lines",
+            "undeclared-source",
+            "opaque-scorer",
+            "length-blind",
+            "two-agents",
+            "ready",
+        ):
+            # Built under the neutral name `suite` would give it: a directory named after
+            # the preset is a tell, and `verify` says so -- which the last test here
+            # relies on being true of every other path.
+            out = Path(cls.workspace) / build.bank_directory(preset)
+            build_or_raise("demo", "--preset", preset, "--out", str(out))
+            cls.outs[preset] = out
+        cls.truth = slice_rows()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.workspace, ignore_errors=True)
+
+    def project(self, preset: str) -> Path:
+        return self.outs[preset] / "project"
+
+    def dataset(self, preset: str) -> dict:
+        return json.loads((self.outs[preset] / "demo.json").read_text())["components"][
+            "dataset"
+        ]
+
+    def lines(self, preset: str) -> list[str]:
+        return [
+            line
+            for line in (self.project(preset) / "dataset.jsonl")
+            .read_text(encoding="utf-8")
+            .split("\n")
+            if line
+        ]
+
+    # ------------------------------------------------------------------ leaky-split
+
+    def test_leaky_emits_six_tuning_rows_a_second_time_as_held_out_rows(self) -> None:
+        rows = rows_of(self.project("leaky-split"))
+        ready = rows_of(self.project("ready"))
+        self.assertEqual(len(rows), 306)
+        self.assertEqual(rows[:300], ready, "the first 300 rows are not the ready rows")
+        copies = rows[300:]
+        self.assertEqual(len(copies), 6)
+        by_input = {row["input"]: row for row in ready}
+        for copy in copies:
+            with self.subTest(row=copy["metadata"]["id"]):
+                original = by_input[copy["input"]]
+                self.assertEqual(original["metadata"]["split"], "tuning")
+                self.assertEqual(copy["metadata"]["split"], "holdout")
+                self.assertEqual(copy["output"], original["output"])
+                self.assertEqual(
+                    copy["metadata"]["id"], original["metadata"]["id"] + "-holdout"
+                )
+        # Both sides of the line hold the same question: that is the leak.
+        tuning = {r["input"] for r in rows if r["metadata"]["split"] == "tuning"}
+        holdout = {r["input"] for r in rows if r["metadata"]["split"] == "holdout"}
+        self.assertEqual(len(tuning & holdout), 6)
+        self.assertEqual(
+            Counter(c["metadata"]["difficulty"] for c in copies),
+            {"easy": 2, "hard": 2, "medium": 1, "very-hard": 1},
+        )
+        record = self.dataset("leaky-split")
+        self.assertEqual(record["damage"], "leaky")
+        self.assertEqual(
+            sorted(record["damage_detail"]["leaked_ids"]),
+            sorted(c["metadata"]["id"][: -len("-holdout")] for c in copies),
+        )
+        self.assertEqual(record["split_counts"], {"holdout": 66, "tuning": 240})
+
+    # ------------------------------------------------------------------ holdout-only
+
+    def test_holdout_labelled_keeps_answers_on_the_held_out_rows_only(self) -> None:
+        rows = rows_of(self.project("holdout-only"))
+        self.assertEqual(len(rows), EXPECTED_MINI_ROWS)
+        self.assertEqual(id_digest(rows), DRAWN_ROW_IDS_SHA256["mini"])
+        labelled = 0
+        for row in rows:
+            with self.subTest(row=row["metadata"]["id"]):
+                if row["metadata"]["split"] == "holdout":
+                    labelled += 1
+                    self.assertEqual(
+                        row["output"], self.truth[row["metadata"]["id"]]["output"]
+                    )
+                else:
+                    self.assertNotIn("output", row)
+        self.assertEqual(labelled, 6)
+        record = self.dataset("holdout-only")
+        self.assertFalse(record["labelled"])
+        self.assertEqual(record["labelled_rows"], 6)
+        self.assertEqual(record["damage"], "holdout-labelled")
+
+    # ------------------------------------------------------------------ split-by-database
+
+    def test_split_by_database_holds_out_whole_databases(self) -> None:
+        rows = rows_of(self.project("split-by-database"))
+        self.assertEqual(len(rows), 300)
+        self.assertEqual(
+            [r["metadata"]["id"] for r in rows],
+            [r["metadata"]["id"] for r in rows_of(self.project("ready"))],
+        )
+        sides: dict[str, set[str]] = {}
+        for row in rows:
+            sides.setdefault(row["metadata"]["db_id"], set()).add(
+                row["metadata"]["split"]
+            )
+            self.assertEqual(row["output"], self.truth[row["metadata"]["id"]]["output"])
+        for db_id, splits in sorted(sides.items()):
+            self.assertEqual(len(splits), 1, f"{db_id} sits on both sides of the line")
+        held = sorted(db for db, s in sides.items() if s == {"holdout"})
+        # Pinned as a literal: the cut is seeded, and everyone who builds this state
+        # has to hold out the same databases.
+        self.assertEqual(
+            held,
+            [
+                "cre_Doc_Template_Mgt",
+                "flight_2",
+                "orchestra",
+                "real_estate_properties",
+                "singer",
+            ],
+        )
+        held_rows = sum(1 for r in rows if r["metadata"]["split"] == "holdout")
+        self.assertEqual(held_rows, 61)
+        self.assertGreaterEqual(held_rows / len(rows), 0.15)
+        self.assertLessEqual(held_rows / len(rows), 0.25)
+        record = self.dataset("split-by-database")
+        self.assertEqual(record["damage_detail"]["held_out_databases"], held)
+
+    # ------------------------------------------------------------------ raw-export
+
+    def test_raw_export_writes_spiders_own_key_names(self) -> None:
+        rows = [json.loads(line) for line in self.lines("raw-export")]
+        self.assertEqual(len(rows), 300)
+        for row in rows:
+            with self.subTest(row=row["metadata"]["id"]):
+                self.assertEqual(
+                    sorted(row), ["db_id", "metadata", "query", "question"]
+                )
+                original = self.truth[row["metadata"]["id"]]
+                self.assertEqual(row["question"], original["input"])
+                self.assertEqual(row["query"], original["output"])
+                self.assertEqual(row["db_id"], original["metadata"]["db_id"])
+                self.assertEqual(row["metadata"], original["metadata"])
+        catalog = json.loads((self.project("raw-export") / "catalog.json").read_text())
+        self.assertEqual(set(catalog), {row["question"] for row in rows})
+        record = self.dataset("raw-export")
+        self.assertEqual(record["fields"], {"input": "question", "output": "query"})
+        self.assertTrue(record["labelled"])
+
+    # ------------------------------------------------------------------ torn-lines
+
+    def test_torn_cuts_exactly_two_lines_and_records_which(self) -> None:
+        lines = self.lines("torn-lines")
+        self.assertEqual(len(lines), EXPECTED_MINI_ROWS)
+        torn = []
+        whole = []
+        for number, line in enumerate(lines, 1):
+            try:
+                whole.append(json.loads(line))
+            except ValueError:
+                torn.append(number)
+        self.assertEqual(torn, [10, 20])
+        self.assertNotIn(1, torn)
+        self.assertEqual(len(whole), 28)
+        record = self.dataset("torn-lines")
+        self.assertEqual(record["damage"], "torn")
+        self.assertEqual(record["damage_detail"]["torn_lines"], torn)
+        # The 28 whole rows are the mini draw's rows, unchanged, minus the two cut ones.
+        mini = build.select_rows(build.read_dataset(), "mini")
+        expected = [
+            build.project_row(row, "torn")
+            for number, row in enumerate(mini, 1)
+            if number not in torn
+        ]
+        self.assertEqual(whole, expected)
+        # And each torn line is the front of the row it was cut from.
+        for number in torn:
+            self.assertTrue(
+                json.dumps(
+                    build.project_row(mini[number - 1], "torn"),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ).startswith(lines[number - 1])
+            )
+
+    # ------------------------------------------------------------------ undeclared-source
+
+    def test_undeclared_writes_a_provenance_word_the_guide_does_not_know(self) -> None:
+        rows = rows_of(self.project("undeclared-source"))
+        ready = rows_of(self.project("ready"))
+        self.assertEqual(len(rows), 300)
+        for row, original in zip(rows, ready):
+            with self.subTest(row=row["metadata"]["id"]):
+                self.assertEqual(row["metadata"]["provenance"], "spider-dev")
+                restored = {
+                    **row,
+                    "metadata": {**row["metadata"], "provenance": "real"},
+                }
+                self.assertEqual(restored, original)
+        self.assertEqual(
+            self.dataset("undeclared-source")["damage_detail"],
+            {"provenance": "spider-dev", "slice_says": "real"},
+        )
+        # The committed slice still says `real`, which docs/dataset.md explains.
+        self.assertTrue(
+            all(row["metadata"]["provenance"] == "real" for row in self.truth.values())
+        )
+
+    # ------------------------------------------------------------------ opaque-scorer
+
+    def test_opaque_ships_a_scorer_that_imports_a_library_the_project_lacks(
+        self,
+    ) -> None:
+        shipped = (self.project("opaque-scorer") / "evaluator.py").read_text()
+        self.assertIn("from sqlgrade.compare import QueryGrader", shipped)
+        self.assertEqual(
+            shipped,
+            (REPO_ROOT / "components" / "evaluator" / "opaque.py").read_text(),
+        )
+        self.assertFalse(
+            (self.project("opaque-scorer") / build.RUNS_DIRECTORY).exists(),
+            "probe answers shipped for a scorer nothing here has ever run",
+        )
+        record = json.loads((self.outs["opaque-scorer"] / "demo.json").read_text())[
+            "components"
+        ]["evaluator"]
+        self.assertIsNone(record["method"])
+        self.assertIsNone(record["executes_candidate_output"])
+        self.assertIsNone(record["calibration"])
+        # Nothing the project ships resolves the import.
+        self.assertFalse(
+            list(self.project("opaque-scorer").rglob("sqlgrade*")),
+            "the project carries the library the scorer is supposed to be missing",
+        )
+
+    def test_opaque_refuses_to_ship_probes(self) -> None:
+        out = Path(self.workspace) / "opaque_with_probes"
+        result = run_build(
+            "demo", "--eval", "opaque", "--calibration", "present", "--out", str(out)
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("nothing could vouch for the probes", result.stderr)
+        self.assertFalse(out.exists(), "a refused build left a directory behind")
+
+    # ------------------------------------------------------------------ length-blind
+
+    def test_length_blind_ships_the_length_scorer_and_the_text_probes(self) -> None:
+        project = self.project("length-blind")
+        shipped = (project / "evaluator.py").read_text()
+        self.assertEqual(
+            shipped,
+            (REPO_ROOT / "components" / "evaluator" / "length_blind.py").read_text(),
+        )
+        self.assertIn("abs(len(produced) - len(recorded))", shipped)
+        probes = project / build.RUNS_DIRECTORY / build.CALIBRATION_FILE
+        self.assertTrue(probes.is_file())
+        self.assertEqual(
+            probes.read_bytes(),
+            (
+                REPO_ROOT / "components" / "calibration" / "exact_match.json"
+            ).read_bytes(),
+        )
+        record = json.loads((self.outs["length-blind"] / "demo.json").read_text())[
+            "components"
+        ]["evaluator"]
+        self.assertIsNone(record["method"])
+        self.assertIs(record["executes_candidate_output"], False)
+        self.assertEqual(record["calibration"]["case_count"], 4)
+
+    # ------------------------------------------------------------------ two-agents
+
+    def test_two_agents_ships_the_tunable_agent_and_a_second_one_beside_it(
+        self,
+    ) -> None:
+        project = self.project("two-agents")
+        provider = build.DEFAULT_PROVIDER
+        self.assertEqual(
+            (project / "agent.py").read_bytes(),
+            (
+                REPO_ROOT / "components" / "agent" / provider / "agent_ready.py"
+            ).read_bytes(),
+        )
+        sibling = project / "sql_explainer"
+        self.assertEqual(
+            sorted(p.name for p in sibling.iterdir()),
+            ["agent.py", "dataset.jsonl", "evaluator.py"],
+        )
+        self.assertEqual(
+            (sibling / "agent.py").read_bytes(),
+            (
+                REPO_ROOT / "components" / "explainer" / provider / "agent.py"
+            ).read_bytes(),
+        )
+        self.assertEqual(
+            (sibling / "evaluator.py").read_bytes(),
+            (REPO_ROOT / "components" / "explainer" / "evaluator.py").read_bytes(),
+        )
+        note = (project / "PROJECT.md").read_text()
+        self.assertEqual(
+            note, (REPO_ROOT / "components" / "explainer" / "PROJECT.md").read_text()
+        )
+        self.assertIn("`agent.py`", note)
+        self.assertIn("`sql_explainer/`", note)
+        self.assertIn("the one to work on", note)
+
+        rows = rows_of(sibling)
+        self.assertEqual(len(rows), 20)
+        golds = {row["output"] for row in self.truth.values()}
+        for row in rows:
+            with self.subTest(row=row["metadata"]["id"]):
+                self.assertNotIn("output", row)
+                self.assertIn(row["input"], golds)
+                self.assertEqual(
+                    row["input"], self.truth[row["metadata"]["id"]]["output"]
+                )
+                self.assertEqual(
+                    sorted(row["metadata"]), ["db_id", "difficulty", "id", "provenance"]
+                )
+        self.assertEqual(
+            Counter(r["metadata"]["difficulty"] for r in rows),
+            {"easy": 5, "hard": 5, "medium": 5, "very-hard": 5},
+        )
+        record = json.loads((self.outs["two-agents"] / "demo.json").read_text())[
+            "components"
+        ]["agent"]
+        self.assertEqual(record["state"], "two-agents")
+        self.assertEqual(record["path"], "agent.py")
+        self.assertEqual(
+            record["second_agent"],
+            {
+                "directory": "sql_explainer",
+                "path": "sql_explainer/agent.py",
+                "evaluator": "sql_explainer/evaluator.py",
+                "dataset": "sql_explainer/dataset.jsonl",
+                "rows": 20,
+                "labelled": False,
+                "models": ["openrouter/qwen/qwen3-coder"],
+                "note": "PROJECT.md",
+            },
+        )
+        # The first agent's roster is the tunable one's, and the second's is its own.
+        self.assertEqual(len(record["models"]), 3)
+
+    def test_a_second_agent_draws_from_the_rows_before_damage(self) -> None:
+        """`duplicated` repeats ids and `leaky` mints `-holdout` copies; neither may reach
+        the second agent's file, whose damage no record describes."""
+        for state in ("duplicated", "leaky"):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"two_agents_{state}"
+                result = run_build(
+                    "demo",
+                    "--agent",
+                    "two-agents",
+                    "--dataset",
+                    state,
+                    "--out",
+                    str(out),
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                rows = [
+                    json.loads(line)
+                    for line in (out / "project" / "sql_explainer" / "dataset.jsonl")
+                    .read_text()
+                    .splitlines()
+                ]
+                ids = [row["metadata"]["id"] for row in rows]
+                self.assertEqual(len(ids), len(set(ids)), ids)
+                self.assertFalse(
+                    [name for name in ids if name.endswith("-holdout")], ids
+                )
+                self.assertEqual(len(rows), build.SECOND_AGENT_ROWS)
+
+    def test_a_mostly_state_declares_on_most_of_the_rows_and_not_all(self) -> None:
+        """ "Mostly" is the whole difference, and nothing was checking it.
+
+        The guide's provenance and answer-key ladders each have a rung at more
+        than half, which is why these states exist beside the all-rows ones.
+        Rewriting `mostly-undeclared` to touch all three hundred rows made it a
+        duplicate of `undeclared` with the suite green and the README still
+        reading "180 of the 300"; so did moving `MOSTLY_SHARE`, and so did
+        replacing the band-balanced draw with the front of the list.
+        """
+
+        # Whether 180 of 300 sits above the rung the guide's two ladders put at "more
+        # than half" is the guide's to say, and it says it on the committed card:
+        # `tests/test_score_bank.py` holds each `mostly-` preset's card to the
+        # `dataset-mostly-*` condition `build.PRESET_CAPS` says it was built for, and
+        # the measurement job re-takes those cards at the pinned guide. A copy of the
+        # guide's 0.5 here would agree with itself whatever the guide did. What is
+        # checked here is this repository's half: how many rows the state touches.
+        for state, declared_key, declared_value in (
+            ("mostly-undeclared", "provenance", build.UNDECLARED_PROVENANCE),
+            ("mostly-synthetic", "provenance", build.SYNTHETIC_PROVENANCE),
+            (
+                "mostly-generated-answers",
+                build.GENERATED_ANSWER_KEY,
+                build.GENERATED_ANSWER_PROVENANCE,
+            ),
+        ):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"mostly_{state}"
+                if not out.exists():
+                    built = run_build("demo", "--dataset", state, "--out", str(out))
+                    self.assertEqual(built.returncode, 0, built.stderr)
+                rows = [
+                    json.loads(line)
+                    for line in (out / "project" / "dataset.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                    if line.strip()
+                ]
+                touched = [
+                    row
+                    for row in rows
+                    if row["metadata"].get(declared_key) == declared_value
+                ]
+                self.assertEqual(180, len(touched), "the declared count moved")
+                self.assertEqual(300, len(rows))
+                self.assertLess(
+                    len(touched),
+                    len(rows),
+                    "touching every row makes this the all-rows state under a "
+                    "different name",
+                )
+                bands = collections.Counter(
+                    row["metadata"]["difficulty"] for row in touched
+                )
+                self.assertEqual(
+                    1,
+                    len(set(bands.values())),
+                    f"the draw is meant to be band-balanced and reads {dict(bands)}",
+                )
+
+    def test_all_rows_states_really_declare_on_all_of_them(self) -> None:
+        """The other end of the same pair, for the same reason."""
+
+        out = Path(self.workspace) / "all_generated_answers"
+        if not out.exists():
+            built = run_build(
+                "demo", "--dataset", "generated-answers", "--out", str(out)
+            )
+            self.assertEqual(built.returncode, 0, built.stderr)
+        rows = [
+            json.loads(line)
+            for line in (out / "project" / "dataset.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(
+            len(rows),
+            sum(
+                1
+                for row in rows
+                if row["metadata"].get(build.GENERATED_ANSWER_KEY)
+                == build.GENERATED_ANSWER_PROVENANCE
+            ),
+        )
+
+    def test_the_answer_key_field_is_one_the_guide_reads(self) -> None:
+        """A declaration in a field nothing reads declares nothing.
+
+        `preflight.py`'s `row_output_provenance` looks at `output_provenance` and
+        `output_source`, at the row's top level or inside `metadata`. Renaming
+        this constant to anything else leaves both answer-key states writing a
+        field the guide never opens -- their cards would quietly stop reading 74
+        and nothing in the suite would notice.
+        """
+
+        self.assertIn(
+            build.GENERATED_ANSWER_KEY, ("output_provenance", "output_source")
+        )
+
+    def test_the_slow_scorer_is_slow_enough_to_reach_the_timeout(self) -> None:
+        """The state is "too slow for the budget", in the run a customer gets.
+
+        The first version checked the scorer against the sweep's own `--timeout 5`
+        and passed at three seconds a call -- while a real guided run, which passes
+        no `--timeout`, finished calibrating it in a minute and a half and never
+        raised `evaluator-timeout` at all. What has to outlast the guide's default
+        budget is the phase that budget times: the authored probes, run one after
+        another in one worker.
+        """
+
+        scorer = load_scorer("slow", keep_timing=True)
+        cases = json.loads(
+            (REPO_ROOT / "components" / "calibration" / "slow.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        budget = GUIDE_CALIBRATION_BUDGET
+        self.assertEqual(
+            budget["PROBES_PER_CASE"] * len(cases),
+            sum(len(case["probes"]) for case in cases),
+        )
+        # The shipped matrix, every smaller one the guide accepts, and larger
+        # ones: the assistant may adapt the case set, and the state has to be
+        # "too slow for the budget" whichever set it settles on.
+        for case_count in range(budget["MINIMUM_CASES"], 3 * len(cases) + 1):
+            default_budget = min(
+                budget["CALIBRATION_TIMEOUT_CEILING_SECONDS"],
+                case_count
+                * (
+                    budget["PROBES_PER_CASE"]
+                    + budget["DETERMINISTIC_SUPPLEMENTAL_PROBES_PER_CASE"]
+                )
+                * budget["DETERMINISTIC_SECONDS_PER_PROBE"],
+            )
+            authored_calls = case_count * budget["PROBES_PER_CASE"]
+            with self.subTest(case_count=case_count):
+                self.assertGreater(
+                    authored_calls * scorer.SECONDS_PER_CALL,
+                    default_budget,
+                    f"{case_count} cases make {authored_calls} authored calls of "
+                    f"{scorer.SECONDS_PER_CALL}s against a default budget of "
+                    f"{default_budget}s, so a guided run finishes calibrating "
+                    "this scorer and never reaches the timeout",
+                )
+        # And the sweep's shorter budget, which is what the committed card was
+        # taken under, is reached as well -- by the first call.
+        self.assertGreater(
+            scorer.SECONDS_PER_CALL, SLOW_SCORER_CALIBRATION_BUDGET_SECONDS
+        )
+
+    def test_the_guide_budget_was_read_at_the_pin_the_sweep_measures(self) -> None:
+        """A moved pin is a moved budget, so it sends someone back to re-read it."""
+        located = importlib.util.spec_from_file_location(
+            "_sweep_pin", REPO_ROOT / "docs" / "measurements" / "score_bank.py"
+        )
+        assert located is not None and located.loader is not None
+        sweep = importlib.util.module_from_spec(located)
+        sys.modules[located.name] = sweep
+        located.loader.exec_module(sweep)
+        self.assertEqual(sweep.PINNED_REVISION, GUIDE_CALIBRATION_BUDGET["read_at"])
+
+    def test_the_slow_scorer_keeps_the_case_inside_a_quoted_value(self) -> None:
+        """The rule `exact_match.py` states, applied to the scorer beside it.
+
+        "Case inside a quoted string is kept, because 'France' and 'france' are
+        different values even though SELECT and select are the same keyword."
+        The first version of the slow scorer folded the whole query in one
+        `translate`, which is the tempting one-liner and re-introduced exactly
+        the behaviour that docstring argues down -- on the same example.
+        """
+
+        located = importlib.util.spec_from_file_location(
+            "_slow", REPO_ROOT / "components" / "evaluator" / "slow.py"
+        )
+        assert located is not None and located.loader is not None
+        scorer = importlib.util.module_from_spec(located)
+        sys.modules[located.name] = scorer
+        located.loader.exec_module(scorer)
+        scorer.SECONDS_PER_CALL = 0.0
+
+        recorded = "SELECT name FROM singer WHERE country != 'France'"
+        self.assertEqual(
+            0.0,
+            scorer.score("SELECT name FROM singer WHERE country != 'france'", recorded),
+            "a filter on a different value is not the same answer",
+        )
+        self.assertEqual(
+            1.0,
+            scorer.score(
+                "select  NAME from SINGER where COUNTRY != 'France' ;", recorded
+            ),
+            "keyword case, spacing and a trailing semicolon still do not matter",
+        )
+
+    def test_the_slow_scorer_keeps_the_spacing_inside_a_quoted_value(self) -> None:
+        """The same rule for whitespace: 'New  York' and 'New York' are two values.
+
+        The case fix above folded only outside quotes and then collapsed whitespace
+        across the whole query, inside quotes included -- the same defect one
+        character class over, and a filter that matches no row scored 1.0.
+        """
+
+        scorer = load_scorer("slow")
+        recorded = "SELECT name FROM city WHERE name = 'New York'"
+        self.assertEqual(
+            0.0,
+            scorer.score("SELECT name FROM city WHERE name = 'New  York'", recorded),
+            "a filter on a different value is not the same answer",
+        )
+        self.assertEqual(
+            1.0,
+            scorer.score(
+                "SELECT  name\nFROM city   WHERE name = 'New York' ;", recorded
+            ),
+            "spacing outside the quoted value still does not matter",
+        )
+
+    def test_the_slow_scorer_accepts_nothing_the_text_comparator_rejects(
+        self,
+    ) -> None:
+        """The mechanism, rather than one more instance of it.
+
+        `slow.py` states the weaker comparison: whitespace, keyword case and a
+        trailing semicolon, and nothing about quoting. So wherever it says two
+        queries are the same, the text comparator -- whose docstring owns the rule
+        about quoted values -- has to say so too. Both defects the slow scorer has
+        shipped were exactly this: an answer it accepted and `exact_match.py`
+        refused. Held here over every quoted value in the slice, re-spaced and
+        re-cased inside the quotes, with a control that the comparison outside
+        them still passes.
+        """
+
+        slow = load_scorer("slow")
+        exact = load_scorer("exact_match")
+        quoted = re.compile(r"(['\"])([^'\"]+)\1")
+        inside = 0
+        for row in build.read_dataset():
+            recorded = row["output"]
+            found = quoted.search(recorded)
+            if not found:
+                continue
+            value = found.group(2)
+            respaced = (
+                value.replace(" ", "  ") if " " in value else f"{value[0]} {value[1:]}"
+            )
+            variants = [respaced]
+            if value.swapcase() != value:
+                variants.append(value.swapcase())
+            for variant in variants:
+                candidate = (
+                    recorded[: found.start(2)] + variant + recorded[found.end(2) :]
+                )
+                with self.subTest(row=row["metadata"]["id"], candidate=candidate):
+                    self.assertEqual(0.0, exact.score(candidate, recorded))
+                    self.assertEqual(
+                        0.0,
+                        slow.score(candidate, recorded),
+                        "the slow scorer accepts a changed quoted value",
+                    )
+                    inside += 1
+            if len(quoted.findall(recorded)) != 1:
+                continue
+            # Everything outside the one quoted value re-spaced and upper-cased, the
+            # value itself untouched: both comparators have to call that the same.
+            outside = (
+                "  "
+                + recorded[: found.start()].upper().replace(" ", "   ")
+                + found.group(0)
+                + recorded[found.end() :].upper()
+                + ("" if recorded.rstrip().endswith(";") else " ;")
+            )
+            with self.subTest(row=row["metadata"]["id"], control=outside):
+                self.assertEqual(1.0, exact.score(outside, recorded))
+                self.assertEqual(1.0, slow.score(outside, recorded))
+        self.assertGreater(
+            inside, 0, "no quoted value was changed, so none was checked"
+        )
+
+    def test_a_probe_called_equivalent_returns_the_same_rows(self) -> None:
+        """A text probe's claim is checkable by running it, so run it.
+
+        `equivalent_good` asserts that a re-spelling of the recorded query is
+        the same answer. Nothing was checking that against the database, and a
+        probe file written by the same hand as the scorer agrees with the
+        scorer by construction: the first `slow.json` declared four such
+        probes, three of which returned different rows -- one of them none at
+        all, and one re-admitting the French singer a `!= 'France'` filter
+        exists to exclude. Both the scorer and its probes said 1.0.
+        """
+
+        databases = REPO_ROOT / "spider" / "databases"
+        checked = 0
+        for name in ("exact_match.json", "slow.json"):
+            cases = json.loads(
+                (REPO_ROOT / "components" / "calibration" / name).read_text(
+                    encoding="utf-8"
+                )
+            )
+            for case in cases:
+                database = case["metadata"]["db_id"]
+                path = databases / database / f"{database}.sqlite"
+                self.assertTrue(path.is_file(), f"{name}: no database for {database}")
+                connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+                try:
+                    expected = connection.execute(case["expected"]).fetchall()
+                    for probe in ("good", "equivalent_good"):
+                        with self.subTest(
+                            file=name, row=case["metadata"]["row_id"], probe=probe
+                        ):
+                            rows = connection.execute(case["probes"][probe]).fetchall()
+                            self.assertEqual(
+                                expected,
+                                rows,
+                                f"{name}: {probe} for {case['metadata']['row_id']} is "
+                                f"declared the same answer and returns different rows",
+                            )
+                            checked += 1
+                finally:
+                    connection.close()
+        self.assertGreater(checked, 0, "no probe was executed, so nothing was checked")
+
+    def test_every_damage_detail_field_is_checked_against_the_rows(self) -> None:
+        """A record that restates a constant can restate the wrong one.
+
+        Three of `damage_detail`'s fields are read off the rows that ship, and
+        those are pinned elsewhere. The rest were restated from the constants
+        that produced them, and could be falsified one at a time with the whole
+        suite green -- `labelled_split: "tuning"` on a `holdout-labelled` demo
+        is the exact inverse of the file beside it. `docs/isolation.md` says
+        `demo.json` records what was done to the rows, so every field is read
+        back out of the bytes here.
+        """
+
+        def rows_of(out: Path) -> list[dict[str, object]]:
+            lines = (
+                (out / "project" / "dataset.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            )
+            return [json.loads(line) for line in lines if line.strip()]
+
+        def detail_of(out: Path) -> dict[str, object]:
+            manifest = json.loads((out / "demo.json").read_text(encoding="utf-8"))
+            return manifest["components"]["dataset"]["damage_detail"]
+
+        with self.subTest(dataset="holdout-labelled"):
+            out = self.outs["holdout-only"]
+            detail = detail_of(out)
+            labelled = {
+                row["metadata"]["split"] for row in rows_of(out) if "output" in row
+            }
+            self.assertEqual({detail["labelled_split"]}, labelled)
+
+        with self.subTest(dataset="raw-export"):
+            out = self.outs["raw-export"]
+            detail = detail_of(out)
+            rows = rows_of(out)
+            self.assertTrue(
+                all(key in rows[0] for key in detail["keys"].values()), rows[0]
+            )
+            for name in detail["top_level"]:
+                self.assertIn(name, rows[0])
+
+        with self.subTest(dataset="torn"):
+            out = self.outs["torn-lines"]
+            detail = detail_of(out)
+            raw = (
+                (out / "project" / "dataset.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            )
+            # Each torn line is a prefix of the row it was cut from, so the row
+            # is recoverable from the slice by that prefix -- and then the cut
+            # can be pinned from BOTH sides. An upper bound on the torn line's
+            # length passes for any LARGER `cut_at` as happily as for the right
+            # one, which is how a falsified `cut_at` stayed green.
+            whole = [
+                json.dumps(
+                    build.project_row(row, "torn"), ensure_ascii=False, sort_keys=True
+                )
+                for row in self.truth.values()
+            ]
+            for number in detail["torn_lines"]:
+                cut = raw[number - 1]
+                with self.assertRaises(ValueError):
+                    json.loads(cut)
+                originals = [line for line in whole if line.startswith(cut)]
+                self.assertEqual(1, len(originals), f"line {number} matches no row")
+                self.assertEqual(int(len(originals[0]) * detail["cut_at"]), len(cut))
+
+        with self.subTest(dataset="undeclared"):
+            out = self.outs["undeclared-source"]
+            detail = detail_of(out)
+            self.assertEqual(
+                {detail["provenance"]},
+                {row["metadata"]["provenance"] for row in rows_of(out)},
+            )
+            self.assertNotEqual(detail["provenance"], detail["slice_says"])
+
+        with self.subTest(dataset="leaky"):
+            out = self.outs["leaky-split"]
+            detail = detail_of(out)
+            copies = [
+                row
+                for row in rows_of(out)
+                if str(row["metadata"]["id"]).endswith(detail["copy_id_suffix"])
+            ]
+            self.assertTrue(copies)
+            self.assertEqual(
+                {detail["copy_split"]},
+                {row["metadata"]["split"] for row in copies},
+            )
+
+        for state, preset, key, value in (
+            ("mostly-undeclared", "mostly-undeclared-source", "provenance", None),
+            ("mostly-synthetic", "mostly-synthetic-source", "provenance", None),
+            ("generated-answers", "generated-answer-key", "output_provenance", None),
+            (
+                "mostly-generated-answers",
+                "mostly-generated-answer-key",
+                "output_provenance",
+                None,
+            ),
+        ):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"damage_detail_{state}"
+                if not out.exists():
+                    built = run_build("demo", "--preset", preset, "--out", str(out))
+                    self.assertEqual(built.returncode, 0, built.stderr)
+                detail = detail_of(out)
+                rows = rows_of(out)
+                declared = detail.get("provenance") or detail.get("output_provenance")
+                counted = sum(1 for row in rows if row["metadata"].get(key) == declared)
+                self.assertEqual(detail["declared_rows"], counted)
+                self.assertEqual(detail["of_rows"], len(rows))
+                self.assertNotEqual(
+                    detail["slice_says"],
+                    declared,
+                    "the record says the slice already read this, which it did not",
+                )
+
+        with self.subTest(dataset="wrong-answers"):
+            out = Path(self.workspace) / "damage_detail_wrong_answers"
+            built = run_build("demo", "--preset", "wrong-answers", "--out", str(out))
+            self.assertEqual(built.returncode, 0, built.stderr)
+            detail = detail_of(out)
+            truth = {
+                identifier: row["output"]
+                for identifier, row in self.truth.items()
+                if "output" in row
+            }
+            kept = sum(
+                1
+                for row in rows_of(out)
+                if row.get("output") == truth.get(row["metadata"]["id"])
+            )
+            self.assertEqual(detail["rows_keeping_their_answer"], kept)
+            # "Rotated within" a field: every answer shipped is the gold query of a
+            # row of the slice that shares that field's value with the row it now
+            # sits on. The first version of this compared a row with itself, so
+            # any value of `rotated_within` passed.
+            field = str(detail["rotated_within"])
+            within: dict[object, set[object]] = {}
+            for row in self.truth.values():
+                within.setdefault(row["metadata"].get(field), set()).add(row["output"])
+            shipped = rows_of(out)
+            self.assertTrue(
+                all(field in row["metadata"] for row in shipped),
+                f"no shipped row carries {field!r}, so nothing can be rotated within it",
+            )
+            strays = [
+                row["metadata"]["id"]
+                for row in shipped
+                if row["output"] not in within[row["metadata"][field]]
+            ]
+            self.assertEqual(
+                [], strays, f"the rotation is declared to stay within {field}"
+            )
+
+    def test_verify_reads_the_project_as_utf_8_whatever_the_locale_says(self) -> None:
+        """`build.py verify --demo` is the README's first-screen command.
+
+        Every writer here passes `encoding="utf-8"`; `verify_demo` was the one
+        reader that did not, so on a machine with `LANG` unset it read the rows
+        as ASCII and failed on the typographic apostrophe two of them carry.
+        `UnicodeDecodeError` is a `ValueError`, so the existing handler caught
+        it and reported a correct project as damaged -- and the `torn` state
+        makes "lines that are not JSON" a real condition, so the environment
+        failure wore the exact costume of the feature.
+        """
+
+        out = Path(self.workspace) / "locale_verify"
+        built = run_build("demo", "--preset", "ready", "--out", str(out))
+        self.assertEqual(built.returncode, 0, built.stderr)
+
+        result = run_build("verify", "--demo", str(out), env=ascii_locale_env())
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_a_second_agent_may_not_ship_an_answer_the_dataset_withholds(self) -> None:
+        """The second agent's input IS the row's gold query, under the row's id.
+
+        Drawn from the whole slice, `--dataset unlabeled` shipped forty rows with
+        no answers and the gold query for twenty of them in a file beside them --
+        a project blind to nothing at all, which `verify` called `ok`. The first
+        refusal asked only whether a row was labelled, so `wrong-answers` still
+        shipped the true query for twenty rows whose answers it had rotated. The
+        refusal now compares each query with the answer its row actually ships,
+        which covers a withheld answer, a replaced one and a torn line alike.
+        """
+        for state, disclosed in (
+            ("unlabeled", "20"),
+            ("holdout-labelled", "17"),
+            ("wrong-answers", "20"),
+            ("torn", "1"),
+        ):
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"two_agents_withheld_{state}"
+                result = run_build(
+                    "demo",
+                    "--agent",
+                    "two-agents",
+                    "--dataset",
+                    state,
+                    "--out",
+                    str(out),
+                )
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertIn("withholds or replaces the answer on", result.stderr)
+                self.assertIn(f"on {disclosed} of the 20", result.stderr)
+                self.assertFalse(out.exists(), f"{out} was left behind")
+
+    def test_a_second_agent_is_refused_only_where_it_would_disclose(self) -> None:
+        """Every state whose rows ship their own answers still builds with it."""
+        for state in build.DATASET_STATES:
+            refused = ("unlabeled", "holdout-labelled", "wrong-answers", "torn")
+            if state == "missing" or state in refused:
+                continue
+            with self.subTest(dataset=state):
+                arguments = build.build_parser().parse_args(
+                    ["demo", "--agent", "two-agents", "--dataset", state, "--out"]
+                    + [str(Path(self.workspace) / f"never_written_{state}")]
+                )
+                try:
+                    build.plan_demo(arguments)
+                except build.BuildError as refused_for_another_reason:
+                    # `tiny` has too few rows to give the second agent twenty; that
+                    # is a different refusal, and this test is about disclosure.
+                    self.assertNotIn(
+                        "withholds or replaces", str(refused_for_another_reason)
+                    )
+
+    def test_every_metadata_key_is_classified_as_structure_or_declaration(
+        self,
+    ) -> None:
+        """A field in neither set is a field nobody decided about.
+
+        The second agent mirrors declarations and not structure, so the split
+        decides what a sibling file repeats. Deriving one side from the other
+        swept the row's whole CREATE TABLE block into a file with no use for
+        it; naming both sides only helps while every key is in one of them.
+        """
+
+        # Every state that ships rows, not only the ones already known to declare:
+        # a state that writes a field in neither set is exactly the one a list of
+        # "declaring" states -- read off the fields already named -- would miss.
+        seen: set[str] = set()
+        for state in build.DATASET_STATES:
+            if state == "missing":
+                continue
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"classified_{state}"
+                if not out.exists():
+                    built = run_build("demo", "--dataset", state, "--out", str(out))
+                    self.assertEqual(built.returncode, 0, built.stderr)
+                unreadable = 0
+                for line in (
+                    (out / "project" / "dataset.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                ):
+                    if not line.strip():
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        unreadable += 1
+                        continue
+                    seen |= set(row["metadata"])
+                self.assertEqual(
+                    build.TORN_LINES if state == "torn" else 0,
+                    unreadable,
+                    "only the lines `torn` cuts short may fail to parse",
+                )
+        unclassified = sorted(
+            seen - build.STRUCTURAL_ROW_FIELDS - build.DECLARATION_ROW_FIELDS
+        )
+        self.assertEqual(
+            [],
+            unclassified,
+            "these metadata keys ship and are in neither named set, so nothing "
+            "has decided whether a second file should repeat them",
+        )
+        self.assertTrue(seen & build.DECLARATION_ROW_FIELDS, "nothing was read")
+
+    def test_a_second_agent_repeats_every_declaration_not_just_provenance(
+        self,
+    ) -> None:
+        """The mirror is over the class, because the class grew.
+
+        The first version of this mirror named `provenance`, which was the only
+        declaration there was. `generated-answers` then declared on
+        `output_provenance` and the contradiction came straight back: one SQL
+        string in two files, one saying a model wrote the answer and one saying
+        nothing, with `verify` reporting `ok`.
+        """
+
+        states = declaring_states()
+        self.assertTrue(states, "no state writes a declaration, so nothing was checked")
+        for state in states:
+            with self.subTest(dataset=state):
+                out = Path(self.workspace) / f"two_agents_declarations_{state}"
+                built = run_build(
+                    "demo",
+                    "--agent",
+                    "two-agents",
+                    "--dataset",
+                    state,
+                    "--out",
+                    str(out),
+                )
+                self.assertEqual(built.returncode, 0, built.stderr)
+                shipped = {
+                    row["metadata"]["id"]: row["metadata"]
+                    for row in (
+                        json.loads(line)
+                        for line in (out / "project" / "dataset.jsonl")
+                        .read_text(encoding="utf-8")
+                        .splitlines()
+                        if line.strip()
+                    )
+                }
+                sibling = [
+                    json.loads(line)
+                    for line in (out / "project" / "sql_explainer" / "dataset.jsonl")
+                    .read_text(encoding="utf-8")
+                    .splitlines()
+                    if line.strip()
+                ]
+                self.assertTrue(sibling)
+                for row in sibling:
+                    beside = shipped[row["metadata"]["id"]]
+                    for key, value in beside.items():
+                        if key not in build.DECLARATION_ROW_FIELDS:
+                            continue
+                        self.assertEqual(
+                            value,
+                            row["metadata"].get(key),
+                            f"{state}: the two files disagree about {key} for "
+                            f"{row['metadata']['id']}",
+                        )
+
+    def test_a_second_agent_declares_the_provenance_the_dataset_declares(self) -> None:
+        """`undeclared` rewrites every row's provenance; the sibling must follow.
+
+        The draw is taken before the damage, which is right for a repeated id and
+        wrong for a rewritten field: a second file saying `real` for twenty ids
+        contradicted, inside one project, the one thing that state exists to say.
+        """
+        out = Path(self.workspace) / "two_agents_undeclared"
+        result = run_build(
+            "demo",
+            "--agent",
+            "two-agents",
+            "--dataset",
+            "undeclared",
+            "--out",
+            str(out),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        sibling = [
+            json.loads(line)
+            for line in (out / "project" / "sql_explainer" / "dataset.jsonl")
+            .read_text()
+            .splitlines()
+        ]
+        self.assertEqual(
+            {build.UNDECLARED_PROVENANCE},
+            {row["metadata"]["provenance"] for row in sibling},
+        )
+
+    def test_a_second_agent_needs_rows_to_draw_from(self) -> None:
+        out = Path(self.workspace) / "two_agents_no_rows"
+        result = run_build(
+            "demo", "--agent", "two-agents", "--dataset", "missing", "--out", str(out)
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("second agent", result.stderr)
+
+    # ------------------------------------------------------------------ all nine
+
+    def test_every_preset_builds_and_passes_verify(self) -> None:
+        """Every preset in the bank, not only the ones this class builds as fixtures.
+
+        The name said "every" while the loop covered the ten presets `setUpClass`
+        happens to build, so twenty-one of them -- including all five from the
+        provenance and cost round -- were never handed to `verify_demo`. Since
+        `verify` is what scans a project against the blinding roster, that gap
+        was between the claim and the thing the claim is about.
+        """
+
+        # A neutral name: `verify` scans the demo's own PATH against the roster,
+        # and a directory called "verify_every_preset" trips it on the word this
+        # repository blinds. The check catching the test's own scratch directory
+        # is the check doing its job.
+        room = Path(self.workspace) / "bank"
+        room.mkdir(exist_ok=True)
+        for preset in sorted(build.PRESETS):
+            with self.subTest(preset=preset):
+                out = self.outs.get(preset)
+                if out is None:
+                    # Built under the neutral name a bank would give it, because a
+                    # directory named after the preset is itself a tell.
+                    out = room / build.bank_directory(preset)
+                    if not out.exists():
+                        built = run_build("demo", "--preset", preset, "--out", str(out))
+                        self.assertEqual(built.returncode, 0, built.stderr)
+                self.assertEqual(build.verify_demo(out), [])
+
+    def test_every_new_state_name_is_a_tell(self) -> None:
+        """The nine names are hyphenated, so they joined the tell roster. That a shipped
+        project carries none of them is `test_every_preset_builds_and_passes_verify`'s job: `verify`
+        scans every file against the roster this test pins."""
+        for name in (
+            "leaky-split",
+            "holdout-only",
+            "split-by-database",
+            "raw-export",
+            "torn-lines",
+            "undeclared-source",
+            "opaque-scorer",
+            "length-blind",
+            "two-agents",
+            "holdout-labelled",
+        ):
+            self.assertIn(name, build.revealing_names(), f"{name} is not a tell")
+
+
 class Guards(unittest.TestCase):
     def setUp(self) -> None:
         self.workspace = tempfile.mkdtemp()
@@ -1823,6 +3171,158 @@ class RepositoryCheck(unittest.TestCase):
             self.assertIn(preset["dataset"], build.DATASET_STATES, name)
             self.assertIn(preset["eval"], build.EVALUATOR_FILES, name)
             self.assertIn(name, build.PRESET_NOTES, f"{name} has no description")
+            self.assertIn(
+                name, build.PRESET_CAPS, f"{name} says nothing it was built for"
+            )
+        self.assertEqual(set(build.PRESETS), set(build.PRESET_CAPS))
+
+
+class TheTablesLineUp(unittest.TestCase):
+    """`list` and `suite` print tables, and a name longer than its column broke them."""
+
+    def test_every_list_row_starts_its_description_under_the_heading(self) -> None:
+        listing = run_build("list")
+        self.assertEqual(listing.returncode, 0, listing.stderr)
+        lines = listing.stdout.splitlines()
+        column = lines[0].index("WHAT IT IS")
+        for name, note in build.PRESET_NOTES.items():
+            with self.subTest(preset=name):
+                row = next(line for line in lines if line.startswith(name + " "))
+                self.assertEqual(column, row.index(note), row)
+
+    def test_every_suite_row_lines_up_under_its_heading(self) -> None:
+        built = [
+            {
+                "directory": "project-1",
+                "preset": max(build.PRESETS, key=len),
+                "components": {"agent": "ready", "dataset": "ready", "eval": "slow"},
+                "rows": 300,
+            },
+            {
+                "directory": "project-2",
+                "preset": "ready",
+                "components": {
+                    "agent": "two-agents",
+                    "dataset": max(build.DATASET_STATES, key=len),
+                    "eval": "exact-match",
+                },
+                "rows": 10,
+            },
+        ]
+        text = build.render_suite(
+            {
+                "built": built,
+                "failed": [],
+                "root": "/bank",
+                "record": "bank.json",
+                "handoff": "",
+            }
+        )
+        lines = text.splitlines()
+        header = next(line for line in lines if "DIRECTORY" in line)
+        for heading, field in (("PRESET", "preset"), ("AGENT", None), ("EVAL", None)):
+            for entry in built:
+                row = next(line for line in lines if entry["directory"] in line)
+                value = (
+                    entry["preset"] if field else entry["components"][heading.lower()]
+                )
+                with self.subTest(heading=heading, row=entry["directory"]):
+                    self.assertEqual(header.index(heading), row.index(value), row)
+
+
+class TheTornLinesAreTheConstantsLines(unittest.TestCase):
+    """`TORN_LINES` says how many lines `torn` cuts, and the cuts have to follow it."""
+
+    def test_the_cuts_follow_the_count_they_are_named_for(self) -> None:
+        original = build.TORN_LINES
+        self.addCleanup(setattr, build, "TORN_LINES", original)
+        for count in (1, 2, 3):
+            with self.subTest(torn_lines=count):
+                build.TORN_LINES = count
+                cuts = build.torn_line_numbers(30)
+                self.assertEqual(count, len(set(cuts)), cuts)
+                self.assertTrue(all(1 < cut < 30 for cut in cuts), cuts)
+
+    def test_a_file_too_short_for_the_cuts_is_refused(self) -> None:
+        with self.assertRaises(build.BuildError):
+            build.torn_line_numbers(5)
+        self.assertEqual([2, 4], build.torn_line_numbers(6))
+
+
+class EveryChoiceIsNamedWhereTheChoicesAreListed(unittest.TestCase):
+    """A state the lists leave out is one a reader never learns exists.
+
+    `--eval`'s help was written by hand and named every scorer but `slow`; the README's
+    flag table named every dataset state but `fully-synthetic`. Each list is held to the
+    choices the parser actually accepts, which is the only list that cannot be wrong.
+    """
+
+    def commands(self) -> dict[str, argparse.ArgumentParser]:
+        parser = build.build_parser()
+        found: dict[str, argparse.ArgumentParser] = {"": parser}
+        for action in parser._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                found.update(action.choices)
+        return found
+
+    def test_a_help_that_enumerates_names_exactly_the_choices(self) -> None:
+        checked = 0
+        for command, parser in self.commands().items():
+            for action in parser._actions:
+                if not action.choices or not action.help or " | " not in action.help:
+                    continue
+                if isinstance(action, argparse._SubParsersAction):
+                    continue
+                listed = [
+                    re.split(r"[\s:(]", piece.strip(), maxsplit=1)[0]
+                    for piece in action.help.split(";")[0].split(" | ")
+                ]
+                checked += 1
+                with self.subTest(command=command, option=action.option_strings):
+                    self.assertEqual(list(action.choices), listed)
+        self.assertGreaterEqual(checked, 3, "--agent, --dataset and --eval enumerate")
+
+    def test_the_readme_flag_table_names_exactly_the_choices(self) -> None:
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        table = readme.split("## Choosing what the project starts with", 1)[1]
+        demo = self.commands()["demo"]
+        accepted = {
+            option: list(action.choices)
+            for action in demo._actions
+            if action.choices
+            for option in action.option_strings
+        }
+        checked = 0
+        for row in re.finditer(r"^\| `(--[a-z-]+)` \| (.+) \|$", table, re.MULTILINE):
+            flag, values = row.groups()
+            named = [
+                found.group(1)
+                for found in (
+                    re.match(r"`([^`]+)`", item.strip()) for item in values.split(" · ")
+                )
+                if found
+            ]
+            checked += 1
+            with self.subTest(flag=flag):
+                self.assertIn(flag, accepted, "the table documents a flag demo lacks")
+                self.assertEqual(sorted(accepted[flag]), sorted(named))
+        self.assertGreaterEqual(checked, 3, "the table was not read")
+
+    def test_the_scorer_document_names_every_scorer(self) -> None:
+        """`docs/eval-methods.md` is where a reader learns what each `--eval` is.
+
+        It counted "two real scorers and four others" for a round after `slow` arrived,
+        and never mentioned it: a document that enumerates the choices has to name them.
+        """
+        document = (REPO_ROOT / "docs" / "eval-methods.md").read_text(encoding="utf-8")
+        for state in build.EVALUATOR_FILES:
+            if state == "missing":
+                continue
+            with self.subTest(eval=state):
+                self.assertTrue(
+                    f"`{state}`" in document,
+                    f"docs/eval-methods.md never names {state}",
+                )
 
 
 if __name__ == "__main__":

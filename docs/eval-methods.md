@@ -1,7 +1,12 @@
-# The two SQL scorers
+# The SQL scorers
 
-`--eval` picks how an answer gets marked. The two real choices disagree about what a right
-answer is, and the disagreement is not a detail.
+`--eval` picks how an answer gets marked. Two of the choices are the real scoring methods, and
+they disagree about what a right answer is; the disagreement is not a detail. `slow` compares
+text too, more narrowly, and asks a service to do it one row at a time, two minutes a call, so
+it is right and too slow to check inside the guide's fifteen-minute calibration budget -- a
+guided run on it waits that whole budget before the card can be read. The other four -- `broken`, `swapped`, `opaque` and
+`length-blind` -- are what a project arrives with when its scorer is not one, and `missing` is a
+project with no scorer at all; each is described at the end.
 
 ## `exact-match` -- compare the text
 
@@ -97,7 +102,7 @@ a `containment` warning, discloses in your words what was not checked, and conti
 trial executes your evaluator against your engine after that disclosure, and you get one
 optional question whether the evaluator connects read-only.
 
-So the two presets ask different questions:
+So the presets ask different questions:
 
 - **`--preset ready`** (exact-match) asks whether a guided first run works end to end.
 - **`--preset sql-exec-stop`** (exec-match) asks whether the run correctly skips calibrating
@@ -120,8 +125,8 @@ Measured against the first-run guide at revision
 `6ec2b9c161400cd91faea9c8cdb1c4e00d21c8d9` (`6ec2b9c1`) on 2026-09-02.
 
 > **Every readiness figure in this section is that 2026-09-02 reading, and the tool has since
-> moved.** The score bank was regenerated at `e4096e3a` on 2026-09-15 and re-taken unchanged at
-> `5ce65540` on 2026-09-17 -- the current cards are
+> moved.** The score bank was regenerated at `e4096e3a` on 2026-09-15, re-taken unchanged at
+> `5ce65540` on 2026-09-17 and unchanged again at `d07b62cd` -- the current cards are
 > under [`docs/measurements/cards/`](measurements/README.md) and the current table is in the
 > repository README -- and since `9eaabbb2` the run behind the 91 EXCELLENT number is refused
 > by the calibration tool; since `e4096e3a` `checked` reads 93 and the declared pair 99, and both are held
@@ -218,19 +223,27 @@ probes shipped, read 86. Since `e4096e3a` `ready` reads 45 under the `evaluator-
 ceiling and `checked` 93, so the same probes are worth 48 points at the opening -- and the band
 above WORKABLE additionally waits for a row review. The 41-point figure is a 6ec2b9c1 reading.
 
-The two scorers get different probes, because equivalence means different things to them.
+The two methods get different probes, because equivalence means different things to them.
 The text comparator gets 4 cases and is given re-spellings of a recorded query: different
 spacing, quote style, keyword case, a trailing semicolon. The execution scorer gets 3 and is
 given queries written differently that return the same rows: an alias, an `IN` with one
-element, an implicit `ASC`. Handing either the other's probes would measure the wrong thing and
-report a known limit as a defect. Every case comes from a real row of the slice, named by
+element, an implicit `ASC`. `slow` compares text more narrowly than the text comparator and
+gets 4 cases of its own, which pin what it really accepts. Handing either method the other's
+probes would measure the wrong thing and report a known limit as a defect. Every case comes from a real row of the slice, named by
 `row_id` and byte-identical to it in both question and gold query, all from the tuning split,
 and every probe query was executed against the shipped databases before being written down.
 
 Measured: `exact-match` passes all 4, `exec-match` passes all 3, `broken` **fails** all 4 --
 it returns 1.0 for the wrong-answer probe -- and `swapped` **fails**, from the other direction,
-returning 0.0 for the right one. Both failures land on the same `evaluator-invalid` cap at
-ceiling 25 with `repair-evaluator`. That is why cases ship for the broken scorers too.
+returning 0.0 for the right one. `length-blind` **fails** a third way: the right answer scores
+1.0, and the wrong answer -- about as long -- scores between 0.81 and 1.0 across the four
+cases, where the calibrator holds a binary case's wrong answer at or under 0.2. On one case
+the right and wrong probes tie at 1.0; what keeps it apart from the constant scorer is that the
+four probes of a case never all tie (`non_constant` true on every case), so it is refused for
+letting the wrong answer through, not for scoring everything alike. All three land on the same `evaluator-invalid`
+cap at ceiling 25 with `repair-evaluator`. That is why cases ship for the broken scorers too.
+`opaque` gets none, and `--calibration present` is refused for it: its grader is a library the
+project does not carry, so nothing here has ever run it and nothing could vouch for the probes.
 
 **The gate the guide puts in front of this is the reason `best-case` opens where it does.**
 Calibration is opened at the opening gate only when the complete path does not execute
@@ -242,7 +255,7 @@ line. Only `--calibrated-copy-of` admits engine witnesses -- and only for a copy
 `traigent-runs/calibration/` repointed at a customer-supplied read-only or duplicate target.
 The gate has become a check.
 
-## `broken`, `swapped` and `missing`
+## `broken`, `swapped`, `opaque`, `length-blind` and `missing`
 
 `--eval broken` ships a scorer that returns full marks for everything -- all four of its
 arguments arrive and none is read. Every configuration measures the same, so any comparison
@@ -256,6 +269,25 @@ answers it, so every row scores zero and every configuration ties at the bottom.
 compares depends on the answer, which is why no amount of running it can tell two answers
 apart. It is what `--preset wrong-wiring` ships, and without probe answers its card is
 byte-identical to `--preset ready`'s.
+
+`--eval opaque` ships a scorer that hands both queries to `sqlgrade`, a grading library the
+project does not carry -- `from sqlgrade.compare import QueryGrader`, in the voice of a team
+that had one shared at work. It parses, it has never been run here, and it cannot be: what
+it does is what that library does. `demo.json` records `method: null` and
+`executes_candidate_output: null` for it, both meaning unknown, and the sweep passes no
+`--evaluator-method` for it, because none could be declared honestly. The guide answers an
+undeclared method with `evaluator-unresolved` (40, blocks): "An evaluator file is connected,
+but no method could be honestly declared for it without executing it". It is what `--preset
+opaque-scorer` ships.
+
+`--eval length-blind` ships `1 - abs(len(output) - len(expected)) / len(expected)`, clipped to
+`[0, 1]`: a scorer that moves, and never for the right reason. It is not one of the methods
+the guide names -- a comparison of lengths is not `normalized-exact`, and declaring the nearest
+word would credit the file with a comparison it does not make -- so `demo.json` records
+`method: null` for it too, and the sweep declares nothing. It imports nothing and runs nothing,
+so `executes_candidate_output` is `false`. With the text comparator's probes beside it,
+calibration runs and fails (`evaluator-invalid`, 25, blocks); without them it reads the same
+`evaluator-unresolved` 40 as `opaque`. It is what `--preset length-blind` ships.
 
 `--eval missing` ships no evaluator at all, which is a more honest starting point than it
 sounds -- most projects do not have one.

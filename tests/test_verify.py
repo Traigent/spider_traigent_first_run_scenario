@@ -23,6 +23,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
@@ -352,6 +353,748 @@ class VerifyReadsTheDemosOwnPath(ADemoFixture):
             any("the path this demo sits at" in p for p in problems), problems
         )
         self.assertTrue(any("'wrong-answers'" in p for p in problems), problems)
+
+
+class VerifyReadsTheRecordOfDeliberateDamage(unittest.TestCase):
+    """Two states write the data other than the way `verify` used to read it.
+
+    `torn` ships two lines that are not JSON, and `raw-export` writes its rows under
+    Spider's own key names. `verify` reads both off `demo.json` -- the torn lines and the
+    field names are recorded there -- so a demo damaged the way its record says is clean,
+    and one damaged any other way is not. The gate is checked in both directions.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workspace = tempfile.mkdtemp()
+        cls.torn = Path(cls.workspace) / "torn"
+        build_or_raise("demo", "--preset", "torn-lines", "--out", str(cls.torn))
+        cls.raw = Path(cls.workspace) / "raw"
+        build_or_raise("demo", "--preset", "raw-export", "--out", str(cls.raw))
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.workspace, ignore_errors=True)
+
+    def copy(self, pristine: Path) -> Path:
+        holder = Path(tempfile.mkdtemp(dir=self.workspace))
+        self.addCleanup(shutil.rmtree, holder, ignore_errors=True)
+        out = holder / "demo"
+        shutil.copytree(pristine, out)
+        return out
+
+    def rewrite(self, out: Path, lines: list[str]) -> None:
+        dataset = out / build.PROJECT_SUBDIR / "dataset.jsonl"
+        dataset.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        repair_record(out, "dataset.jsonl")
+
+    def test_a_torn_demo_torn_where_its_record_says_is_clean(self) -> None:
+        self.assertEqual(build.verify_demo(self.copy(self.torn)), [])
+        record = json.loads((self.torn / "demo.json").read_text())
+        self.assertEqual(
+            record["components"]["dataset"]["damage_detail"]["torn_lines"], [10, 20]
+        )
+
+    def test_a_third_torn_line_is_reported(self) -> None:
+        out = self.copy(self.torn)
+        lines = (out / build.PROJECT_SUBDIR / "dataset.jsonl").read_text().split("\n")
+        lines[2] = lines[2][:40]
+        self.rewrite(out, [line for line in lines if line])
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any("the rows or the catalog cannot be read" in p for p in problems),
+            problems,
+        )
+
+    def test_a_recorded_torn_line_that_reads_whole_is_reported(self) -> None:
+        """The record says line 10 is torn; a line 10 that parses is a demo that no
+        longer matches its own description, in the direction that hides the damage."""
+        out = self.copy(self.torn)
+        lines = (out / build.PROJECT_SUBDIR / "dataset.jsonl").read_text().split("\n")
+        mini = build.select_rows(build.read_dataset(), "mini")
+        lines[9] = json.dumps(
+            build.project_row(mini[9], "torn"), ensure_ascii=False, sort_keys=True
+        )
+        self.rewrite(out, [line for line in lines if line])
+        problems = build.verify_demo(out)
+        self.assertIn("line 10 is recorded as torn and reads as a whole row", problems)
+
+    def test_a_raw_export_demo_is_read_under_its_own_field_names(self) -> None:
+        self.assertEqual(build.verify_demo(self.copy(self.raw)), [])
+
+    def test_a_raw_export_row_missing_its_question_is_still_caught(self) -> None:
+        out = self.copy(self.raw)
+        lines = (out / build.PROJECT_SUBDIR / "dataset.jsonl").read_text().split("\n")
+        row = json.loads(lines[0])
+        del row["question"]
+        lines[0] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+        self.rewrite(out, [line for line in lines if line])
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any("cannot be read" in p and "question" in p for p in problems), problems
+        )
+
+    def test_a_second_agent_that_does_not_compile_is_caught(self) -> None:
+        out = Path(self.workspace) / "two"
+        build_or_raise("demo", "--preset", "two-agents", "--out", str(out))
+        self.assertEqual(build.verify_demo(out), [])
+        broken = out / build.PROJECT_SUBDIR / "sql_explainer" / "agent.py"
+        broken.write_text(broken.read_text() + "\ndef run(  :\n")
+        repair_record(out, "sql_explainer/agent.py")
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any(
+                p.startswith("sql_explainer/agent.py does not compile")
+                for p in problems
+            ),
+            problems,
+        )
+
+
+class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
+    """What `demo.json` says was done to the rows, read back out of the project.
+
+    `verify` used to read two things from the record: the field names, and which lines
+    are torn. Everything else the record says -- how many rows carry their answer, every
+    field of `damage_detail`, the second agent -- was trusted, so a preset that stopped
+    producing its damage (no leaked copies, a wrong count of declaring rows, a second
+    agent gone) still verified clean. Every damaged state is built once, checked clean,
+    and then broken one claim at a time.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workspace = tempfile.mkdtemp()
+        cls.built: dict[str, Path] = {}
+        # Neutral directory names: `verify` rightly refuses a path that names a state.
+        for index, state in enumerate(build.DAMAGED_STATES):
+            out = Path(cls.workspace) / f"d{index}"
+            build_or_raise("demo", "--dataset", state, "--out", str(out))
+            cls.built[state] = out
+        out = Path(cls.workspace) / "pair"
+        build_or_raise("demo", "--agent", "two-agents", "--out", str(out))
+        cls.built["two-agents"] = out
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.workspace, ignore_errors=True)
+
+    def copy(self, state: str) -> Path:
+        holder = Path(tempfile.mkdtemp(dir=self.workspace))
+        self.addCleanup(shutil.rmtree, holder, ignore_errors=True)
+        out = holder / "demo"
+        shutil.copytree(self.built[state], out)
+        return out
+
+    def edit_record(self, out: Path, change: object) -> None:
+        record = out / "demo.json"
+        manifest = json.loads(record.read_text(encoding="utf-8"))
+        change(manifest)  # type: ignore[operator]
+        record.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+
+    def lines(self, out: Path, relative: str = "dataset.jsonl") -> list[str]:
+        path = out / build.PROJECT_SUBDIR / relative
+        return [line for line in path.read_text(encoding="utf-8").split("\n") if line]
+
+    def rewrite(
+        self, out: Path, lines: list[str], relative: str = "dataset.jsonl"
+    ) -> None:
+        path = out / build.PROJECT_SUBDIR / relative
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        repair_record(out, relative)
+
+    def assert_reported(self, out: Path, fragment: str) -> None:
+        problems = build.verify_demo(out)
+        self.assertTrue(any(fragment in problem for problem in problems), problems)
+
+    def test_every_damaged_state_verifies_clean_as_built(self) -> None:
+        for state, out in sorted(self.built.items()):
+            with self.subTest(state=state):
+                self.assertEqual([], build.verify_demo(out))
+
+    def test_a_leak_with_its_copies_removed_is_caught(self) -> None:
+        out = self.copy("leaky")
+        suffix = build.LEAK_ID_SUFFIX
+        kept = [line for line in self.lines(out) if f'{suffix}"' not in line]
+        self.rewrite(out, kept)
+        self.assert_reported(out, "damage_detail.leaked_ids says")
+
+    def test_a_wrong_count_of_declaring_rows_is_caught(self) -> None:
+        for state in (
+            "mostly-synthetic",
+            "fully-synthetic",
+            "mostly-generated-answers",
+        ):
+            with self.subTest(state=state):
+                out = self.copy(state)
+
+                def recount(manifest: dict) -> None:  # type: ignore[type-arg]
+                    detail = manifest["components"]["dataset"]["damage_detail"]
+                    detail["declared_rows"] -= 1
+
+                self.edit_record(out, recount)
+                self.assert_reported(out, "damage_detail.declared_rows says")
+
+    def test_a_wrong_count_of_labelled_rows_is_caught(self) -> None:
+        out = self.copy("holdout-labelled")
+
+        def relabel(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["labelled_rows"] += 1
+
+        self.edit_record(out, relabel)
+        self.assert_reported(out, "rows carry their answer")
+
+    def test_a_rotation_described_within_the_wrong_field_is_caught(self) -> None:
+        out = self.copy("wrong-answers")
+
+        def misdescribe(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"][
+                "rotated_within"
+            ] = "difficulty"
+
+        self.edit_record(out, misdescribe)
+        self.assert_reported(out, "damage_detail.rotated_within says 'difficulty'")
+
+    def test_an_answer_left_in_place_is_caught(self) -> None:
+        out = self.copy("wrong-answers")
+        truth = {row["metadata"]["id"]: row["output"] for row in build.read_dataset()}
+        lines = self.lines(out)
+        row = json.loads(lines[0])
+        row["output"] = truth[row["metadata"]["id"]]
+        lines[0] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+        self.rewrite(out, lines)
+        self.assert_reported(out, "damage_detail.rows_keeping_their_answer says 0")
+
+    def test_a_claim_verify_cannot_check_is_itself_reported(self) -> None:
+        out = self.copy("split-by-database")
+
+        def embellish(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["reviewed_by"] = "x"
+
+        self.edit_record(out, embellish)
+        self.assert_reported(
+            out, "damage_detail.reviewed_by is not a claim --dataset split-by-database"
+        )
+
+    def test_every_damage_detail_field_verify_accepts_is_one_the_builder_writes(
+        self,
+    ) -> None:
+        """`DAMAGE_DETAIL_FIELDS` is what verify accepts; it has to be what is written."""
+        self.assertEqual(set(build.DAMAGED_STATES), set(build.DAMAGE_DETAIL_FIELDS))
+        for state in build.DAMAGED_STATES:
+            with self.subTest(state=state):
+                record = json.loads((self.built[state] / "demo.json").read_text())
+                written = record["components"]["dataset"]["damage_detail"]
+                self.assertEqual(build.DAMAGE_DETAIL_FIELDS[state], set(written))
+
+    def test_a_damage_field_on_a_state_that_does_not_do_that_damage_is_refused(
+        self,
+    ) -> None:
+        """Each of these used to pass on `duplicated`, whose rows carry none of it."""
+        for field, value in (
+            ("cut_at", 0.6),
+            ("copy_id_suffix", "-holdout"),
+            ("rotated_within", "db_id"),
+            ("top_level", []),
+        ):
+            with self.subTest(field=field):
+                out = self.copy("duplicated")
+
+                def add(manifest: dict) -> None:  # type: ignore[type-arg]
+                    manifest["components"]["dataset"]["damage_detail"][field] = value
+
+                self.edit_record(out, add)
+                self.assert_reported(
+                    out, f"damage_detail.{field} is not a claim --dataset duplicated"
+                )
+
+    def test_a_damage_field_on_its_own_state_still_needs_the_damage(self) -> None:
+        """On the state that does the damage, a field still has to describe some."""
+        cases = (
+            ("leaky", "copy_id_suffix", "-nowhere", "no row is a copy carrying it"),
+            ("raw-export", "top_level", [], "damage_detail.top_level names no field"),
+        )
+        for state, field, value, fragment in cases:
+            with self.subTest(state=state, field=field):
+                out = self.copy(state)
+
+                def change(manifest: dict) -> None:  # type: ignore[type-arg]
+                    manifest["components"]["dataset"]["damage_detail"][field] = value
+
+                self.edit_record(out, change)
+                self.assert_reported(out, fragment)
+
+    def test_a_cut_recorded_where_no_line_was_cut_is_caught(self) -> None:
+        """A torn dataset whose lines were all written whole, recorded with no torn
+        lines: `cut_at` then describes a cut nothing shows."""
+        out = self.copy("torn")
+        mini = build.select_rows(build.read_dataset(), "mini")
+        whole = [
+            json.dumps(
+                build.project_row(row, "torn"), ensure_ascii=False, sort_keys=True
+            )
+            for row in mini
+        ]
+        self.rewrite(out, whole)
+
+        def untear(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["torn_lines"] = []
+
+        self.edit_record(out, untear)
+        self.assert_reported(out, "damage_detail.cut_at says where lines were cut")
+
+    def test_a_rotation_that_moved_nothing_is_caught(self) -> None:
+        out = self.copy("wrong-answers")
+        truth = {row["metadata"]["id"]: row["output"] for row in build.read_dataset()}
+        lines = []
+        for line in self.lines(out):
+            row = json.loads(line)
+            row["output"] = truth[row["metadata"]["id"]]
+            lines.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
+        self.rewrite(out, lines)
+        self.assert_reported(out, "and every row keeps its own")
+
+    def test_an_unreadable_torn_line_does_not_lose_the_others(self) -> None:
+        """A torn line whose question cannot be decoded is one problem, and the next
+        torn line is still checked."""
+        out = self.copy("torn")
+        torn = json.loads((out / "demo.json").read_text())["components"]["dataset"][
+            "damage_detail"
+        ]["torn_lines"]
+        lines = self.lines(out)
+        first, second = torn[0] - 1, torn[1] - 1
+        lines[first] = '{"input": "bad \\q escape", "met'
+        lines[second] = lines[second][: len(lines[second]) // 2]
+        self.rewrite(out, lines)
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any(f"torn line {torn[0]} cannot be read" in p for p in problems), problems
+        )
+        self.assertTrue(
+            any(
+                f"torn line {torn[1]} is not its row cut at 60%" in p for p in problems
+            ),
+            problems,
+        )
+
+    def test_torn_lines_recorded_for_a_state_that_does_not_tear(self) -> None:
+        out = self.copy("duplicated")
+
+        def excuse(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["torn_lines"] = [3]
+
+        self.edit_record(out, excuse)
+        self.assert_reported(out, "the record names torn lines for --dataset")
+
+    def test_a_torn_line_past_the_end_of_the_file_is_caught(self) -> None:
+        out = self.copy("torn")
+
+        def extend(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["torn_lines"].append(99)
+
+        self.edit_record(out, extend)
+        self.assert_reported(out, "are torn and the file has 30 lines")
+
+    def test_what_the_slice_says_is_checked_against_the_slice(self) -> None:
+        out = self.copy("undeclared")
+
+        def restate(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"][
+                "slice_says"
+            ] = "synthetic"
+
+        self.edit_record(out, restate)
+        self.assert_reported(out, "damage_detail.slice_says is 'synthetic'")
+
+    def test_a_record_with_no_count_of_labelled_rows_is_caught(self) -> None:
+        out = self.copy("holdout-labelled")
+
+        def forget(manifest: dict) -> None:  # type: ignore[type-arg]
+            del manifest["components"]["dataset"]["labelled_rows"]
+
+        self.edit_record(out, forget)
+        self.assert_reported(out, "carry their answer is None, not a count")
+
+    def test_a_negative_count_of_labelled_rows_is_caught(self) -> None:
+        for count in (-1, -300):
+            with self.subTest(count=count):
+                out = self.copy("holdout-labelled")
+
+                def negate(manifest: dict) -> None:  # type: ignore[type-arg]
+                    manifest["components"]["dataset"]["labelled_rows"] = count
+
+                self.edit_record(out, negate)
+                self.assert_reported(out, f"carry their answer is {count}, not a count")
+
+    def test_what_the_slice_says_has_to_be_stated_in_words(self) -> None:
+        out = self.copy("generated-answers")
+
+        def blank(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["slice_says"] = None
+
+        self.edit_record(out, blank)
+        self.assert_reported(out, "damage_detail.slice_says is None")
+
+    def test_a_top_level_field_no_row_carries_is_caught(self) -> None:
+        out = self.copy("raw-export")
+
+        def invent(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["top_level"].append(
+                "nonexistent"
+            )
+
+        self.edit_record(out, invent)
+        self.assert_reported(out, "nonexistent is not at the top level of every row")
+
+    def test_an_unreadable_row_is_reported_and_the_other_checks_still_run(
+        self,
+    ) -> None:
+        out = self.copy("wrong-answers")
+        lines = self.lines(out)
+        row = json.loads(lines[0])
+        del row["metadata"]["id"]
+        lines[0] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+        self.rewrite(out, lines)
+        (out / build.PROJECT_SUBDIR / "notes.txt").write_text("added\n")
+
+        def miscount(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["rows"] = 1
+
+        self.edit_record(out, miscount)
+        problems = build.verify_demo(out)
+        # Found by the same check before it failed, and kept.
+        self.assertTrue(any("the record says 1 rows" in p for p in problems), problems)
+        self.assertTrue(
+            any("the dataset record cannot be checked" in p for p in problems),
+            problems,
+        )
+        self.assertTrue(any("notes.txt" in p for p in problems), problems)
+
+    def test_an_unreadable_second_agent_is_reported_rather_than_raised(self) -> None:
+        out = self.copy("two-agents")
+        relative = "sql_explainer/dataset.jsonl"
+        self.rewrite(out, [*self.lines(out, relative), "not json"], relative)
+        self.assert_reported(out, "the second agent cannot be checked")
+
+    def test_a_record_describing_no_damage_is_caught(self) -> None:
+        """A clean build relabelled as a damaged state, with a detail naming no damage.
+
+        Every claim then agrees with the rows -- there is nothing to disagree about -- so
+        the only thing that can catch it is that the state has to show some damage.
+        """
+        cases = [
+            ("duplicated", {"repeated_ids": []}, "names no repeated row"),
+            (
+                "split-by-database",
+                {"held_out_databases": []},
+                "names no held-out database",
+            ),
+            (
+                "mostly-synthetic",
+                {
+                    "provenance": build.SYNTHETIC_PROVENANCE,
+                    "slice_says": "real",
+                    "declared_rows": 0,
+                    "of_rows": 300,
+                },
+                "declares 0 of 300 rows; the state declares more than half",
+            ),
+            (
+                "generated-answers",
+                {
+                    "output_provenance": build.GENERATED_ANSWER_PROVENANCE,
+                    "slice_says": build.SLICE_DECLARES_NO_ANSWER_PROVENANCE,
+                    "declared_rows": 0,
+                    "of_rows": 300,
+                },
+                "declares 0 of 300 rows; the state declares every row",
+            ),
+            (
+                "undeclared",
+                {"provenance": "real", "slice_says": "real"},
+                "damage_detail.provenance is 'real', what the slice already says",
+            ),
+            (
+                "fully-synthetic",
+                {
+                    "provenance": "real",
+                    "slice_says": "real",
+                    "declared_rows": 300,
+                    "of_rows": 300,
+                },
+                "damage_detail.provenance is 'real', what the slice already says",
+            ),
+            (
+                "generated-answers",
+                {
+                    "output_provenance": None,
+                    "slice_says": build.SLICE_DECLARES_NO_ANSWER_PROVENANCE,
+                    "declared_rows": 300,
+                    "of_rows": 300,
+                },
+                "damage_detail.output_provenance is None, what the slice already says",
+            ),
+            (
+                "holdout-labelled",
+                {"labelled_split": ["holdout", "tuning"]},
+                "not the name of one split",
+            ),
+        ]
+        clean = Path(tempfile.mkdtemp(dir=self.workspace)) / "demo"
+        build_or_raise("demo", "--dataset", "ready", "--out", str(clean))
+        for index, (state, detail, reason) in enumerate(cases):
+            with self.subTest(case=index, state=state):
+                holder = Path(tempfile.mkdtemp(dir=self.workspace))
+                out = holder / "demo"
+                shutil.copytree(clean, out)
+
+                def relabel(manifest: dict) -> None:  # type: ignore[type-arg]
+                    dataset = manifest["components"]["dataset"]
+                    dataset.update(state=state, damage=state, damage_detail=detail)
+
+                self.edit_record(out, relabel)
+                self.assert_reported(out, reason)
+
+    def test_a_field_the_state_records_is_required(self) -> None:
+        out = self.copy("mostly-synthetic")
+
+        def drop(manifest: dict) -> None:  # type: ignore[type-arg]
+            del manifest["components"]["dataset"]["damage_detail"]["of_rows"]
+
+        self.edit_record(out, drop)
+        self.assert_reported(out, "damage_detail has no of_rows")
+
+    def test_a_record_nested_too_deep_to_parse_is_reported(self) -> None:
+        out = self.copy("duplicated")
+        (out / "demo.json").write_text("[" * 200_000 + "]" * 200_000)
+        self.assert_reported(out, "the build record cannot be read")
+
+    def test_a_declared_count_that_is_not_a_count_is_caught(self) -> None:
+        """`True == 1` and `1.0 == 1`, so a non-count agreed with one declaring row.
+
+        The rows are edited so that exactly one declares, which is the state where such
+        a count used to agree with the rows through `claim` and skip the rule that a
+        fully-synthetic dataset declares every row. An integer `1` is the control: it
+        is a count, and the extent rule is what refuses it.
+        """
+        for value, reason in (
+            (True, "damage_detail.declared_rows is True, not a count"),
+            (1.0, "damage_detail.declared_rows is 1.0, not a count"),
+            (1, "declares 1 of 300 rows; the state declares every row"),
+        ):
+            with self.subTest(value=value):
+                out = self.copy("fully-synthetic")
+                lines = self.lines(out)
+                for index, line in enumerate(lines[1:], start=1):
+                    row = json.loads(line)
+                    row["metadata"]["provenance"] = "real"
+                    lines[index] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+                self.rewrite(out, lines)
+
+                def miscount(manifest: dict) -> None:  # type: ignore[type-arg]
+                    detail = manifest["components"]["dataset"]["damage_detail"]
+                    detail["declared_rows"] = value
+
+                self.edit_record(out, miscount)
+                self.assert_reported(out, reason)
+
+    def test_every_recorded_count_and_flag_has_to_be_of_its_type(self) -> None:
+        """A value equal to the truth but of the wrong type is still a wrong record.
+
+        `300.0 == 300` and `1 == True`, so these used to agree with the rows; each is
+        reported now, whatever it happens to equal.
+        """
+        edits = (
+            ("wrong-answers", ("rows",), 60.0, "the record says 60.0 rows"),
+            (
+                "wrong-answers",
+                ("labelled",),
+                1,
+                "the record's `labelled` disagrees with its own `labelled_rows`",
+            ),
+            (
+                "wrong-answers",
+                ("damage_detail", "rows_keeping_their_answer"),
+                False,
+                "damage_detail.rows_keeping_their_answer is False, not a count",
+            ),
+        )
+        for state, path, value, reason in edits:
+            with self.subTest(field=path[-1]):
+                out = self.copy(state)
+
+                def retype(manifest: dict) -> None:  # type: ignore[type-arg]
+                    holder = manifest["components"]["dataset"]
+                    for name in path[:-1]:
+                        holder = holder[name]
+                    holder[path[-1]] = value
+
+                self.edit_record(out, retype)
+                self.assert_reported(out, reason)
+        out = self.copy("two-agents")
+
+        def retype_second(manifest: dict) -> None:  # type: ignore[type-arg]
+            second = manifest["components"]["agent"]["second_agent"]
+            second["rows"] = float(second["rows"])
+
+        self.edit_record(out, retype_second)
+        self.assert_reported(out, "the second agent is recorded with 20.0 rows")
+
+    def test_a_count_too_large_for_a_float_is_reported_not_raised(self) -> None:
+        out = self.copy("mostly-synthetic")
+
+        def inflate(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["of_rows"] = 10**400
+
+        self.edit_record(out, inflate)
+        self.assert_reported(out, "the state declares more than half of them")
+
+    def test_source_nested_too_deep_to_compile_is_reported(self) -> None:
+        out = self.copy("duplicated")
+        relative = "agent.py"
+        path = out / build.PROJECT_SUBDIR / relative
+        path.write_text(
+            path.read_text(encoding="utf-8") + "\nx = " + "-" * 200_000 + "1\n"
+        )
+        repair_record(out, relative)
+        self.assert_reported(out, "agent.py does not compile")
+
+    def test_a_dataset_line_nested_too_deep_to_parse_is_reported(self) -> None:
+        out = self.copy("duplicated")
+        self.rewrite(out, ["[" * 200_000 + "]" * 200_000, *self.lines(out)[1:]])
+        self.assert_reported(out, "cannot be read")
+
+    def test_a_demo_verify_cannot_finish_is_reported_not_raised(self) -> None:
+        out = self.copy("duplicated")
+        for failure in (
+            ValueError("boom"),
+            RecursionError("deep"),
+            OverflowError("wide"),
+            MemoryError("stack"),
+        ):
+            with self.subTest(failure=type(failure).__name__):
+                with mock.patch.object(build, "verify_demo", side_effect=failure):
+                    problems = build.verified(out)
+                self.assertEqual(1, len(problems), problems)
+                self.assertIn("verify could not finish on this demo", problems[0])
+
+    def test_a_torn_line_cut_somewhere_else_is_caught(self) -> None:
+        out = self.copy("torn")
+        torn = json.loads((out / "demo.json").read_text())["components"]["dataset"][
+            "damage_detail"
+        ]["torn_lines"]
+        mini = build.select_rows(build.read_dataset(), "mini")
+        lines = self.lines(out)
+        whole = json.dumps(
+            build.project_row(mini[torn[0] - 1], "torn"),
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        lines[torn[0] - 1] = whole[: len(whole) // 2]
+        self.rewrite(out, lines)
+        self.assert_reported(out, f"torn line {torn[0]} is not its row cut at 60%")
+
+    def test_a_second_agent_removed_from_the_record_is_caught(self) -> None:
+        out = self.copy("two-agents")
+
+        def drop(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["agent"]["second_agent"] = None
+
+        self.edit_record(out, drop)
+        self.assert_reported(out, "--agent two-agents is recorded with no second agent")
+
+    def test_a_second_agent_that_discloses_an_answer_is_caught(self) -> None:
+        out = self.copy("two-agents")
+        relative = "sql_explainer/dataset.jsonl"
+        lines = self.lines(out, relative)
+        first, second = json.loads(lines[0]), json.loads(lines[1])
+        first["input"] = second["input"]
+        lines[0] = json.dumps(first, ensure_ascii=False, sort_keys=True)
+        self.rewrite(out, lines, relative)
+        self.assert_reported(out, "of the second agent's queries are not the answer")
+
+    def test_a_second_agent_with_rows_missing_is_caught(self) -> None:
+        out = self.copy("two-agents")
+        relative = "sql_explainer/dataset.jsonl"
+        self.rewrite(out, self.lines(out, relative)[:-1], relative)
+        self.assert_reported(
+            out, "the second agent is recorded with 20 rows and has 19"
+        )
+
+    def test_the_guides_own_environment_is_not_compiled(self) -> None:
+        """It is reported as present; its contents are not the project's code."""
+        out = self.copy("leaky")
+        inside = out / build.PROJECT_SUBDIR / build.FORBIDDEN_VENV_NAME / "bin"
+        inside.mkdir(parents=True)
+        (inside / "broken.py").write_text("def (:\n")
+        problems = build.verify_demo(out)
+        self.assertTrue(any("the project contains" in p for p in problems), problems)
+        self.assertFalse(any("does not compile" in p for p in problems), problems)
+
+
+class VerifyReportsAMalformedRecord(unittest.TestCase):
+    """A build record of the wrong shape is a problem to report, never a traceback."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workspace = tempfile.mkdtemp()
+        cls.pristine = Path(cls.workspace) / "pristine"
+        build_or_raise("demo", "--preset", "torn-lines", "--out", str(cls.pristine))
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.workspace, ignore_errors=True)
+
+    TRIGGERS = (
+        (
+            "damage_detail is a list",
+            "damage_detail",
+            "`damage_detail` is not an object",
+        ),
+        ("torn_lines is a number", "torn_lines", "`torn_lines` is not a list"),
+        ("dataset is a string", "dataset", "`components.dataset` is not an object"),
+    )
+
+    def broken(self, holder: Path, trigger: str) -> Path:
+        out = holder / "demo"
+        shutil.copytree(self.pristine, out)
+        record = out / "demo.json"
+        manifest = json.loads(record.read_text(encoding="utf-8"))
+        dataset = manifest["components"]["dataset"]
+        if trigger == "damage_detail":
+            dataset["damage_detail"] = ["torn_lines"]
+        elif trigger == "torn_lines":
+            dataset["damage_detail"]["torn_lines"] = 10
+        else:
+            manifest["components"]["dataset"] = "torn"
+        record.write_text(json.dumps(manifest), encoding="utf-8")
+        return out
+
+    def test_each_shape_is_reported_not_raised(self) -> None:
+        for name, trigger, fragment in self.TRIGGERS:
+            with self.subTest(trigger=name):
+                holder = Path(tempfile.mkdtemp(dir=self.workspace))
+                problems = build.verify_demo(self.broken(holder, trigger))
+                self.assertTrue(any(fragment in p for p in problems), problems)
+
+    def test_one_bad_record_does_not_stop_a_bank(self) -> None:
+        bank = Path(tempfile.mkdtemp(dir=self.workspace)) / "bank"
+        bank.mkdir()
+        for index, (_, trigger, _) in enumerate(self.TRIGGERS):
+            holder = bank / f"b{index}"
+            holder.mkdir()
+            shutil.move(str(self.broken(holder, trigger)), str(bank / f"p{index}"))
+            holder.rmdir()
+        shutil.copytree(self.pristine, bank / "p9")
+        result = run_build("--format", "json", "verify", "--demo", str(bank))
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        report = json.loads(result.stdout)
+        verdicts = {entry["demo"]: entry["problems"] for entry in report["checked"]}
+        self.assertEqual(["p0", "p1", "p2", "p9"], sorted(verdicts))
+        self.assertEqual([], verdicts["p9"], "the good demo after the bad ones")
+        for name in ("p0", "p1", "p2"):
+            self.assertTrue(verdicts[name], name)
 
 
 class VerifyOverAWholeBank(unittest.TestCase):
