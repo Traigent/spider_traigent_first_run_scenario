@@ -2496,7 +2496,16 @@ def verify_demo(root: Path) -> list[str]:
         return [f"no build record at {record}"]
     if not project.is_dir():
         return [f"no project at {project}"]
-    manifest = json.loads(record.read_text(encoding="utf-8"))
+    try:
+        manifest = json.loads(record.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as error:
+        return [f"the build record cannot be read: {error}"]
+    # The checks below read the record as the builder writes it. A record of another
+    # shape is a problem to report -- never a traceback, which ends `verify` for this demo
+    # and, before `cmd_verify` contained each one, for every demo after it in a bank.
+    malformed = record_shape_problems(manifest)
+    if malformed:
+        return malformed
 
     if (project / record.name).exists():
         problems.append("the build record is inside the project the agent reads")
@@ -2653,6 +2662,59 @@ def verify_demo(root: Path) -> list[str]:
             )
     elif manifest["components"]["agent"].get("second_agent"):
         problems.append("the record has a second agent and the project has no rows")
+    return problems
+
+
+def record_shape_problems(manifest: object) -> list[str]:
+    """Where a build record is not the shape `verify_demo` reads, one problem each.
+
+    Only the fields verify reads, and only their types: whether the values are true is
+    what the rest of `verify` checks, against the project.
+    """
+    if not isinstance(manifest, dict):
+        return ["the build record is not an object"]
+    problems: list[str] = []
+    files = manifest.get("files")
+    if not isinstance(files, list) or not all(
+        isinstance(entry, dict)
+        and isinstance(entry.get("path"), str)
+        and isinstance(entry.get("sha256"), str)
+        for entry in files
+    ):
+        problems.append("the build record's `files` is not a list of paths and hashes")
+    components = manifest.get("components")
+    if not isinstance(components, dict):
+        return problems + ["the build record's `components` is not an object"]
+    agent = components.get("agent")
+    if not isinstance(agent, dict):
+        problems.append("the build record's `components.agent` is not an object")
+    elif agent.get("second_agent") is not None and not isinstance(
+        agent["second_agent"], dict
+    ):
+        problems.append("the build record's `second_agent` is not an object")
+    dataset = components.get("dataset")
+    if dataset is None:
+        return problems
+    if not isinstance(dataset, dict):
+        return problems + ["the build record's `components.dataset` is not an object"]
+    fields = dataset.get("fields")
+    if fields is not None and not (
+        isinstance(fields, dict)
+        and all(isinstance(fields.get(key), str) for key in ("input", "output"))
+    ):
+        problems.append("the build record's dataset `fields` are not two names")
+    detail = dataset.get("damage_detail")
+    if detail is not None and not isinstance(detail, dict):
+        problems.append("the build record's `damage_detail` is not an object")
+    elif isinstance(detail, dict) and "torn_lines" in detail:
+        torn = detail["torn_lines"]
+        if not isinstance(torn, list) or not all(
+            isinstance(number, int) and not isinstance(number, bool) and number > 0
+            for number in torn
+        ):
+            problems.append(
+                "the build record's `torn_lines` is not a list of line numbers"
+            )
     return problems
 
 
@@ -2983,6 +3045,19 @@ def second_agent_problems(
     return problems
 
 
+def verified(root: Path) -> list[str]:
+    """`verify_demo` for one demo of a bank, whose failure is that demo's problem.
+
+    A check that raises on a demo nobody foresaw is still a demo that did not verify, and
+    the rest of the bank still has to be looked at. Fails closed: the demo is reported,
+    never passed.
+    """
+    try:
+        return verify_demo(root)
+    except (ValueError, KeyError, TypeError, AttributeError, OSError) as error:
+        return [f"verify could not finish on this demo: {error!r}"]
+
+
 def cmd_verify(args: argparse.Namespace) -> dict[str, Any]:
     """Check one built demo, or every demo under one root."""
     root = args.demo.expanduser()
@@ -2998,7 +3073,7 @@ def cmd_verify(args: argparse.Namespace) -> dict[str, Any]:
     )
     if not roots:
         raise BuildError(f"{root} holds no built demo")
-    checked = [{"demo": r.name, "problems": verify_demo(r)} for r in roots]
+    checked = [{"demo": r.name, "problems": verified(r)} for r in roots]
     return {
         "ok": all(not entry["problems"] for entry in checked),
         "root": str(root),

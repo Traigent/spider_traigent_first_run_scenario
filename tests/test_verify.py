@@ -726,6 +726,71 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         self.assertFalse(any("does not compile" in p for p in problems), problems)
 
 
+class VerifyReportsAMalformedRecord(unittest.TestCase):
+    """A build record of the wrong shape is a problem to report, never a traceback."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workspace = tempfile.mkdtemp()
+        cls.pristine = Path(cls.workspace) / "pristine"
+        build_or_raise("demo", "--preset", "torn-lines", "--out", str(cls.pristine))
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.workspace, ignore_errors=True)
+
+    TRIGGERS = (
+        (
+            "damage_detail is a list",
+            "damage_detail",
+            "`damage_detail` is not an object",
+        ),
+        ("torn_lines is a number", "torn_lines", "`torn_lines` is not a list"),
+        ("dataset is a string", "dataset", "`components.dataset` is not an object"),
+    )
+
+    def broken(self, holder: Path, trigger: str) -> Path:
+        out = holder / "demo"
+        shutil.copytree(self.pristine, out)
+        record = out / "demo.json"
+        manifest = json.loads(record.read_text(encoding="utf-8"))
+        dataset = manifest["components"]["dataset"]
+        if trigger == "damage_detail":
+            dataset["damage_detail"] = ["torn_lines"]
+        elif trigger == "torn_lines":
+            dataset["damage_detail"]["torn_lines"] = 10
+        else:
+            manifest["components"]["dataset"] = "torn"
+        record.write_text(json.dumps(manifest), encoding="utf-8")
+        return out
+
+    def test_each_shape_is_reported_not_raised(self) -> None:
+        for name, trigger, fragment in self.TRIGGERS:
+            with self.subTest(trigger=name):
+                holder = Path(tempfile.mkdtemp(dir=self.workspace))
+                problems = build.verify_demo(self.broken(holder, trigger))
+                self.assertTrue(any(fragment in p for p in problems), problems)
+
+    def test_one_bad_record_does_not_stop_a_bank(self) -> None:
+        bank = Path(tempfile.mkdtemp(dir=self.workspace)) / "bank"
+        bank.mkdir()
+        for index, (_, trigger, _) in enumerate(self.TRIGGERS):
+            holder = bank / f"b{index}"
+            holder.mkdir()
+            shutil.move(str(self.broken(holder, trigger)), str(bank / f"p{index}"))
+            holder.rmdir()
+        shutil.copytree(self.pristine, bank / "p9")
+        result = run_build("--format", "json", "verify", "--demo", str(bank))
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        report = json.loads(result.stdout)
+        verdicts = {entry["demo"]: entry["problems"] for entry in report["checked"]}
+        self.assertEqual(["p0", "p1", "p2", "p9"], sorted(verdicts))
+        self.assertEqual([], verdicts["p9"], "the good demo after the bad ones")
+        for name in ("p0", "p1", "p2"):
+            self.assertTrue(verdicts[name], name)
+
+
 class VerifyOverAWholeBank(unittest.TestCase):
     """`verify --demo <root>` reads every directory under the root, not only the good ones."""
 
