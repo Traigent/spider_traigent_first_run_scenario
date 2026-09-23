@@ -86,6 +86,20 @@ def load_harness() -> types.ModuleType:
     return module
 
 
+def build_module() -> types.ModuleType:
+    """`build.py` as a module, by path, registered before it runs.
+
+    A dataclass looks its module up by name while the class is being made, which is why
+    the registration comes first, as in `load_harness`.
+    """
+    located = importlib.util.spec_from_file_location("_build", REPO_ROOT / "build.py")
+    assert located is not None and located.loader is not None
+    builder = importlib.util.module_from_spec(located)
+    sys.modules[located.name] = builder
+    located.loader.exec_module(builder)
+    return builder
+
+
 def fingerprint(tree: Path) -> dict[str, str]:
     """Every file under a directory, by relative path and content digest."""
     return {
@@ -104,15 +118,7 @@ class TheSweepNamesEveryPreset(unittest.TestCase):
 
     def test_the_sweep_and_the_builder_agree_on_the_presets(self) -> None:
         harness = load_harness()
-        located = importlib.util.spec_from_file_location(
-            "_build", REPO_ROOT / "build.py"
-        )
-        assert located is not None and located.loader is not None
-        builder = importlib.util.module_from_spec(located)
-        # Registered before it runs, as `load_harness` does: a dataclass looks its
-        # module up by name while the class is being made.
-        sys.modules[located.name] = builder
-        located.loader.exec_module(builder)
+        builder = build_module()
         # A preset may be named by the sweep's plain list or by a variant, which is
         # how one carries an option -- `slow-scorer` states the calibration budget it
         # is measured under rather than making every reproduction wait fifteen minutes
@@ -188,6 +194,87 @@ class TheCommittedCardsAreWhatTheDocumentsSay(unittest.TestCase):
             found,
             "the cards that are identical to another are not the ones recorded",
         )
+
+
+# The presets whose own committed card cannot carry the condition `build.PRESET_CAPS` says
+# they were built for, each with the run that does show it (or None) and the reason. Written
+# down so each exception is a claim the suite checks in both directions: the preset's card
+# must still NOT carry the condition -- the day it does, the reason here and the prose that
+# repeats it are out of date -- and a run named as showing it must carry it.
+NOT_ON_THEIR_OWN_CARD: dict[str, tuple[str | None, str]] = {
+    "wrong-answers": (
+        None,
+        "the condition fires on the `no` verdicts of a row review, and the sweep passes "
+        "no row review: writing one would be the sweep answering the question this "
+        "preset asks (see score_bank.py)",
+    ),
+    "wrong-wiring": (
+        "wrong-wiring--calibrated",
+        "only probe answers expose a scorer that never reads the output, and the preset "
+        "ships none; the calibrated variant does",
+    ),
+    "split-by-database": (
+        None,
+        "a finding about the guide: its family check reads the leading words of each "
+        "question, which span every database, so a split along databases is not one it "
+        "sees (docs/measurements/README.md)",
+    ),
+}
+
+
+def card_conditions(tag: str) -> set[str]:
+    """The conditions a committed card carries, read from the card the guide printed."""
+    reading = json.loads(
+        (
+            REPO_ROOT / "docs" / "measurements" / "cards" / tag / "05-readiness.json"
+        ).read_text(encoding="utf-8")
+    )
+    return {cap["condition"] for cap in reading["caps"]}
+
+
+class EveryPresetOpensOnTheStateItWasBuiltFor(unittest.TestCase):
+    """The committed card of each preset, against what the preset was built to be.
+
+    Re-measuring at a later guide revision republishes every card, and a preset that
+    stopped reading as its state -- `mostly-synthetic-source` no longer raising
+    `dataset-mostly-synthetic` because the guide moved its rung, say -- would arrive as
+    one changed score among forty-nine. Here it is a named failure instead.
+    """
+
+    def test_every_preset_carries_the_conditions_it_was_built_for(self) -> None:
+        revision = json.loads(
+            (REPO_ROOT / "docs" / "measurements" / "cards" / "results.json").read_text(
+                encoding="utf-8"
+            )
+        )["guide_revision"][:8]
+        checked = 0
+        for preset, conditions in sorted(build_module().PRESET_CAPS.items()):
+            if not conditions or preset in NOT_ON_THEIR_OWN_CARD:
+                continue
+            with self.subTest(preset=preset):
+                carried = card_conditions(preset)
+                self.assertLessEqual(
+                    set(conditions),
+                    carried,
+                    f"{preset} was built for {sorted(conditions)}; its card at "
+                    f"{revision} carries {sorted(carried)}",
+                )
+                checked += 1
+        self.assertGreater(checked, 0, "no card was read, so none was checked")
+
+    def test_every_exception_still_holds_and_says_where_it_shows(self) -> None:
+        caps = build_module().PRESET_CAPS
+        for preset, (shown_on, reason) in sorted(NOT_ON_THEIR_OWN_CARD.items()):
+            with self.subTest(preset=preset):
+                self.assertTrue(caps[preset], f"{preset} is built for no condition")
+                self.assertTrue(reason.strip())
+                self.assertFalse(
+                    set(caps[preset]) & card_conditions(preset),
+                    f"{preset}'s own card now carries {caps[preset]}, so the reason it "
+                    f"was excused -- {reason!r} -- and the prose repeating it are stale",
+                )
+                if shown_on is not None:
+                    self.assertLessEqual(set(caps[preset]), card_conditions(shown_on))
 
 
 class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):

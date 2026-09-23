@@ -2385,10 +2385,13 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
         replacing the band-balanced draw with the front of the list.
         """
 
-        # The share the guide's two ladders put their rung at. Written here as the
-        # guide's number, not as ours: a state has to sit above it to be read as
-        # "most", and `MOSTLY_SHARE` is only correct while it does.
-        guide_rung = 0.5
+        # Whether 180 of 300 sits above the rung the guide's two ladders put at "more
+        # than half" is the guide's to say, and it says it on the committed card:
+        # `tests/test_score_bank.py` holds each `mostly-` preset's card to the
+        # `dataset-mostly-*` condition `build.PRESET_CAPS` says it was built for, and
+        # the measurement job re-takes those cards at the pinned guide. A copy of the
+        # guide's 0.5 here would agree with itself whatever the guide did. What is
+        # checked here is this repository's half: how many rows the state touches.
         for state, declared_key, declared_value in (
             ("mostly-undeclared", "provenance", build.UNDECLARED_PROVENANCE),
             ("mostly-synthetic", "provenance", build.SYNTHETIC_PROVENANCE),
@@ -2417,11 +2420,6 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                 ]
                 self.assertEqual(180, len(touched), "the declared count moved")
                 self.assertEqual(300, len(rows))
-                self.assertGreater(
-                    len(touched) / len(rows),
-                    guide_rung,
-                    "below the guide's rung this is not a `mostly-` reading at all",
-                )
                 self.assertLess(
                     len(touched),
                     len(rows),
@@ -3169,6 +3167,10 @@ class RepositoryCheck(unittest.TestCase):
             self.assertIn(preset["dataset"], build.DATASET_STATES, name)
             self.assertIn(preset["eval"], build.EVALUATOR_FILES, name)
             self.assertIn(name, build.PRESET_NOTES, f"{name} has no description")
+            self.assertIn(
+                name, build.PRESET_CAPS, f"{name} says nothing it was built for"
+            )
+        self.assertEqual(set(build.PRESETS), set(build.PRESET_CAPS))
 
 
 class EveryChoiceIsNamedWhereTheChoicesAreListed(unittest.TestCase):

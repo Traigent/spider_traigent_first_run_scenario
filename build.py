@@ -526,6 +526,52 @@ PRESET_NOTES = {
     "two-agents": "a second agent beside the first, and a note saying which one to work on",
 }
 
+# The readiness conditions each preset was built to put on the guide's opening card -- the
+# state it stands for, in the guide's own vocabulary. Declared once, here beside the presets,
+# so that the committed measurement of each one can be held to it: a re-measurement at a
+# later guide revision that moves a preset off the state it was built for fails the suite
+# instead of being published as an ordinary change of score.
+#
+# Two presets are built for no condition. `checked` is the complete project with nothing
+# wrong in it, and `two-agents` asks which agent a run selects, which the opening card does
+# not record. Three are built for a condition their own card does not carry -- one needs
+# probes the preset does not ship, one a row review the measurement never passes, and one
+# is a finding about the guide -- and `tests/test_score_bank.py` names each with its reason.
+PRESET_CAPS: dict[str, tuple[str, ...]] = {
+    "ready": ("evaluator-unvalidated",),
+    "checked": (),
+    "no-eval": ("evaluator-absent",),
+    "no-labels": ("dataset-no-expected-outputs",),
+    "no-knobs": ("agent-no-varying-knobs",),
+    "sql-exec-stop": ("evaluator-calibration-refused",),
+    "fake-ruler": ("evaluator-invalid",),
+    "agent-and-logs": ("dataset-no-expected-outputs", "evaluator-absent"),
+    "logs-only": ("agent-absent", "dataset-no-expected-outputs", "evaluator-absent"),
+    "no-agent": ("agent-absent",),
+    "no-data": ("dataset-absent",),
+    "empty": ("agent-absent", "dataset-absent", "evaluator-absent"),
+    "wrong-wiring": ("evaluator-invalid",),
+    "duplicated-data": ("dataset-integrity-fail", "dataset-repeated-rows"),
+    "wrong-answers": ("dataset-unsound-expected-outputs",),
+    "hand-written": ("dataset-below-measurable-size",),
+    "best-case": ("evaluator-calibration-refused",),
+    "leaky-split": ("dataset-tune-holdout-overlap",),
+    "holdout-only": ("dataset-tuning-split-empty",),
+    "split-by-database": ("dataset-split-by-task-family",),
+    "raw-export": ("dataset-shape-unrecognised",),
+    "torn-lines": ("dataset-integrity-fail",),
+    "undeclared-source": ("dataset-undeclared-provenance",),
+    "mostly-undeclared-source": ("dataset-mostly-undeclared",),
+    "mostly-synthetic-source": ("dataset-mostly-synthetic",),
+    "synthetic-source": ("dataset-fully-synthetic",),
+    "generated-answer-key": ("dataset-generated-answer-key",),
+    "mostly-generated-answer-key": ("dataset-mostly-generated-answer-key",),
+    "opaque-scorer": ("evaluator-unresolved",),
+    "slow-scorer": ("evaluator-timeout",),
+    "length-blind": ("evaluator-invalid",),
+    "two-agents": (),
+}
+
 
 class BuildError(RuntimeError):
     """Raised when a demo cannot be built as asked."""
