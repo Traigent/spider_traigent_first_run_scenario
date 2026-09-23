@@ -275,6 +275,7 @@ RECORDED = {
 # The conditions that say a scorer is not a scorer: it is invalid, or it cannot be run.
 NOT_A_SCORER = {"evaluator-invalid", "evaluator-unresolved"}
 WRONG_ON_PURPOSE = "## Data that is wrong on purpose"
+SCORE_TABLES = "## Where each preset starts, and what the run has to do about it"
 
 
 def table_presets(text: str, heading: str) -> list[str]:
@@ -331,6 +332,16 @@ def measure() -> dict[str, Quantity]:
         ("presets that ship no rows", len(presets) - len(shipping), "build.PRESETS"),
         ("presets in the first bank", len(PRESET_ROUNDS[0][1]), rounds),
         ("presets ported on 2026-09-18", len(ported), rounds),
+        (
+            "presets added after the port",
+            sum(len(names) for _, names in PRESET_ROUNDS[2:]),
+            rounds,
+        ),
+        (
+            "presets in the score tables",
+            len(score_bank_tests.score_rows(REPO_ROOT / "README.md", SCORE_TABLES)),
+            "the score tables in README.md, held to build.PRESETS",
+        ),
         (
             "presets once the provenance and cost round landed",
             sum(len(names) for _, names in PRESET_ROUNDS[:3]),
@@ -486,10 +497,12 @@ CLAIMS: dict[str, tuple[str, ...]] = {
         "including how the {scoring methods} methods are graded, `slow`, which is right "
         "and too slow to check, and the {scorers that are not scorers} scorers beside "
         "them that are not scorers at all",
-        "read the table as {presets} starting points",
+        "read the table as {presets in the score tables} starting points",
         "(the {execution-evaluator cards} execution-evaluator cards changed",
         "and the {cards whose action is label-data} cards whose action is `label-data`",
-        "these {presets} presets are the ones",
+        "these {presets in the score tables} presets are the ones",
+        "The {presets ported on 2026-09-18} ported on 2026-09-18 and the "
+        "{presets added after the port} added after them for provenance and cost",
         "### {starting points the bank could not separate at 6ec2b9c1} starting points "
         "the opening gate does not separate",
         "from the {presets ported on 2026-09-18} presets ported on 2026-09-18",

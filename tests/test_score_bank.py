@@ -30,6 +30,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -296,6 +297,77 @@ class EveryPresetOpensOnTheStateItWasBuiltFor(unittest.TestCase):
                 )
                 if shown_on is not None:
                     self.assertLessEqual(set(caps[preset]), card_conditions(shown_on))
+
+
+SCORE_ROW = re.compile(
+    r"^\| `(?P<run>[a-z-]+)` \| (?P<score>\d+|refused) \| (?P<band>[A-Z ]+|--) \| "
+    r"(?:`(?P<action>[a-z-]+)`|--) \|",
+    re.MULTILINE,
+)
+
+
+def score_rows(document: Path, heading: str) -> list[tuple[str, str, str, str | None]]:
+    """The (run, score, band, action) rows of the score tables in one section."""
+    text = document.read_text(encoding="utf-8")
+    section = text.split(heading, 1)[1]
+    section = re.split(r"\n#{1,6} ", section, maxsplit=1)[0]
+    return [
+        (row["run"], row["score"], row["band"], row["action"])
+        for row in SCORE_ROW.finditer(section)
+    ]
+
+
+class TheScoreTablesAreTheCards(unittest.TestCase):
+    """Every score a table prints is read back off `results.json`, and every row is there.
+
+    The README's tables were written by hand from the cards and checked by nothing: the
+    round that added `synthetic-source` measured it, committed its cards, and left it out
+    of the README while the text beside the tables still said thirty-two.
+    """
+
+    def results(self) -> dict[str, dict[str, object]]:
+        record = json.loads(
+            (REPO_ROOT / "docs" / "measurements" / "cards" / "results.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        return {run["tag"]: run for run in record["runs"]}
+
+    def assert_rows_match(self, rows: list[tuple[str, str, str, str | None]]) -> None:
+        results = self.results()
+        for run, score, band, action in rows:
+            with self.subTest(run=run):
+                measured = results[run]
+                if measured.get("refused"):
+                    self.assertEqual(("refused", "--", None), (score, band, action))
+                else:
+                    self.assertEqual(
+                        (
+                            measured["overall"],
+                            measured["band"],
+                            measured["recommended_action"],
+                        ),
+                        (int(score), band, action),
+                    )
+
+    def test_the_readme_tables_hold_every_preset_once_as_measured(self) -> None:
+        rows = score_rows(
+            REPO_ROOT / "README.md",
+            "## Where each preset starts, and what the run has to do about it",
+        )
+        names = [run for run, _, _, _ in rows]
+        self.assertEqual(len(names), len(set(names)), "a preset is listed twice")
+        self.assertEqual(set(build_module().PRESETS), set(names))
+        self.assert_rows_match(rows)
+
+    def test_the_measurements_table_holds_every_run_once_as_measured(self) -> None:
+        rows = score_rows(
+            REPO_ROOT / "docs" / "measurements" / "README.md", "## Results"
+        )
+        names = [run for run, _, _, _ in rows]
+        self.assertEqual(len(names), len(set(names)), "a run is listed twice")
+        self.assertEqual(set(self.results()), set(names))
+        self.assert_rows_match(rows)
 
 
 class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):

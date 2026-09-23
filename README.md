@@ -472,7 +472,7 @@ by hand.
 | `best-case` | 85 | WORKABLE | `confirm-evaluator-connection` | the same, and its card is byte-identical to `sql-exec-stop`'s |
 | `checked` | 93 | WORKABLE | `review-answer-key` | nothing -- read the answers it is graded on |
 
-The nine ported on 2026-09-18 and the five provenance and cost states added after them,
+The nine ported on 2026-09-18 and the six added after them for provenance and cost,
 measured by the same script at the same `d07b62cd` (each
 row's card is under `docs/measurements/cards/<preset>/`; the caps column names what the card
 raises, `*` for one that blocks):
@@ -486,8 +486,9 @@ raises, `*` for one that blocks):
 | `holdout-only` | 45 | PARTIAL | `resplit-dataset` | `evaluator-unvalidated` 45 · `dataset-tuning-split-empty` 50\* | answers on the tuning side. The 45 is the evaluator ceiling; the block is the empty tuning split |
 | `leaky-split` | 45 | PARTIAL | `resplit-dataset` | `evaluator-unvalidated` 45 · `dataset-tune-holdout-overlap` 50\* · `dataset-repeated-rows` 89 | a disjoint split. The card names the six rows on both sides and offers to continue on the 300 that differ |
 | `undeclared-source` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-undeclared-provenance` 65 | the provenance word: `spider-dev` is "a word its vocabulary does not know", scored as generated, and the card asks for the source to be declared or re-labelled |
-| `mostly-undeclared-source` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-mostly-undeclared` 70 | the same word on 180 rows: the reading moves off `dataset-undeclared-provenance` onto `dataset-mostly-undeclared`, one rung up at 70. Uncalibrated the evaluator ceiling hides both -- see the calibrated pair below |
+| `mostly-undeclared-source` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-mostly-undeclared` 70 | the same word on 180 rows: the reading moves off `dataset-undeclared-provenance` onto `dataset-mostly-undeclared`, one rung up at 70. Uncalibrated the evaluator ceiling hides both; calibrated, the two read 65 and 70 -- see `undeclared-source--calibrated` and `mostly-undeclared-source--calibrated` in [the measurements](docs/measurements/README.md#results) |
 | `mostly-synthetic-source` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-mostly-synthetic` 70 | `dataset-mostly-synthetic`, the declared arm of the same rung. The distinction between this and the row above is whether the customer said *what* the rows are or said nothing at all |
+| `synthetic-source` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-fully-synthetic` 65 | `dataset-fully-synthetic`, the rung below: every row declared written costs 65 where most of them costs 70 (calibrated, 65 `proceed`) |
 | `generated-answer-key` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-generated-answer-key` 74 | `dataset-generated-answer-key` at 74: the questions are real and the ruler is a model's opinion |
 | `mostly-generated-answer-key` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-mostly-generated-answer-key` 74 | `dataset-mostly-generated-answer-key`, the rung the answer-key ladder gained so the cap could not turn on one row |
 | `slow-scorer` | 45 | PARTIAL | `bound-evaluator-cost` | `evaluator-timeout` 45\* | the scorer, and not because it is wrong. Calibration ran out of its budget, and the card asks for the cost to be bounded rather than for a repair |
