@@ -30,14 +30,17 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HARNESS = REPO_ROOT / "docs" / "measurements" / "score_bank.py"
@@ -546,6 +549,360 @@ class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):
         )
 
 
+class EveryStepRunsBoundedAndWithoutTheShell(unittest.TestCase):
+    """Each step the sweep runs has a budget above the guide's, and none of the shell.
+
+    The steps run code that is not the sweep's -- the builder, the guide's scripts, and
+    through the calibrator the project's own evaluator -- and each used to inherit every
+    variable the operator had exported, with no limit on how long it could hold the sweep.
+    """
+
+    def setUp(self) -> None:
+        self.harness = load_harness()
+        self.room = Path(tempfile.mkdtemp(prefix="score-bank-step-"))
+        self.addCleanup(shutil.rmtree, self.room, True)
+
+    def test_the_bound_sits_above_every_budget_the_guide_gives_itself(self) -> None:
+        """The guide's timeout is the finding; this bound may never be what fires first."""
+        harness = self.harness
+        self.assertEqual(
+            harness.STEP_TIMEOUT_SECONDS,
+            harness.GUIDE_CALIBRATION_CEILING_SECONDS + harness.STEP_HEADROOM_SECONDS,
+        )
+        self.assertEqual(900, harness.GUIDE_CALIBRATION_CEILING_SECONDS)
+        self.assertGreater(harness.STEP_HEADROOM_SECONDS, 0)
+        # A guided run of `slow-scorer` passes no `--timeout`: the guide's 900 seconds
+        # decide, and the step is still being waited on when they run out.
+        self.assertEqual(
+            harness.STEP_TIMEOUT_SECONDS, harness.calibration_step_seconds(None)
+        )
+        # The sweep's own `slow-scorer` states five seconds; its calibrator stops itself
+        # at five and the step bound is five plus the same headroom.
+        budget = {tag: opts for tag, _, opts in harness.VARIANTS}["slow-scorer"][
+            "calibration_timeout"
+        ]
+        self.assertEqual(
+            budget + harness.STEP_HEADROOM_SECONDS,
+            harness.calibration_step_seconds(budget),
+        )
+
+    def test_the_measurement_job_outlasts_one_step(self) -> None:
+        """CI's limit is above one step's, so the sweep's own diagnostic is what a hang
+        prints rather than a bare cancellation of the job around it."""
+        workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8")
+        job = workflow.split("\n  measurements:\n", 1)[1]
+        found = re.search(r"^    timeout-minutes: (\d+)$", job, re.M)
+        assert found, "the measurement job states no timeout"
+        self.assertGreater(int(found.group(1)) * 60, self.harness.STEP_TIMEOUT_SECONDS)
+
+    def test_a_step_past_its_budget_is_killed_with_what_it_started(self) -> None:
+        """Ours, loud, and nothing left running: the calibrator's worker is a child."""
+        marker = self.room / "the-worker-outlived-the-step"
+        worker = self.room / "worker.py"
+        worker.write_text(
+            "import pathlib, sys, time\n"
+            "time.sleep(3)\n"
+            "pathlib.Path(sys.argv[1]).write_text('alive')\n",
+            encoding="utf-8",
+        )
+        child = (
+            "import subprocess, sys, time\n"
+            f"subprocess.Popen([sys.executable, {str(worker)!r}, {str(marker)!r}])\n"
+            "time.sleep(60)\n"
+        )
+        started = time.monotonic()
+        with self.assertRaises(self.harness.StepTimedOut) as caught:
+            self.harness.capture(
+                [sys.executable, "-c", child],
+                self.room,
+                self.room / "step.txt",
+                seconds=1,
+            )
+        self.assertLess(time.monotonic() - started, 30)
+        self.assertIsInstance(caught.exception, self.harness.HarnessFault)
+        self.assertNotIsInstance(caught.exception, self.harness.GuideRefused)
+        self.assertIn("1-second budget", str(caught.exception))
+        time.sleep(4)
+        self.assertFalse(marker.exists(), "the step's own child kept running")
+
+    def test_a_step_that_stops_itself_inside_the_budget_is_read_as_before(self) -> None:
+        """The `slow-scorer` shape: the calibrator reaches ITS timeout and says so."""
+        answer = '{"timed_out": true, "timeout_seconds": 1}'
+        done = self.harness.capture_json(
+            [
+                sys.executable,
+                "-c",
+                f"import sys, time; time.sleep(1); print({answer!r}); sys.exit(1)",
+            ],
+            self.room,
+            self.room / "03-calibration-stderr.txt",
+            self.room / "03-calibration.json",
+            seconds=self.harness.calibration_step_seconds(1),
+        )
+        self.assertEqual(1, done.returncode)
+        self.assertEqual(
+            {"timed_out": True, "timeout_seconds": 1},
+            self.harness.decoded(done, "calibrate_evaluator.py"),
+        )
+
+    def test_a_step_sees_only_the_variables_it_is_given(self) -> None:
+        planted = {
+            "OPENROUTER_API_KEY": "sk-or-planted",
+            "TRAIGENT_API_KEY": "tg-planted",
+            "POSTGRES_CONNECTION_STRING": "postgresql://planted",
+            "VIRTUAL_ENV": "/planted/venv",
+        }
+        with mock.patch.dict(os.environ, planted):
+            done = self.harness.capture_json(
+                [
+                    sys.executable,
+                    "-c",
+                    "import json, os; print(json.dumps(dict(os.environ)))",
+                ],
+                self.room,
+                self.room / "stderr.txt",
+                self.room / "out.json",
+            )
+            seen = json.loads(done.stdout)
+            self.assertEqual([], sorted(set(planted) & set(seen)))
+            # LC_CTYPE is the interpreter's own: PEP 538 sets it in a child started
+            # under the C locale. HOME and PYTHONUSERBASE are the sweep's own values
+            # (the test below). Nothing else may appear that was not passed.
+            self.assertLessEqual(
+                set(seen),
+                set(self.harness.STEP_ENVIRONMENT)
+                | {"LC_CTYPE", "HOME", "PYTHONUSERBASE"},
+            )
+            for name in self.harness.STEP_ENVIRONMENT:
+                if name in os.environ:
+                    self.assertEqual(os.environ[name], seen.get(name), name)
+
+    def test_a_step_gets_a_home_of_its_own_and_the_same_packages(self) -> None:
+        """Not the operator's HOME: nothing under it is found by its default name.
+
+        A library that looks for `~/.netrc`, `~/.aws/credentials` or its own config under
+        HOME finds an empty directory. What the operator installed with `pip --user` is
+        still importable, because the user site the sweep's own interpreter uses is named
+        explicitly -- the SDK is found only there on some machines.
+        """
+        probe = (
+            "import importlib.util, json, os, site\n"
+            "print(json.dumps({'home': os.environ.get('HOME'),"
+            " 'listing': sorted(os.listdir(os.environ['HOME'])),"
+            " 'user_site': site.getusersitepackages(),"
+            " 'traigent': importlib.util.find_spec('traigent') is not None}))\n"
+        )
+        done = self.harness.capture_json(
+            [sys.executable, "-c", probe],
+            self.room,
+            self.room / "stderr.txt",
+            self.room / "out.json",
+        )
+        seen = json.loads(done.stdout)
+        self.assertNotEqual(str(Path.home()), seen["home"])
+        self.assertEqual([], seen["listing"], "the step's HOME is not an empty one")
+        self.assertEqual(
+            importlib.util.find_spec("traigent") is not None, seen["traigent"]
+        )
+        import site
+
+        if site.ENABLE_USER_SITE:
+            self.assertEqual(site.getusersitepackages(), seen["user_site"])
+
+    def test_what_one_step_leaves_in_its_home_the_next_does_not_find(self) -> None:
+        """A HOME per step, not per sweep: a config written by one step is gone by the next.
+
+        The calibrator imports the project's evaluator, and whatever it writes under HOME
+        would otherwise be in the HOME of every step after it, the readiness step included.
+        """
+        leave = (
+            "import os, pathlib\n"
+            "pathlib.Path(os.environ['HOME'], '.probe-config').write_text('x')\n"
+            "print(os.environ['HOME'])\n"
+        )
+        first = self.harness.capture_json(
+            [sys.executable, "-c", leave],
+            self.room,
+            self.room / "first.txt",
+            self.room / "first.out",
+        )
+        look = "import json, os; print(json.dumps(os.listdir(os.environ['HOME'])))"
+        second = self.harness.capture_json(
+            [sys.executable, "-c", look],
+            self.room,
+            self.room / "second.txt",
+            self.room / "second.out",
+        )
+        self.assertEqual(0, first.returncode, first.stderr)
+        self.assertTrue(first.stdout.strip(), "the first step named no HOME")
+        self.assertEqual([], json.loads(second.stdout))
+        self.assertFalse(
+            Path(first.stdout.strip()).exists(), "a step's HOME outlived the step"
+        )
+
+    def test_a_step_leaves_no_name_behind_for_its_home(self) -> None:
+        """The HOME a step is given is named while its output is written, and no longer.
+
+        Kept, every step of a sweep would add a dead name to the list each write is
+        rewritten through, a few hundred of them by the end of the bank.
+        """
+        before = list(self.harness.PATH_NAMES)
+        self.harness.capture(
+            [sys.executable, "-c", "print('done')"], self.room, self.room / "step.txt"
+        )
+        self.harness.capture_json(
+            [sys.executable, "-c", "print('{}')"],
+            self.room,
+            self.room / "stderr.txt",
+            self.room / "out.json",
+        )
+        self.assertEqual(before, self.harness.PATH_NAMES)
+
+    def test_a_home_path_a_step_prints_is_written_as_home(self) -> None:
+        """What the step says about its own HOME reaches the log already neutral."""
+        self.harness.capture(
+            [sys.executable, "-c", "import os; print(os.environ['HOME'] + '/x')"],
+            self.room,
+            self.room / "step.txt",
+        )
+        written = (self.room / "step.txt").read_text(encoding="utf-8")
+        self.assertIn("$HOME/x", written)
+        self.assertNotIn("score-bank-home-", written)
+
+    def test_a_home_path_on_stderr_or_resolved_is_written_as_home(self) -> None:
+        """Stderr is neutral too, and so is HOME as the step resolves it.
+
+        Shaped like macOS, where /var links to /private/var: the resolved path is the
+        made one with a prefix in front, so the made path ends it. Replacing the shorter
+        spelling first would leave `/private$HOME` behind.
+        """
+        link = self.room / "tmp-link"
+        real = Path(str(self.room / "private") + str(link))
+        real.mkdir(parents=True)
+        link.symlink_to(real, target_is_directory=True)
+        self.assertTrue(str(real).endswith(str(link)))
+        step = (
+            "import os, sys\n"
+            "print('{}')\n"
+            "print(os.environ['HOME'] + '/said', file=sys.stderr)\n"
+            "print(os.path.realpath(os.environ['HOME']) + '/resolved', file=sys.stderr)\n"
+        )
+        with mock.patch.object(tempfile, "tempdir", str(link)):
+            self.harness.capture_json(
+                [sys.executable, "-c", step],
+                self.room,
+                self.room / "stderr.txt",
+                self.room / "out.json",
+            )
+        written = (self.room / "stderr.txt").read_text(encoding="utf-8")
+        self.assertIn("\n$HOME/said\n", written)
+        self.assertIn("\n$HOME/resolved\n", written)
+        self.assertNotIn("private$HOME", written)
+        self.assertNotIn("score-bank-home-", written)
+
+    def test_a_home_path_a_killed_step_printed_is_written_as_home(self) -> None:
+        """The partial output of a step killed for time is neutral as well."""
+        step = (
+            "import os, time\n"
+            "print(os.environ['HOME'] + '/before-the-hang', flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        log = self.room / "killed.txt"
+        with self.assertRaises(self.harness.StepTimedOut):
+            self.harness.capture(
+                [sys.executable, "-c", step], self.room, log, seconds=1
+            )
+        written = log.read_text(encoding="utf-8")
+        self.assertIn("$HOME/before-the-hang", written)
+        self.assertNotIn("score-bank-home-", written)
+
+    def test_an_interrupt_ends_the_step_and_what_it_started(self) -> None:
+        """Ctrl-C at the sweep reaches the step, whose session is otherwise its own.
+
+        The step may be the calibrator running the project's evaluator with
+        --allow-execution, so an operator stopping the sweep has to stop that too.
+        """
+        marker = self.room / "the-step-outlived-the-interrupt"
+        worker = self.room / "worker.py"
+        worker.write_text(
+            "import pathlib, sys, time\n"
+            "time.sleep(3)\n"
+            "pathlib.Path(sys.argv[1]).write_text('alive')\n",
+            encoding="utf-8",
+        )
+        operator = (
+            "import importlib.util, os, signal, sys, threading\n"
+            f"spec = importlib.util.spec_from_file_location('h', {str(HARNESS)!r})\n"
+            "harness = importlib.util.module_from_spec(spec)\n"
+            "sys.modules['h'] = harness\n"
+            "spec.loader.exec_module(harness)\n"
+            "threading.Timer(0.5, os.kill, (os.getpid(), signal.SIGINT)).start()\n"
+            "from pathlib import Path\n"
+            f"room = Path({str(self.room)!r})\n"
+            "harness.capture([sys.executable, str(room / 'worker.py'),"
+            f" {str(marker)!r}], room, room / 'step.txt')\n"
+        )
+        started = time.monotonic()
+        stopped = subprocess.run(
+            [sys.executable, "-c", operator],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=60,
+        )
+        self.assertNotEqual(0, stopped.returncode, stopped.stdout)
+        self.assertIn("KeyboardInterrupt", stopped.stdout)
+        self.assertLess(time.monotonic() - started, 30)
+        time.sleep(4)
+        self.assertFalse(marker.exists(), "the step kept running after Ctrl-C")
+
+    def test_a_step_that_finishes_leaves_nothing_of_its_own_running(self) -> None:
+        """A child the step started and never waited for goes with the step."""
+        marker = self.room / "an-orphan-kept-running"
+        worker = self.room / "orphan.py"
+        worker.write_text(
+            "import pathlib, sys, time\n"
+            "time.sleep(2)\n"
+            "pathlib.Path(sys.argv[1]).write_text('alive')\n",
+            encoding="utf-8",
+        )
+        step = (
+            "import subprocess, sys\n"
+            f"subprocess.Popen([sys.executable, {str(worker)!r}, {str(marker)!r}],"
+            " stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+            "print('done')\n"
+        )
+        done = self.harness.capture(
+            [sys.executable, "-c", step], self.room, self.room / "step.txt"
+        )
+        self.assertEqual(0, done.returncode)
+        time.sleep(3)
+        self.assertFalse(marker.exists(), "a process the step started outlived it")
+
+    def test_a_killed_step_leaves_what_it_said_in_its_log(self) -> None:
+        """The partial output is the only evidence of why it hung, so it is kept."""
+        step = (
+            "import sys, time\n"
+            "print('reached the second phase', flush=True)\n"
+            "print('x' * 9000, flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        log = self.room / "03-calibration-stderr.txt"
+        with self.assertRaises(self.harness.StepTimedOut):
+            self.harness.capture_json(
+                [sys.executable, "-c", step],
+                self.room,
+                log,
+                self.room / "03-calibration.json",
+                seconds=1,
+            )
+        written = log.read_text(encoding="utf-8")
+        self.assertIn("reached the second phase", written)
+        self.assertIn("characters dropped]", written)
+        self.assertIn("killed after 1 seconds", written)
+        self.assertLess(len(written), self.harness.KILLED_OUTPUT_LIMIT + 1000)
+
+
 class HarnessTestCase(unittest.TestCase):
     """A scratch guide, a scratch `cards/`, and the harness pointed at both."""
 
@@ -700,6 +1057,21 @@ class AFaultOfOursPublishesNothing(HarnessTestCase):
         self.assertEqual(
             len(attempted), 1, "the sweep carried on past a fault it could not measure"
         )
+
+    def test_a_step_that_times_out_ends_the_sweep_and_publishes_nothing(self) -> None:
+        """Killed is not refused: no row for it, and no card moved."""
+        before = fingerprint(self.cards)
+
+        def hang(tag: str, *rest: object, **options: object) -> dict[str, object]:
+            raise self.harness.StepTimedOut(
+                ["python3", "$GUIDE/calibrate_evaluator.py"], 960
+            )
+
+        status, said, complained = self.run_sweep(hang, publish=True)
+        self.assertEqual(status, 3)
+        self.assertIn("calibrate_evaluator.py ran past the sweep's", complained)
+        self.assertNotIn("REFUSED", said)
+        self.assertEqual(fingerprint(self.cards), before)
 
     def test_a_failing_builder_is_a_harness_fault_at_the_raise_site(self) -> None:
         """Not through a stub: the real `score_one`, with a real `build.py` refusal.

@@ -29,6 +29,16 @@ the refusal, and moving that over a committed card deletes the card itself.
 Standard library only, like `build.py`. It needs a checkout of the guide, because the
 scripts it runs are the guide's, and it never reaches the network.
 
+**Every step runs bounded and without the shell.** A step is given `STEP_ENVIRONMENT`, an
+empty HOME of its own that is removed when it ends, and the user site this interpreter
+imports from, and nothing else of the environment this script was started in -- no provider
+key, no database URL -- because it runs code that is not this script's, the project's own
+evaluator included, and because preflight writes what it finds there into the card. It runs
+in a process group of its own, which is killed once the step's output is read, on Ctrl-C,
+and once it outlasts `STEP_TIMEOUT_SECONDS`: the guide's own calibration ceiling plus the
+headroom the guide's harness allows the same command. A kill for time writes what the step
+said into its log, ends the sweep on exit 3 and publishes nothing; it is never a row.
+
 **It pins the revision.** `PINNED_REVISION` below is the commit every figure under `cards/`
 was measured at, and the run refuses a checkout sitting on anything else rather than quietly
 scoring against a moved target. The revision used is recorded in `cards/results.json`.
@@ -109,12 +119,17 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import importlib.metadata
 import json
+import os
 import pathlib
 import shutil
+import signal
+import site
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -327,6 +342,33 @@ class HarnessFault(MeasurementError):
     """
 
 
+class StepTimedOut(HarnessFault):
+    """A step outlasted the sweep's own budget for one step, and was killed.
+
+    Not a refusal: the guide says nothing when it is killed, so there is no sentence of
+    its own to record, and a row would be this script inventing one. It is a
+    `HarnessFault` because what ran out is ours -- the budget this sweep sets above the
+    guide's -- so the sweep stops, publishes nothing, and says which step and how long.
+    """
+
+    def __init__(self, argv: list[str], seconds: int, output: str = "") -> None:
+        # The script the step runs, which is what a reader recognises: `build.py`,
+        # `calibrate_evaluator.py`, or the `readiness.py` the contract probe reads.
+        step = next(
+            (Path(piece).name for piece in argv[1:] if piece.endswith(".py")), argv[0]
+        )
+        super().__init__(
+            f"{step} ran past the "
+            f"sweep's {seconds}-second budget for one step and was killed with every "
+            "process it started. The guide's own calibration budget is below that "
+            "bound, so a step that reaches it has stopped answering rather than run "
+            "slowly; nothing was recorded for the run and cards/ was not touched"
+        )
+        self.argv = argv
+        self.seconds = seconds
+        self.output = output
+
+
 # Every transcript under cards/ is committed, so no line in one may carry a path from the
 # machine that produced it. The substitution lives at the writer, not at each call site:
 # argv.json was rewritten and the .txt transcripts beside it were not, and a rule applied at
@@ -351,12 +393,193 @@ def neutralise(text: str) -> str:
     return text
 
 
-def capture(argv: list[str], cwd: Path, log: Path) -> subprocess.CompletedProcess[str]:
+# How long one step may run before the sweep kills it. The guide's calibrator never gives
+# itself more than CALIBRATION_TIMEOUT_CEILING_SECONDS = 900 by default
+# (skills/traigent-first-run/scripts/calibrate_evaluator.py:103 at the pin), and a
+# calibration that spends all of it still has to stop its worker and write the result
+# that says so: `slow-scorer` measured at the default budget exited at 900 seconds with
+# `timed_out: true`, and that record is the finding. So this bound sits ABOVE the guide's,
+# by the headroom the guide's own harness allows the same command for exactly that
+# teardown (CALIBRATION_TIMEOUT_HEADROOM_SECONDS = 60, tests/behavioral/harness.py:130 at
+# the pin). The guide's budget decides every run that finishes; this one only ends a step
+# that has stopped answering, which the sweep otherwise waited on for ever.
+GUIDE_CALIBRATION_CEILING_SECONDS = 900
+STEP_HEADROOM_SECONDS = 60
+STEP_TIMEOUT_SECONDS = GUIDE_CALIBRATION_CEILING_SECONDS + STEP_HEADROOM_SECONDS
+
+# The only variables a step inherits. Every step runs code that is not this script's --
+# `build.py`, the guide's scripts, and through `calibrate_evaluator.py --allow-execution`
+# the project's own evaluator -- and each used to inherit the whole shell it was started
+# from: every provider key, database URL and token the operator had exported. Preflight
+# also WRITES what it finds there into the card ("no LLM provider credential names are
+# present", "traigent-key: not configured yet"), so the committed evidence depended on
+# whose shell measured it.
+#
+# Four are passed through from the operator's shell when it has them: PATH to find the
+# interpreter, LANG and LC_ALL for the text encoding, TMPDIR for where the calibrator's
+# temporary files may go. They are the variables in the guide's own behavioural-harness
+# environment (tests/behavioral/harness.py `command_environment` at the pin) that describe
+# the machine; that harness sets fixed values for them, and this sweep passes the
+# operator's own instead, so the locale a card was taken under is the operator's.
+#
+# HOME is NOT the operator's. Each step gets an empty directory of its own, made when it
+# starts and removed when it ends, so nothing a library looks for under HOME by its default
+# name -- a `~/.netrc`, `~/.aws/credentials`, the SDK's own config -- is found, and nothing
+# one step writes there (the calibrator imports the project's evaluator) is found by the
+# next. That is a default
+# closed, not a sandbox: a path spelled out in full is still readable. What the sweep's own
+# interpreter imports from the user site (`pip install --user`, which is where the SDK is
+# on some machines) is still importable, because that site is named for the step through
+# PYTHONUSERBASE rather than found through HOME.
+#
+# The guide sets what it needs beyond these itself -- the calibrator's worker gets
+# `TRAIGENT_OFFLINE_MODE` and the local price map from `subprocess_environment`, and
+# preflight sets the price map too.
+STEP_ENVIRONMENT = ("PATH", "LANG", "LC_ALL", "TMPDIR")
+
+
+def calibration_step_seconds(budget: int | None) -> int:
+    """The bound on a calibration step: the budget the guide gives it, plus the headroom.
+
+    The same derivation the guide's harness makes for the same command -- an explicit
+    `--timeout` where one is passed, the ceiling where none is -- so `slow-scorer`, which
+    states a five-second budget, is killed by its own calibrator and never by this sweep.
+    """
+    return (
+        GUIDE_CALIBRATION_CEILING_SECONDS if budget is None else budget
+    ) + STEP_HEADROOM_SECONDS
+
+
+def step_environment(home: Path) -> dict[str, str]:
+    """What a step is given: `STEP_ENVIRONMENT`, `home` as HOME, and the user site."""
+    given = {name: os.environ[name] for name in STEP_ENVIRONMENT if name in os.environ}
+    given["HOME"] = str(home)
+    if site.ENABLE_USER_SITE:
+        given["PYTHONUSERBASE"] = site.getuserbase()
+    return given
+
+
+# How much of a killed step's output its log keeps: the first 4,000 characters, and a count
+# of the rest, which is what the guide's harness keeps of a command it kills
+# (TIMEOUT_CAPTURE_LIMIT = 4_000, tests/behavioral/harness.py at the pin) -- the start, where
+# the invocation's own errors and the phases it opened with are, and short enough that a
+# runaway printer cannot bury the line that says it was killed.
+KILLED_OUTPUT_LIMIT = 4_000
+
+
+def killed_output(text: str) -> str:
+    """The start of a killed step's output, and how much was dropped after it."""
+    if len(text) <= KILLED_OUTPUT_LIMIT:
+        return text
+    dropped = len(text) - KILLED_OUTPUT_LIMIT
+    return f"{text[:KILLED_OUTPUT_LIMIT]}\n[+{dropped} characters dropped]\n"
+
+
+def end_group(group: int) -> None:
+    """Kill every process left in a step's group; a group already empty is fine.
+
+    After a normal finish this runs once the step itself has been reaped. On Linux, while any
+    member of its group is alive the group's id cannot be handed out again; once none is, a
+    new process could in principle take that id as its own group before this call, and would
+    be killed with it. That window is left open deliberately: closing it would mean replacing
+    `communicate()`'s reap -- waiting with `os.waitid(..., WEXITED | WNOWAIT)` and killing the
+    group before the leader is reaped -- for a race no sweep has met.
+    """
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(group, signal.SIGKILL)
+
+
+def run_step(
+    argv: list[str], cwd: Path, *, merge_stderr: bool, seconds: int
+) -> subprocess.CompletedProcess[str]:
+    """Run one step in a session of its own, under a budget, with the minimal environment.
+
+    A session of its own because the step is rarely one process: the calibrator runs the
+    evaluator in a worker, and killing only the calibrator leaves that worker holding the
+    pipe this call is reading, so the wait never ends. The whole group is killed instead.
+
+    The session is also why the group is killed on every other way out. A terminal's
+    Ctrl-C goes to its foreground group, which a step in its own session is not in, so an
+    interrupt of this script used to leave the step -- the evaluator, with execution
+    allowed -- running on after it. And a step that exits leaving a child of its own
+    behind leaves that child in the group, so the group is ended once the step's output is
+    read, however it finished.
+    """
+    home = Path(tempfile.mkdtemp(prefix="score-bank-home-"))
+    try:
+        with subprocess.Popen(
+            argv,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
+            text=True,
+            env=step_environment(home),
+            start_new_session=True,
+        ) as child:
+            try:
+                stdout, stderr = child.communicate(timeout=seconds)
+            except subprocess.TimeoutExpired:
+                end_group(child.pid)
+                said, complained = child.communicate()
+                raise StepTimedOut(
+                    argv,
+                    seconds,
+                    killed_output(homeless((said or "") + (complained or ""), home)),
+                ) from None
+            except BaseException:
+                end_group(child.pid)
+                child.communicate()
+                raise
+            end_group(child.pid)
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+    return subprocess.CompletedProcess(
+        argv, child.returncode, homeless(stdout, home), homeless(stderr or "", home)
+    )
+
+
+def homeless(text: str, home: Path) -> str:
+    """A step's output with its throwaway HOME written as `$HOME`, as the operator's is.
+
+    Replaced here rather than registered with `name_path`, because the directory lives only
+    as long as the step: registered, every step of a sweep left a dead name behind in the
+    list every committed file is rewritten through.
+
+    Both spellings are replaced, the path as made and the path as resolved: behind a
+    symlinked temporary directory a step that resolves its HOME prints the second, which
+    need not contain the first. The longer goes first, so a spelling that ends with the
+    other is not left half-replaced -- on macOS, where /var links to /private/var, the
+    resolved path is the made one with /private in front.
+    """
+    for spelling in sorted({str(home), str(home.resolve())}, key=len, reverse=True):
+        text = text.replace(spelling, "$HOME")
+    return text
+
+
+def killed_log(argv: list[str], log: Path, killed: StepTimedOut) -> None:
+    """What a killed step said before it was killed, where its transcript would be."""
+    log.write_text(
+        neutralise(
+            "$ "
+            + " ".join(argv)
+            + "\n"
+            + killed.output
+            + f"killed after {killed.seconds} seconds by the sweep's step budget\n"
+        ),
+        encoding="utf-8",
+    )
+
+
+def capture(
+    argv: list[str], cwd: Path, log: Path, seconds: int = STEP_TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess[str]:
     """Run one command, writing the invocation, the whole output and the exit status."""
     log.parent.mkdir(parents=True, exist_ok=True)
-    done = subprocess.run(
-        argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-    )
+    try:
+        done = run_step(argv, cwd, merge_stderr=True, seconds=seconds)
+    except StepTimedOut as killed:
+        killed_log(argv, log, killed)
+        raise
     log.write_text(
         neutralise(
             "$ " + " ".join(argv) + "\n" + done.stdout + f"exit={done.returncode}\n"
@@ -367,13 +590,19 @@ def capture(argv: list[str], cwd: Path, log: Path) -> subprocess.CompletedProces
 
 
 def capture_json(
-    argv: list[str], cwd: Path, log: Path, out: Path
+    argv: list[str],
+    cwd: Path,
+    log: Path,
+    out: Path,
+    seconds: int = STEP_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str]:
     """The same, for a command whose stdout is the JSON another step reads."""
     log.parent.mkdir(parents=True, exist_ok=True)
-    done = subprocess.run(
-        argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    )
+    try:
+        done = run_step(argv, cwd, merge_stderr=False, seconds=seconds)
+    except StepTimedOut as killed:
+        killed_log(argv, log, killed)
+        raise
     out.write_text(neutralise(done.stdout), encoding="utf-8")
     log.write_text(
         neutralise(
@@ -444,11 +673,11 @@ def contract_mismatch(scripts: Path) -> tuple[list[str], list[str]]:
     field constants alone, so the settled/undetermined distinction is read from the document
     exactly as the guide reads it, and the field name is written down above.
     """
-    probe = subprocess.run(
+    probe = run_step(
         [sys.executable, "-c", CONTRACT_PROBE, str(scripts / "readiness.py")],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+        HERE,
+        merge_stderr=False,
+        seconds=STEP_TIMEOUT_SECONDS,
     )
     if probe.returncode != 0:
         raise HarnessFault(
@@ -804,6 +1033,7 @@ def score_one(
                 project,
                 room / "03-calibration-stderr.txt",
                 room / "03-calibration.json",
+                seconds=calibration_step_seconds(calibration_timeout),
             )
             calibrated = True
             # A refusal is named here rather than left to the readiness step, which

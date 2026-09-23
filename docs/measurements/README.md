@@ -88,6 +88,30 @@ ours never records a row and never publishes: `build.py` failing says nothing ab
 and a sweep that cannot measure has no business rewriting the evidence of what the guide
 answered when it could.
 
+**Each step gets a small environment, a HOME of its own and a time limit.** The build,
+preflight, calibration and readiness steps are handed `PATH`, `LANG`, `LC_ALL` and `TMPDIR`
+from the shell where it has them, a fresh empty directory of its own as `HOME`, removed when
+the step ends, and `PYTHONUSERBASE` naming the user site the sweep's own interpreter imports
+from -- and nothing else. The calibrator imports the project's own evaluator, and preflight
+writes what it finds in the environment into the card, so a sweep run from a shell holding a
+provider key or a database URL used to hand both to that code, and produced cards that said the
+key was present. The four passed through are the machine-describing part of the guide's own
+test environment (its behavioural harness, at the pin), which fixes their values where this
+sweep passes the operator's. The empty `HOME` means nothing a library looks for there by its
+default name -- `~/.netrc`, `~/.aws/credentials`, a tool's config -- is found, and nothing one
+step writes there is found by the next; it closes a default rather than building a sandbox, and
+a path spelled out in full is still readable. `PYTHONUSERBASE` keeps an SDK installed with `pip
+--user` importable, which is where it is on some machines. A step runs in a process group of
+its own, and the group is killed once the step's output is read, on Ctrl-C, and when the step
+is still running after `STEP_TIMEOUT_SECONDS` -- 960, the guide's 900-second calibration
+ceiling plus the 60 seconds of headroom its harness allows that same command. A step killed for
+time leaves what it said, up to the 4,000 characters the guide's harness keeps of a command it
+kills, in its log, and the sweep stops on exit 3 with nothing published. The guide's ceiling is
+below that limit on purpose: `slow-scorer` depends on the guide reaching its own timeout and
+saying so, and the sweep's limit only ends a step that has stopped answering. The CI job's own
+limit sits above one step's, so a hang prints the sweep's diagnostic rather than a cancelled
+job.
+
 ## What is here
 
 | | |
