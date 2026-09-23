@@ -571,7 +571,110 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
             manifest["components"]["dataset"]["damage_detail"]["reviewed_by"] = "x"
 
         self.edit_record(out, embellish)
-        self.assert_reported(out, "damage_detail.reviewed_by is a claim verify has")
+        self.assert_reported(
+            out, "damage_detail.reviewed_by is not a claim --dataset split-by-database"
+        )
+
+    def test_every_damage_detail_field_verify_accepts_is_one_the_builder_writes(
+        self,
+    ) -> None:
+        """`DAMAGE_DETAIL_FIELDS` is what verify accepts; it has to be what is written."""
+        self.assertEqual(set(build.DAMAGED_STATES), set(build.DAMAGE_DETAIL_FIELDS))
+        for state in build.DAMAGED_STATES:
+            with self.subTest(state=state):
+                record = json.loads((self.built[state] / "demo.json").read_text())
+                written = record["components"]["dataset"]["damage_detail"]
+                self.assertEqual(build.DAMAGE_DETAIL_FIELDS[state], set(written))
+
+    def test_a_damage_field_on_a_state_that_does_not_do_that_damage_is_refused(
+        self,
+    ) -> None:
+        """Each of these used to pass on `duplicated`, whose rows carry none of it."""
+        for field, value in (
+            ("cut_at", 0.6),
+            ("copy_id_suffix", "-holdout"),
+            ("rotated_within", "db_id"),
+            ("top_level", []),
+        ):
+            with self.subTest(field=field):
+                out = self.copy("duplicated")
+
+                def add(manifest: dict) -> None:  # type: ignore[type-arg]
+                    manifest["components"]["dataset"]["damage_detail"][field] = value
+
+                self.edit_record(out, add)
+                self.assert_reported(
+                    out, f"damage_detail.{field} is not a claim --dataset duplicated"
+                )
+
+    def test_a_damage_field_on_its_own_state_still_needs_the_damage(self) -> None:
+        """On the state that does the damage, a field still has to describe some."""
+        cases = (
+            ("leaky", "copy_id_suffix", "-nowhere", "no row is a copy carrying it"),
+            ("raw-export", "top_level", [], "damage_detail.top_level names no field"),
+        )
+        for state, field, value, fragment in cases:
+            with self.subTest(state=state, field=field):
+                out = self.copy(state)
+
+                def change(manifest: dict) -> None:  # type: ignore[type-arg]
+                    manifest["components"]["dataset"]["damage_detail"][field] = value
+
+                self.edit_record(out, change)
+                self.assert_reported(out, fragment)
+
+    def test_a_cut_recorded_where_no_line_was_cut_is_caught(self) -> None:
+        """A torn dataset whose lines were all written whole, recorded with no torn
+        lines: `cut_at` then describes a cut nothing shows."""
+        out = self.copy("torn")
+        mini = build.select_rows(build.read_dataset(), "mini")
+        whole = [
+            json.dumps(
+                build.project_row(row, "torn"), ensure_ascii=False, sort_keys=True
+            )
+            for row in mini
+        ]
+        self.rewrite(out, whole)
+
+        def untear(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["torn_lines"] = []
+
+        self.edit_record(out, untear)
+        self.assert_reported(out, "damage_detail.cut_at says where lines were cut")
+
+    def test_a_rotation_that_moved_nothing_is_caught(self) -> None:
+        out = self.copy("wrong-answers")
+        truth = {row["metadata"]["id"]: row["output"] for row in build.read_dataset()}
+        lines = []
+        for line in self.lines(out):
+            row = json.loads(line)
+            row["output"] = truth[row["metadata"]["id"]]
+            lines.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
+        self.rewrite(out, lines)
+        self.assert_reported(out, "and every row keeps its own")
+
+    def test_an_unreadable_torn_line_does_not_lose_the_others(self) -> None:
+        """A torn line whose question cannot be decoded is one problem, and the next
+        torn line is still checked."""
+        out = self.copy("torn")
+        torn = json.loads((out / "demo.json").read_text())["components"]["dataset"][
+            "damage_detail"
+        ]["torn_lines"]
+        lines = self.lines(out)
+        first, second = torn[0] - 1, torn[1] - 1
+        lines[first] = '{"input": "bad \\q escape", "met'
+        lines[second] = lines[second][: len(lines[second]) // 2]
+        self.rewrite(out, lines)
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any(f"torn line {torn[0]} cannot be read" in p for p in problems), problems
+        )
+        self.assertTrue(
+            any(
+                f"torn line {torn[1]} is not its row cut at 60%" in p for p in problems
+            ),
+            problems,
+        )
 
     def test_torn_lines_recorded_for_a_state_that_does_not_tear(self) -> None:
         out = self.copy("duplicated")

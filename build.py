@@ -2166,6 +2166,36 @@ def write_demo(plan: Plan) -> dict[str, Any]:
     }
 
 
+# The fields each damaged state records in `damage_detail`, and so the ones `verify` will
+# accept for it. `tests/test_verify.py` holds this to what `damage_detail` actually writes
+# for every damaged state.
+DAMAGE_DETAIL_FIELDS: dict[str, frozenset[str]] = {
+    "duplicated": frozenset({"repeated_ids"}),
+    "wrong-answers": frozenset({"rotated_within", "rows_keeping_their_answer"}),
+    "leaky": frozenset({"leaked_ids", "copy_split", "copy_id_suffix"}),
+    "holdout-labelled": frozenset({"labelled_split"}),
+    "split-by-database": frozenset({"held_out_databases"}),
+    "raw-export": frozenset({"keys", "top_level"}),
+    "torn": frozenset({"torn_lines", "cut_at"}),
+    "undeclared": frozenset({"provenance", "slice_says"}),
+    "fully-synthetic": frozenset(
+        {"provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+    "mostly-undeclared": frozenset(
+        {"provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+    "mostly-synthetic": frozenset(
+        {"provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+    "generated-answers": frozenset(
+        {"output_provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+    "mostly-generated-answers": frozenset(
+        {"output_provenance", "slice_says", "declared_rows", "of_rows"}
+    ),
+}
+
+
 def damage_detail(plan: Plan, torn: Sequence[int]) -> dict[str, Any] | None:
     """What a damaged state did to the rows, said in terms checkable against the file.
 
@@ -2792,6 +2822,15 @@ def dataset_record_problems(
 
     ids = [row["metadata"]["id"] for row in rows]
     unchecked = set(detail)
+    # A field describes damage one state does; on any other state it is a claim about
+    # damage the rows were never given, and several would pass there vacuously.
+    recorded_fields = DAMAGE_DETAIL_FIELDS.get(str(state), frozenset())
+    for name in sorted(set(detail) - recorded_fields):
+        unchecked.discard(name)
+        problems.append(f"damage_detail.{name} is not a claim --dataset {state} makes")
+    for name in sorted(recorded_fields - set(detail)):
+        problems.append(f"damage_detail has no {name}, which --dataset {state} records")
+    detail = {name: value for name, value in detail.items() if name in recorded_fields}
 
     def claim(field: str, found: Any) -> None:
         unchecked.discard(field)
@@ -2824,19 +2863,27 @@ def dataset_record_problems(
                 f"damage_detail.rotated_within says {field!r}, and {len(strays)} "
                 f"answers are not a gold query of a row sharing it ({strays[0]}, ...)"
             )
-        if "rows_keeping_their_answer" in detail:
-            claim(
-                "rows_keeping_their_answer",
-                sum(
-                    1
-                    for row in rows
-                    if row.get(keys["output"]) == gold.get(row["metadata"]["id"])
-                ),
+        kept = sum(
+            1
+            for row in rows
+            if row.get(keys["output"]) == gold.get(row["metadata"]["id"])
+        )
+        if rows and kept == len(rows):
+            problems.append(
+                "damage_detail.rotated_within says the answers were rotated, and every "
+                "row keeps its own"
             )
+        if "rows_keeping_their_answer" in detail:
+            claim("rows_keeping_their_answer", kept)
     if "copy_id_suffix" in detail:
         suffix = detail["copy_id_suffix"]
         unchecked.discard("copy_id_suffix")
         copies = [row for row in rows if row["metadata"]["id"].endswith(suffix)]
+        if not suffix or not copies:
+            problems.append(
+                f"damage_detail.copy_id_suffix is {suffix!r}, and no row is a copy "
+                "carrying it"
+            )
         if "leaked_ids" in detail:
             claim(
                 "leaked_ids", [row["metadata"]["id"][: -len(suffix)] for row in copies]
@@ -2888,6 +2935,8 @@ def dataset_record_problems(
             )
     if "top_level" in detail:
         unchecked.discard("top_level")
+        if not detail["top_level"]:
+            problems.append("damage_detail.top_level names no field")
         for name in detail["top_level"]:
             if any(
                 name not in row or row[name] != row["metadata"].get(name)
@@ -2898,7 +2947,21 @@ def dataset_record_problems(
         unchecked.discard("torn_lines")
     if "cut_at" in detail:
         unchecked.discard("cut_at")
-        problems += torn_line_problems(lines, torn, detail["cut_at"], keys)
+        cut_at = detail["cut_at"]
+        if not torn:
+            problems.append(
+                "damage_detail.cut_at says where lines were cut, and none is"
+            )
+        elif not (isinstance(cut_at, (int, float)) and 0 < cut_at < 1):
+            problems.append(
+                f"damage_detail.cut_at is {cut_at!r}, not a share of a line"
+            )
+        else:
+            contained(
+                "the torn lines",
+                problems,
+                partial(torn_line_problems, lines, torn, float(cut_at), keys),
+            )
     for field in ("provenance", "output_provenance"):
         if field not in detail:
             continue
@@ -2942,15 +3005,22 @@ def dataset_record_problems(
 
 
 def torn_line_problems(
-    lines: Sequence[str], torn: set[int], cut_at: float, keys: dict[str, str]
+    lines: Sequence[str],
+    torn: set[int],
+    cut_at: float,
+    keys: dict[str, str],
+    problems: list[str] | None = None,
 ) -> list[str]:
     """Each torn line is the start of a row of the slice, cut where the record says.
 
     The question is the first key of every line, so a cut line still names the row it
     was: that row is written again the way the builder writes it, and the torn line has
     to be exactly its first `cut_at` of characters.
+
+    Problems go into `problems` as they are found, and a line that cannot be read at all
+    is one problem about that line, so the lines after it are still checked.
     """
-    problems: list[str] = []
+    problems = [] if problems is None else problems
     by_question = {row["input"]: row for row in read_dataset()}
     for number in sorted(torn):
         if number > len(lines):
@@ -2959,7 +3029,12 @@ def torn_line_problems(
         opened = re.match(
             r'\{"%s": ("(?:[^"\\]|\\.)*")' % re.escape(keys["input"]), line
         )
-        row = by_question.get(json.loads(opened.group(1))) if opened else None
+        try:
+            question = json.loads(opened.group(1)) if opened else None
+        except ValueError as error:
+            problems.append(f"torn line {number} cannot be read: {error}")
+            continue
+        row = by_question.get(question) if isinstance(question, str) else None
         if row is None:
             problems.append(
                 f"torn line {number} does not begin with a question of the slice"
