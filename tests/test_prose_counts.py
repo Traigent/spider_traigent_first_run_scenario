@@ -51,14 +51,11 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(TESTS))
 
-import build  # noqa: E402
+import test_score_bank as score_bank_tests  # noqa: E402
 from test_build import declaring_states  # noqa: E402
 from test_links import git_files, strip_code  # noqa: E402
-from test_score_bank import (  # noqa: E402
-    IDENTICAL_CARDS,
-    NOT_ON_THEIR_OWN_CARD,
-    load_harness,
-)
+
+import build  # noqa: E402
 
 CARDS = REPO_ROOT / "docs" / "measurements" / "cards"
 
@@ -295,7 +292,7 @@ def caps_on(tag: str) -> set[str]:
 
 def measure() -> dict[str, Quantity]:
     """Every quantity a claim may name, each computed from the thing it counts."""
-    sweep = load_harness()
+    sweep = score_bank_tests.load_harness()
     runs = json.loads((CARDS / "results.json").read_text(encoding="utf-8"))["runs"]
     scored = [run for run in runs if not run.get("refused")]
     presets, caps = build.PRESETS, build.PRESET_CAPS
@@ -367,7 +364,7 @@ def measure() -> dict[str, Quantity]:
         ),
         (
             "presets whose own card cannot show their condition",
-            len(NOT_ON_THEIR_OWN_CARD),
+            len(score_bank_tests.NOT_ON_THEIR_OWN_CARD),
             "NOT_ON_THEIR_OWN_CARD in tests/test_score_bank.py",
         ),
         (
@@ -414,10 +411,14 @@ def measure() -> dict[str, Quantity]:
         ),
         (
             "cards identical to another",
-            sum(len(group) for group in IDENTICAL_CARDS),
+            sum(len(group) for group in score_bank_tests.IDENTICAL_CARDS),
             "IDENTICAL_CARDS in tests/test_score_bank.py, which is held to the cards",
         ),
-        ("groups of identical cards", len(IDENTICAL_CARDS), "the same"),
+        (
+            "groups of identical cards",
+            len(score_bank_tests.IDENTICAL_CARDS),
+            "the same",
+        ),
         (
             "runs held back by the unread answer key",
             len(unread),
@@ -658,7 +659,7 @@ class EveryProseCountIsBound(unittest.TestCase):
         self.assertIn("split-by-database", named, "the control the sentence names")
 
     def test_the_runs_are_the_sweeps_and_the_cards_are_the_runs(self) -> None:
-        sweep = load_harness()
+        sweep = score_bank_tests.load_harness()
         runs = self.quantities["runs"].value
         self.assertEqual(
             runs, len(sweep.PRESETS) + len(sweep.VARIANTS) + len(sweep.GRID)
