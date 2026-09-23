@@ -2835,20 +2835,37 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
         it; naming both sides only helps while every key is in one of them.
         """
 
+        # Every state that ships rows, not only the ones already known to declare:
+        # a state that writes a field in neither set is exactly the one a list of
+        # "declaring" states -- read off the fields already named -- would miss.
         seen: set[str] = set()
-        for state in ("ready", *declaring_states()):
+        for state in build.DATASET_STATES:
+            if state == "missing":
+                continue
             with self.subTest(dataset=state):
                 out = Path(self.workspace) / f"classified_{state}"
                 if not out.exists():
                     built = run_build("demo", "--dataset", state, "--out", str(out))
                     self.assertEqual(built.returncode, 0, built.stderr)
+                unreadable = 0
                 for line in (
                     (out / "project" / "dataset.jsonl")
                     .read_text(encoding="utf-8")
                     .splitlines()
                 ):
-                    if line.strip():
-                        seen |= set(json.loads(line)["metadata"])
+                    if not line.strip():
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        unreadable += 1
+                        continue
+                    seen |= set(row["metadata"])
+                self.assertEqual(
+                    build.TORN_LINES if state == "torn" else 0,
+                    unreadable,
+                    "only the lines `torn` cuts short may fail to parse",
+                )
         unclassified = sorted(
             seen - build.STRUCTURAL_ROW_FIELDS - build.DECLARATION_ROW_FIELDS
         )
