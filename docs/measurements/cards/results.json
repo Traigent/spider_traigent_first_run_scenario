@@ -961,6 +961,105 @@
       "calibration_passed": null
     },
     {
+      "tag": "split-by-question-form",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "dataset-split-by-task-family",
+          "ceiling": 50,
+          "blocks": false,
+          "action_kind": "review-split",
+          "reason": "Every recurring kind of input in your dataset sits on one side of the tuning/held-out line, so the held-out score may answer a question about transfer rather than about your task. Tuned on 'count the', 'find all', 'find the', 'for each'; measured on 'how many'. This is a cheap check that reads the opening words and not their meaning, so it can be wrong - two wordings of one task look like two kinds here. Tell us they are one task and the run carries on, or redraw the split so each kind appears on both sides."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "disclaimed-agent",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-generated",
+          "ceiling": 65,
+          "blocks": false,
+          "action_kind": "connect-real-agent",
+          "reason": "This run wrote the agent, so the winning configuration belongs to a walkthrough stand-in rather than to the program you run. The comparison is real and it is not a measurement of your production behavior."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "disclaimed-scorer",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "evaluator-generated",
+          "ceiling": 74,
+          "blocks": false,
+          "action_kind": "connect-real-evaluator",
+          "reason": "This run wrote the evaluator, so the score reports agreement with an evaluation method nobody outside this run has checked against your task. Your rows and your answers are real; what grades them is a stand-in until your own scoring is connected or a person confirms this one marks the way you would."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
       "tag": "best-case--off-method-calibration",
       "refused": {
         "step": "calibrate_evaluator.py",
@@ -1315,6 +1414,84 @@
       "declared_task_kind": "code-sql",
       "calibration_ran": true,
       "calibration_passed": false
+    },
+    {
+      "tag": "disclaimed-agent--calibrated",
+      "overall": 65,
+      "band": "WORKABLE",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "agent-generated",
+          "ceiling": 65,
+          "blocks": false,
+          "action_kind": "connect-real-agent",
+          "reason": "This run wrote the agent, so the winning configuration belongs to a walkthrough stand-in rather than to the program you run. The comparison is real and it is not a measurement of your production behavior."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "disclaimed-scorer--calibrated",
+      "overall": 74,
+      "band": "WORKABLE",
+      "recommended_action": "proceed",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "evaluator-generated",
+          "ceiling": 74,
+          "blocks": false,
+          "action_kind": "connect-real-evaluator",
+          "reason": "This run wrote the evaluator, so the score reports agreement with an evaluation method nobody outside this run has checked against your task. Your rows and your answers are real; what grades them is a stand-in until your own scoring is connected or a person confirms this one marks the way you would."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "split-by-question-form--calibrated",
+      "overall": 50,
+      "band": "PARTIAL",
+      "recommended_action": "review-split",
+      "status": "OK",
+      "confidence": 0.86,
+      "pillars": {
+        "agent": 100,
+        "dataset": 98,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-split-by-task-family",
+          "ceiling": 50,
+          "blocks": false,
+          "action_kind": "review-split",
+          "reason": "Every recurring kind of input in your dataset sits on one side of the tuning/held-out line, so the held-out score may answer a question about transfer rather than about your task. Tuned on 'count the', 'find all', 'find the', 'for each'; measured on 'how many'. This is a cheap check that reads the opening words and not their meaning, so it can be wrong - two wordings of one task look like two kinds here. Tell us they are one task and the run carries on, or redraw the split so each kind appears on both sides."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
     },
     {
       "tag": "grid-exact--code-sql",

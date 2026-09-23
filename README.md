@@ -130,7 +130,7 @@ put in, and an agent that can read that is not being tested on anything.
 with the data because the licence says it has to: CC BY-SA 4.0 requires the attribution and a
 notice that the data was modified to accompany the data wherever it goes. `build.py` copies it
 in the same branch that writes `dataset.jsonl`, `catalog.json` and `databases/`, so the four
-arrive together or not at all -- 30 of the 32 presets get it, and the two that do not are
+arrive together or not at all -- 33 of the 35 presets get it, and the two that do not are
 `empty` and `no-data`, the two with no rows.
 
 It ships alone, and that is a change worth stating. Projects used to carry `NOTICE`, `LICENSE`
@@ -146,9 +146,9 @@ passes over it and why [docs/isolation.md](docs/isolation.md) can now say what i
 
 | Flag | Values |
 |---|---|
-| `--agent` | `ready` · `no-knobs` · `two-agents` (the tunable agent, and an unrelated second one in `sql_explainer/` with a `PROJECT.md` saying which to work on) · `missing` |
-| `--dataset` | `ready` (300) · `mini` (30) · `tiny` (10) · `unlabeled` (40) · `duplicated` (90, from a 60-row draw) · `wrong-answers` (60) · `leaky` (306: the 300, and six tuning rows again as held-out rows) · `holdout-labelled` (30, answers on the six held-out rows only) · `split-by-database` (300, five whole databases held out) · `raw-export` (300, under Spider's own `question`/`query` keys) · `torn` (30, two lines cut short) · `undeclared` (300, every row's provenance reads `spider-dev`) · `mostly-undeclared` (300, 180 of them do) · `mostly-synthetic` (300, 180 rows declare `synthetic` and 120 declare `real`) · `fully-synthetic` (300, every row declares `synthetic`) · `generated-answers` (300, every row declares its answer model-written) · `mostly-generated-answers` (300, 180 of them do) · `missing` |
-| `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `opaque` (calls a grading library the project does not carry) · `length-blind` (compares the two queries' lengths) · `slow` (compares text the ordinary way and asks a service per row, two minutes a call, so checking it outlasts the guide's fifteen-minute calibration budget) · `missing` |
+| `--agent` | `ready` · `no-knobs` · `two-agents` (the tunable agent, and an unrelated second one in `sql_explainer/` with a `PROJECT.md` saying which to work on) · `disclaimed` (the tunable agent, which the project's README calls a tutorial example and not the agent the product runs) · `missing` |
+| `--dataset` | `ready` (300) · `mini` (30) · `tiny` (10) · `unlabeled` (40) · `duplicated` (90, from a 60-row draw) · `wrong-answers` (60) · `leaky` (306: the 300, and six tuning rows again as held-out rows) · `holdout-labelled` (30, answers on the six held-out rows only) · `split-by-database` (300, five whole databases held out) · `split-by-question-form` (300, every question opening "How many" held out) · `raw-export` (300, under Spider's own `question`/`query` keys) · `torn` (30, two lines cut short) · `undeclared` (300, every row's provenance reads `spider-dev`) · `mostly-undeclared` (300, 180 of them do) · `mostly-synthetic` (300, 180 rows declare `synthetic` and 120 declare `real`) · `fully-synthetic` (300, every row declares `synthetic`) · `generated-answers` (300, every row declares its answer model-written) · `mostly-generated-answers` (300, 180 of them do) · `missing` |
+| `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `opaque` (calls a grading library the project does not carry) · `length-blind` (compares the two queries' lengths) · `slow` (compares text the ordinary way and asks a service per row, two minutes a call, so checking it outlasts the guide's fifteen-minute calibration budget) · `disclaimed` (`exact-match`, which the project's README calls a tutorial example and not how answers are graded) · `missing` |
 | `--provider` | `openrouter` (default) · `direct` |
 | `--calibration` | `none` · `present` (probe answers for the scorer) |
 | `--guide` | `clone` (default) · `local` (with `--guide-src`) |
@@ -190,6 +190,9 @@ Presets are shorthand for the combinations worth having a name:
 | `opaque-scorer` | a scorer that calls a grading library the project does not carry |
 | `length-blind` | a scorer that compares the lengths of the two queries, and probes that catch it |
 | `two-agents` | a second agent beside the first, and a note saying which one to work on |
+| `disclaimed-agent` | the agent is a tutorial example; the real one is somewhere else |
+| `disclaimed-scorer` | the scorer is a tutorial example; real grading is somewhere else |
+| `split-by-question-form` | every question of one opening form is held out |
 
 Individual flags override a preset, so `--preset ready --eval missing` is the ready project
 with the evaluator taken out.
@@ -223,10 +226,12 @@ python3 build.py demo --preset ready --venv ready --out ~/demos/worked-in
 ~/demos/worked-in/project/.venv/bin/python -c "import litellm; print('ready')"
 ```
 
-**It costs about 220 MB per project, and about 20 seconds.** Measured twice on this machine,
+**It costs about 220 MiB per project, and about 20 seconds.** Measured twice on this machine,
 on Python 3.13.14: `du -sm` reports 220 MiB and the files themselves are 193 MB, almost all of
-it `litellm` and what it pulls in. So a thirty-two-preset bank with environments is about
-**7.0 GB** (it was 6.8 GB at thirty-one and 3.7 GB at seventeen), not the 1.7 GB an earlier "hundred megabytes per
+it `litellm` and what it pulls in. So a thirty-five-preset bank with environments is about
+**7.5 GiB** at 220 MiB a project, computed rather than measured (it was 6.9 GiB at thirty-two,
+6.7 GiB at thirty-one and 3.7 GiB at
+seventeen), not the 1.7 GB an earlier "hundred megabytes per
 project" implied -- worth knowing before running `suite --venv ready` on a machine with a
 few gigabytes free. That is why it is
 off by default and why `suite` takes the same flag rather than assuming it.
@@ -252,8 +257,9 @@ not by being present.
 
 ## Data that is wrong on purpose
 
-**Seventeen** of the thirty-two presets sit in this table. Sixteen ship a project whose data or
-scorer is broken, or shaped in a way the tools do not expect; the remaining one, `split-by-database`,
+**Eighteen** of the thirty-five presets sit in this table. Seventeen ship a project whose data or
+scorer is broken, shaped in a way the tools do not expect, or split so the held-out side
+measures something else; the remaining one, `split-by-database`,
 is not wrong at all -- its data is split the way a customer splits it, and it is kept here as the
 control for the family check. Real projects arrive that way, and the run's job is
 not to notice and stop -- it is to notice, repair, and carry on to a result that means
@@ -266,6 +272,7 @@ something. These are the states that make it show its work.
 | `leaky-split` | 306 | the 300, and six tuning rows emitted a second time under `split: holdout` -- the same question and answer on both sides of the line, which is what a holdout drawn from the file already being tuned on looks like. Each copy carries its own id (`<id>-holdout`), on purpose: a copy that kept the id is the `duplicated-data` defect, and the guide reports that one first and holds the score under it, so the leak would never be measured on its own. |
 | `holdout-only` | 30 | the `mini` draw with the answer kept on the six held-out rows and removed from the 24 tuning rows -- a team that wrote out what it meant to grade on and never what it meant to tune on. |
 | `split-by-database` | 300 | the split re-drawn so that the held-out side is five whole databases (61 rows) and the tuning side the other thirteen. Not broken: a split a customer actually makes, kept here to see whether the guide's family check reads it. It does not -- see below. |
+| `split-by-question-form` | 300 | the split re-drawn so that every question opening "How many" -- 34 of them, one written in lower case -- is held out and every other question is tuned on: a team keeping its counting questions back to check a winner on. Nothing about a row changes but its side of the line, and a whole form of question sits on one side of it, which is the defect the family check exists for: the winner is tuned on one kind of question and measured on another. |
 | `raw-export` | 300 | the rows written under Spider's own names -- `question`, `query`, a top-level `db_id`, `metadata` as before -- which is what somebody who has the benchmark export as-is brings. `catalog.json` still keys on the question text. |
 | `torn-lines` | 30 | the `mini` draw with lines 10 and 20 cut off part-way -- what an export that stopped mid-write leaves. `demo.json` records which two, and `verify` checks that exactly those two fail to parse and every other line reads. |
 | `undeclared-source` | 300 | every row's `metadata.provenance` reads `spider-dev` instead of `real`: the name of the benchmark split the rows came from, which is what a person exporting them would write, and a word outside the guide's provenance vocabulary. |
@@ -398,7 +405,7 @@ something is broken it repairs it; then it scores again, and the run carries on.
 number is not a failure -- it is the size of the gap the run has to close before it can
 measure anything, and closing it is the job.
 
-So read the table as thirty-two starting points, and the question each one asks is the same:
+So read the table as thirty-five starting points, and the question each one asks is the same:
 **can the run get from here to a real result, and does it say honestly what it had to build
 along the way?** A project that opens at 25 and reaches a genuine optimization is a better
 demonstration than one that opens at 86, because the first one shows the work.
@@ -472,8 +479,8 @@ by hand.
 | `best-case` | 85 | WORKABLE | `confirm-evaluator-connection` | the same, and its card is byte-identical to `sql-exec-stop`'s |
 | `checked` | 93 | WORKABLE | `review-answer-key` | nothing -- read the answers it is graded on |
 
-The nine ported on 2026-09-18 and the six added after them for provenance and cost,
-measured by the same script at the same `d07b62cd` (each
+The nine ported on 2026-09-18 and the nine added after them -- six for provenance and cost,
+three for who wrote the components and how the split is drawn -- measured by the same script at the same `d07b62cd` (each
 row's card is under `docs/measurements/cards/<preset>/`; the caps column names what the card
 raises, `*` for one that blocks):
 
@@ -494,10 +501,13 @@ raises, `*` for one that blocks):
 | `slow-scorer` | 45 | PARTIAL | `bound-evaluator-cost` | `evaluator-timeout` 45\* | the scorer, and not because it is wrong. Calibration ran out of its budget, and the card asks for the cost to be bounded rather than for a repair |
 | `split-by-database` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 | nothing the card can see -- **`dataset-split-by-task-family` does not fire.** See below |
 | `two-agents` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 | nothing: the card is byte-identical to `ready`'s. The opening credits `agent.py`'s four settings and never mentions `sql_explainer/` or `PROJECT.md` |
+| `split-by-question-form` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `dataset-split-by-task-family` 50 | a split with each form of question on both sides. Every recurring form sits on one side -- "Tuned on 'count the', 'find all', 'find the', 'for each'; measured on 'how many'" -- and the card asks whether they are one task; calibrated it reads 50 `review-split` |
+| `disclaimed-agent` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `agent-generated` 65 | the real agent. The README calls `agent.py` a tutorial example, so a run following the guide declares it `generated` however cleanly it reads (the sweep declares it from the build record), and the winner belongs to a stand-in; calibrated it reads 65 |
+| `disclaimed-scorer` | 45 | PARTIAL | `complete-calibration` | `evaluator-unvalidated` 45 · `evaluator-generated` 74 | the real grading. The README calls `evaluator.py` a tutorial example, so the scorer is `generated` however cleanly it calibrates; calibrated it reads 74 |
 
 **Three of the five bands, and the top two are held rather than missing.** The spread is
 measured rather than arranged -- every preset and comparison the sweep names was built and
-scored, and these thirty-two presets are the ones that describe a project somebody could actually
+scored, and these thirty-five presets are the ones that describe a project somebody could actually
 arrive with. The
 agent pillar reads 100 on every project with an agent, so the numbers are what the dataset and
 evaluation pillars make them; `checked` reaches 93, inside EXCELLENT by the number. It reads
@@ -585,6 +595,14 @@ does not follow the task families` (15 of 24 on `ready`). The card is `ready`'s 
 `239 to tune on / 61 held back` in place of `240 / 60`. The check is doing what its own
 docstring says -- "read off the leading words alone and never from the meaning" -- and a
 split along schemas is a split the wording does not carry.
+
+**A split drawn along the questions' own forms is what it does see.** `split-by-question-form`
+holds out every question that opens "How many" and tunes on the rest: the rows are the slice's
+own, and only their side of the line moves. Every recurring form then sits on one side, and the
+card raises `dataset-split-by-task-family` (50) with the forms it read -- "Tuned on 'count the',
+'find all', 'find the', 'for each'; measured on 'how many'" -- and asks whether they are one
+task rather than stopping. One of the counting questions is written "how many" in lower case;
+a split that left it on the tuning side would put the form on both sides and read as fine.
 
 **A second agent in the project changes nothing at the opening.** `two-agents` ships the
 tunable agent at `agent.py` and an unrelated one in `sql_explainer/` -- its own `agent.py`,

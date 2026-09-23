@@ -31,7 +31,7 @@ python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
 
 It builds each project, scores it, deletes it, and writes a card for each. It reaches no
-network and never uses `--venv ready`. The whole sweep takes four to six minutes on a laptop.
+network and never uses `--venv ready`. The whole sweep takes four to seven minutes on a laptop.
 
 **Checking the committed cards is one flag.** `--compare` re-measures, publishes nothing, and
 compares the result with `cards/` byte for byte -- every card of every run that scored, and
@@ -142,14 +142,14 @@ Two things follow, and both are properties of this table rather than of the guid
 
 ## What the sweep covers
 
-Every one of `build.py`'s thirty-two presets is run once: thirty-one by name, and `slow-scorer`
+Every one of `build.py`'s thirty-five presets is run once: thirty-four by name, and `slow-scorer`
 through a variant, because it carries a non-default calibration budget. Then come the
-seventeen comparisons the documentation makes -- thirteen variants and the four `grid-*` runs --
-for forty-nine runs in all:
+twenty comparisons the documentation makes -- sixteen variants and the four `grid-*` runs --
+for fifty-five runs in all:
 
 | run | what it is for |
 |---|---|
-| the 31 presets | the score tables in the README |
+| the 34 presets | the score tables in the README |
 | `best-case--off-method-calibration` | the number once reached by calibrating an executing scorer; refused by the tool since `9eaabbb2`, its `6ec2b9c1` card retained |
 | `wrong-answers--calibrated` | `--preset wrong-answers --calibration present` |
 | `wrong-wiring--calibrated` | `--preset wrong-wiring --calibration present` |
@@ -164,6 +164,9 @@ for forty-nine runs in all:
 | `generated-answer-key--calibrated` | the answer-key ladder's top rung |
 | `mostly-generated-answer-key--calibrated` | the rung below it, which exists so the cap cannot turn on one row |
 | `slow-scorer` | `--preset slow-scorer` with `--timeout 5` on the calibration step. With no `--timeout` the guide budgets this calibration at 900 seconds, and each authored probe takes the scorer two minutes, so even the smallest case set the guide's `--cases` form accepts -- two cases, eight probes; the form its instructions use -- outlasts it: a guided run reaches the timeout only after the full fifteen minutes. Measured at the pin with the shipped four cases and with two: exit 1 at 900 seconds and `timed_out: true` both times, and the same card: 45, `bound-evaluator-cost`. The shorter budget spares every reproduction that wait, and the card records the one it was reached under |
+| `disclaimed-agent--calibrated` | the ceiling a disclaimed agent sets, once the evaluator ceiling is out of the way |
+| `disclaimed-scorer--calibrated` | the same for a disclaimed scorer, which calibrates cleanly and is still not the customer's |
+| `split-by-question-form--calibrated` | the ceiling a split along the questions' forms sets, likewise uncovered |
 | `grid-*` | the four declared-method x declared-task-kind combinations, all on the same unchanged text comparator |
 
 ## Results
@@ -213,6 +216,9 @@ ceiling reads `none` discloses something without bounding the number
 | `mostly-generated-answer-key` | 45 | PARTIAL | `complete-calibration` | 100 | 94 | 33 | `evaluator-unvalidated` 45 · `dataset-mostly-generated-answer-key` 74 |
 | `split-by-database` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
 | `two-agents` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 |
+| `split-by-question-form` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 · `dataset-split-by-task-family` 50 |
+| `disclaimed-agent` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-generated` 65 |
+| `disclaimed-scorer` | 45 | PARTIAL | `complete-calibration` | 100 | 98 | 33 | `evaluator-unvalidated` 45 · `evaluator-generated` 74 |
 | `best-case--off-method-calibration` | refused | -- | -- | -- | -- | -- | `calibrate_evaluator.py` exit 2: the guide refuses to import a scorer that reaches a SQL engine; the committed directory is the `6ec2b9c1` card |
 | `wrong-answers--calibrated` | 90 | WORKABLE | `review-answer-key` | 100 | 91 | 83 | none |
 | `wrong-wiring--calibrated` | 25 | NOT READY | `repair-evaluator` | 100 | 98 | 28 | `evaluator-invalid` 25\* |
@@ -227,6 +233,9 @@ ceiling reads `none` discloses something without bounding the number
 | `generated-answer-key--calibrated` | 74 | WORKABLE | `review-answer-key` | 100 | 93 | 83 | `dataset-generated-answer-key` 74 |
 | `mostly-generated-answer-key--calibrated` | 74 | WORKABLE | `review-answer-key` | 100 | 94 | 83 | `dataset-mostly-generated-answer-key` 74 |
 | `slow-scorer` | 45 | PARTIAL | `bound-evaluator-cost` | 100 | 98 | 33 | `evaluator-timeout` 45\* |
+| `disclaimed-agent--calibrated` | 65 | WORKABLE | `proceed` | 100 | 98 | 83 | `agent-generated` 65 |
+| `disclaimed-scorer--calibrated` | 74 | WORKABLE | `proceed` | 100 | 98 | 83 | `evaluator-generated` 74 |
+| `split-by-question-form--calibrated` | 50 | PARTIAL | `review-split` | 100 | 98 | 83 | `dataset-split-by-task-family` 50 |
 | `grid-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `grid-normalized-exact--structured` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `grid-normalized-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
@@ -263,11 +272,36 @@ question the opening card does not ask; both are worth writing down.
   (`non_constant` true, `bad_fails` false on every case), and without them the same 40
   `unresolved` as `opaque`.
 
+## What the origin and question-form presets measured
+
+Three conditions the guide can raise were reached by no preset: two about who wrote a
+component, one about where the split falls. Each opened on the condition it was built for,
+and the two kinds show different things, as below.
+
+- **A component the customer disclaims is `generated`.** `disclaimed-agent` and
+  `disclaimed-scorer` ship the tunable agent and the text comparator unchanged; what differs is
+  the project's README, which calls the file a tutorial example and says the real one is
+  elsewhere. The guide has a run declare such a file `generated` "however cleanly it reads or
+  calibrates", and the sweep declares what the build record says (`--agent-origin generated`,
+  `--evaluator-origin generated` in each card's `argv.json`). The cards raise `agent-generated`
+  (65) and `evaluator-generated` (74), both ceilings that do not block; calibrated, those are
+  the numbers they read, with the action `proceed`. Their preflight is byte-identical to
+  `ready`'s, so these cards show how the guide scores a declared origin, not that a run notices
+  the disclaimer: that is what a worker run on the project would show. The guide's wording for
+  both caps says the run "wrote" the component, which a disclaimed file it did not write only
+  approximates.
+- **A split along the questions' opening forms is read.** `split-by-question-form` holds out
+  every question opening "How many" -- 34 rows, one of them in lower case -- and preflight's
+  `dataset-split-family` finds every one of the 24 recurring forms on one side only, so the card
+  raises `dataset-split-by-task-family` (50, asks, does not block) and names the forms. It is
+  the reading `split-by-database` does not get: holding out whole databases leaves the forms on
+  both sides. Here the finding is the guide's own: preflight reads the split from the rows.
+
 ## The cards that are identical to another card
 
 Worth stating because each one is a finding rather than a coincidence: where different starting
 states produce the same card, the guide's opening read did not distinguish them. Fifteen of the
-forty-nine cards fall into the six groups below. Each is checkable directly -- the first line
+fifty-five cards fall into the six groups below. Each is checkable directly -- the first line
 of `04-readiness-card.txt` is the invocation that produced it, which names its own paths, so
 compare from the second line down:
 

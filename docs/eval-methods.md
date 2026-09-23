@@ -6,7 +6,10 @@ text too, more narrowly, and asks a service to do it one row at a time, two minu
 it is right and too slow to check inside the guide's fifteen-minute calibration budget -- a
 guided run on it waits that whole budget before the card can be read. The other four -- `broken`, `swapped`, `opaque` and
 `length-blind` -- are what a project arrives with when its scorer is not one, and `missing` is a
-project with no scorer at all; each is described at the end.
+project with no scorer at all; each is described at the end. `disclaimed` is `exact-match` byte
+for byte, in a project whose README calls it a tutorial example and not how answers are graded:
+the guide then counts it as a scorer this run relies on in the customer's place -- `generated`,
+"however cleanly it reads or calibrates" -- and caps the score at 74 (`evaluator-generated`).
 
 ## `exact-match` -- compare the text
 

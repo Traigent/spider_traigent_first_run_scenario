@@ -474,6 +474,10 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         out = Path(cls.workspace) / "pair"
         build_or_raise("demo", "--agent", "two-agents", "--out", str(out))
         cls.built["two-agents"] = out
+        for index, preset in enumerate(("disclaimed-agent", "disclaimed-scorer")):
+            out = Path(cls.workspace) / f"o{index}"
+            build_or_raise("demo", "--preset", preset, "--out", str(out))
+            cls.built[preset] = out
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -596,6 +600,7 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
             ("copy_id_suffix", "-holdout"),
             ("rotated_within", "db_id"),
             ("top_level", []),
+            ("held_out_opening", "How many"),
         ):
             with self.subTest(field=field):
                 out = self.copy("duplicated")
@@ -642,6 +647,68 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
 
         self.edit_record(out, untear)
         self.assert_reported(out, "damage_detail.cut_at says where lines were cut")
+
+    def test_a_held_out_opening_no_question_has_is_caught(self) -> None:
+        """Every row tuned on, and the record naming an opening nothing opens with: the
+        rows then agree with it vacuously, so the opening has to be found at all."""
+        out = self.copy("split-by-question-form")
+        lines = []
+        for line in self.lines(out):
+            row = json.loads(line)
+            row["metadata"]["split"] = "tuning"
+            lines.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
+        self.rewrite(out, lines)
+
+        def misname(manifest: dict) -> None:  # type: ignore[type-arg]
+            detail = manifest["components"]["dataset"]["damage_detail"]
+            detail["held_out_opening"] = "Zebra crossing"
+            detail["held_out_rows"] = 0
+
+        self.edit_record(out, misname)
+        self.assert_reported(out, "and no question opens that way")
+
+    def test_a_question_form_split_that_holds_out_nothing_is_caught(self) -> None:
+        """A clean `ready` build relabelled as the question-form split: every row tuned
+        on, the opening still one the questions have. The opening check reads the rows
+        as misplaced, and the extent says in its own words what is missing."""
+        out = self.copy("split-by-question-form")
+        lines = []
+        for line in self.lines(out):
+            row = json.loads(line)
+            row["metadata"]["split"] = "tuning"
+            lines.append(json.dumps(row, ensure_ascii=False, sort_keys=True))
+        self.rewrite(out, lines)
+
+        def empty(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["held_out_rows"] = 0
+
+        self.edit_record(out, empty)
+        self.assert_reported(out, "damage_detail.held_out_rows is 0 of 300")
+
+    def test_held_out_rows_has_to_be_a_count(self) -> None:
+        out = self.copy("split-by-question-form")
+
+        def refloat(manifest: dict) -> None:  # type: ignore[type-arg]
+            detail = manifest["components"]["dataset"]["damage_detail"]
+            detail["held_out_rows"] = float(detail["held_out_rows"])
+
+        self.edit_record(out, refloat)
+        self.assert_reported(out, "damage_detail.held_out_rows is 34.0, not a count")
+
+    def test_an_unreadable_origin_does_not_lose_the_other_problems(self) -> None:
+        out = self.copy("split-by-question-form")
+        (out / build.PROJECT_SUBDIR / "notes.txt").write_text("added\n")
+
+        def listify(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["agent"]["state"] = ["ready"]
+
+        self.edit_record(out, listify)
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any("the component origins cannot be checked" in p for p in problems),
+            problems,
+        )
+        self.assertTrue(any("notes.txt" in p for p in problems), problems)
 
     def test_a_rotation_that_moved_nothing_is_caught(self) -> None:
         out = self.copy("wrong-answers")
@@ -1021,6 +1088,57 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
             out, "the second agent is recorded with 20 rows and has 19"
         )
 
+    def test_an_origin_recorded_against_its_state_is_caught(self) -> None:
+        out = self.copy("disclaimed-agent")
+
+        def claim_it(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["agent"]["origin"] = "brought"
+
+        self.edit_record(out, claim_it)
+        self.assert_reported(
+            out,
+            "agent.py is recorded as 'brought' and its state 'disclaimed' is 'generated'",
+        )
+
+    def test_a_generated_component_the_readme_no_longer_disclaims_is_caught(
+        self,
+    ) -> None:
+        out = self.copy("disclaimed-scorer")
+        readme = out / build.PROJECT_SUBDIR / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8").replace(
+                build.DISCLAIMERS["evaluator.py"], "marks an answer."
+            ),
+            encoding="utf-8",
+        )
+        repair_record(out, "README.md")
+        self.assert_reported(
+            out, "evaluator.py is recorded as 'generated' and the README does not"
+        )
+
+    def test_a_brought_component_the_readme_disclaims_is_caught(self) -> None:
+        out = self.copy("leaky")
+        readme = out / build.PROJECT_SUBDIR / "README.md"
+        readme.write_text(
+            readme.read_text(encoding="utf-8") + "\n" + build.DISCLAIMERS["agent.py"],
+            encoding="utf-8",
+        )
+        repair_record(out, "README.md")
+        self.assert_reported(out, "agent.py is recorded as 'brought' and the README")
+
+    def test_a_counting_question_left_on_the_tuning_side_is_caught(self) -> None:
+        out = self.copy("split-by-question-form")
+        lines = self.lines(out)
+        for index, line in enumerate(lines):
+            row = json.loads(line)
+            if row["metadata"]["split"] == "holdout":
+                row["metadata"]["split"] = "tuning"
+                lines[index] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+                break
+        self.rewrite(out, lines)
+        self.assert_reported(out, "damage_detail.held_out_opening says 'How many'")
+        self.assert_reported(out, "damage_detail.held_out_rows says 34")
+
     def test_the_guides_own_environment_is_not_compiled(self) -> None:
         """It is reported as present; its contents are not the project's code."""
         out = self.copy("leaky")
@@ -1053,6 +1171,12 @@ class VerifyReportsAMalformedRecord(unittest.TestCase):
         ),
         ("torn_lines is a number", "torn_lines", "`torn_lines` is not a list"),
         ("dataset is a string", "dataset", "`components.dataset` is not an object"),
+        (
+            "evaluator is a string",
+            "evaluator",
+            "`components.evaluator` is not an object",
+        ),
+        ("origin is a list", "origin", "the build record's agent `origin` is not a"),
     )
 
     def broken(self, holder: Path, trigger: str) -> Path:
@@ -1065,6 +1189,10 @@ class VerifyReportsAMalformedRecord(unittest.TestCase):
             dataset["damage_detail"] = ["torn_lines"]
         elif trigger == "torn_lines":
             dataset["damage_detail"]["torn_lines"] = 10
+        elif trigger == "evaluator":
+            manifest["components"]["evaluator"] = "exact-match"
+        elif trigger == "origin":
+            manifest["components"]["agent"]["origin"] = ["generated"]
         else:
             manifest["components"]["dataset"] = "torn"
         record.write_text(json.dumps(manifest), encoding="utf-8")
@@ -1091,9 +1219,10 @@ class VerifyReportsAMalformedRecord(unittest.TestCase):
         self.assertNotIn("Traceback", result.stderr)
         report = json.loads(result.stdout)
         verdicts = {entry["demo"]: entry["problems"] for entry in report["checked"]}
-        self.assertEqual(["p0", "p1", "p2", "p9"], sorted(verdicts))
+        bad = [f"p{index}" for index in range(len(self.TRIGGERS))]
+        self.assertEqual(sorted([*bad, "p9"]), sorted(verdicts))
         self.assertEqual([], verdicts["p9"], "the good demo after the bad ones")
-        for name in ("p0", "p1", "p2"):
+        for name in bad:
             self.assertTrue(verdicts[name], name)
 
 

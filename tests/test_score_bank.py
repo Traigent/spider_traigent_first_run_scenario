@@ -403,6 +403,110 @@ class EveryCardRecordsTheBuildThatRan(unittest.TestCase):
         self.assertGreater(checked, 0)
 
 
+class EveryRunDeclaresTheOriginItsStateStandsFor(unittest.TestCase):
+    """The origin a card was scored under is read from the build record, never assumed.
+
+    The sweep declared `brought` for every agent and every evaluator it measured, which
+    is the right answer for every state but the ones a customer disclaims -- and a
+    disclaimed component scored as `brought` is a card missing the one cap it exists for.
+    """
+
+    def test_every_committed_card_declared_the_builders_origin(self) -> None:
+        builder = build_module()
+        harness = load_harness()
+        runs: dict[str, tuple[tuple[str, ...], dict[str, object]]] = {
+            preset: (("--preset", preset), {}) for preset in harness.PRESETS
+        }
+        runs.update(
+            {tag: (arguments, options) for tag, arguments, options in harness.VARIANTS}
+        )
+        runs.update({tag: (("--preset", "checked"), {}) for tag, _, _ in harness.GRID})
+        # The refused run's card is the older reading the sweep leaves in place; it
+        # predates the origin flags and no measurement at the pin replaces it.
+        runs.pop("best-case--off-method-calibration")
+        cards = REPO_ROOT / "docs" / "measurements" / "cards"
+        checked = 0
+        for tag, (arguments, options) in sorted(runs.items()):
+            readiness = json.loads(
+                (cards / tag / "argv.json").read_text(encoding="utf-8")
+            )["readiness"]
+            preset = builder.PRESETS[arguments[arguments.index("--preset") + 1]]
+
+            def chosen(flag: str, default: str) -> str:
+                return (
+                    arguments[arguments.index(flag) + 1]
+                    if flag in arguments
+                    else default
+                )
+
+            agent = chosen("--agent", preset["agent"])
+            evaluator = chosen("--eval", preset["eval"])
+            expected = {
+                # The agent's origin is declared only when the run passes an agent read.
+                "--agent-origin": (
+                    builder.AGENT_ORIGINS[agent]
+                    if options.get("agent_knobs", True)
+                    else None
+                ),
+                "--evaluator-origin": builder.EVALUATOR_FACTS.get(evaluator, {}).get(
+                    "origin"
+                ),
+            }
+            for flag, origin in expected.items():
+                with self.subTest(run=tag, flag=flag):
+                    declared = (
+                        readiness[readiness.index(flag) + 1]
+                        if flag in readiness
+                        else None
+                    )
+                    self.assertEqual(origin, declared)
+                    checked += 1
+        self.assertEqual(2 * len(runs), checked)
+
+    def test_a_record_with_no_origin_is_a_fault_of_ours(self) -> None:
+        harness = load_harness()
+        with self.assertRaises(harness.HarnessFault) as caught:
+            harness.declared_origin({"path": "agent.py"}, "ready")
+        self.assertIn("declares no valid origin", str(caught.exception))
+
+    def test_the_readiness_call_declares_the_origin_the_record_does(self) -> None:
+        """The harness, not a committed card: the call is built from the record.
+
+        The card test reads `argv.json` files already on disk, so a harness that went
+        back to declaring `brought` for everything would pass it until the next sweep.
+        This builds the call itself, for both origins and both components.
+        """
+        harness = load_harness()
+        room = Path("/room")
+        for origin in ("brought", "generated"):
+            with self.subTest(origin=origin):
+                call = harness.readiness_command(
+                    scripts=Path("/guide"),
+                    room=room,
+                    project=Path("/project"),
+                    agent={"state": "ready", "path": "agent.py", "origin": origin},
+                    evaluator={"path": "evaluator.py", "origin": origin},
+                    calibrated=True,
+                    declared="normalized-exact",
+                    task_kind="code-sql",
+                    tag="probe",
+                )
+                for flag in ("--agent-origin", "--evaluator-origin"):
+                    self.assertEqual(origin, call[call.index(flag) + 1])
+        with self.assertRaises(harness.HarnessFault):
+            harness.readiness_command(
+                scripts=Path("/guide"),
+                room=room,
+                project=Path("/project"),
+                agent=None,
+                evaluator={"path": "evaluator.py", "origin": "Generated"},
+                calibrated=False,
+                declared=None,
+                task_kind="code-sql",
+                tag="probe",
+            )
+
+
 class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):
     """`slow-scorer` is measured under a stated `--timeout`, and that is a claim.
 
