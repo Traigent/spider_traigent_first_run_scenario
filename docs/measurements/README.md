@@ -161,7 +161,7 @@ for forty-nine runs in all:
 | `synthetic-source--calibrated` | the rung below it: every row declared written, which costs 65 where declaring most of them costs 70 |
 | `generated-answer-key--calibrated` | the answer-key ladder's top rung |
 | `mostly-generated-answer-key--calibrated` | the rung below it, which exists so the cap cannot turn on one row |
-| `slow-scorer` | `--preset slow-scorer` with `--timeout 5` on the calibration step. With no `--timeout` the guide budgets this calibration at 900 seconds and the scorer's sixteen authored probes take a minute each, so a guided run reaches the timeout only after the full fifteen minutes -- measured once at the pin: exit 1 at 900 seconds, `timed_out: true`, and the same card: 45, `bound-evaluator-cost`. The shorter budget spares every reproduction that wait, and the card records the one it was reached under |
+| `slow-scorer` | `--preset slow-scorer` with `--timeout 5` on the calibration step. With no `--timeout` the guide budgets this calibration at 900 seconds, and each authored probe takes the scorer two minutes, so even the smallest case set the guide accepts -- two cases, eight probes -- outlasts it: a guided run reaches the timeout only after the full fifteen minutes. Measured at the pin with the shipped four cases and with two: exit 1 at 900 seconds and `timed_out: true` both times, and the same card: 45, `bound-evaluator-cost`. The shorter budget spares every reproduction that wait, and the card records the one it was reached under |
 | `grid-*` | the four declared-method x declared-task-kind combinations, all on the same unchanged text comparator |
 
 ## Results

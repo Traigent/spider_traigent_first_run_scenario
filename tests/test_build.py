@@ -117,6 +117,9 @@ GUIDE_CALIBRATION_BUDGET = {
     "DETERMINISTIC_SECONDS_PER_PROBE": 75,
     # Line 103: the ceiling the whole default budget is clamped to.
     "CALIBRATION_TIMEOUT_CEILING_SECONDS": 900,
+    # Line 2268: the fewest cases `--cases` accepts. An assistant adapting the
+    # shipped matrix can trim it this far, so the state has to hold there too.
+    "MINIMUM_CASES": 2,
 }
 
 # Which starting state each preset is, written out here and imported from nowhere.
@@ -2479,24 +2482,33 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
             )
         )
         budget = GUIDE_CALIBRATION_BUDGET
-        default_budget = min(
-            budget["CALIBRATION_TIMEOUT_CEILING_SECONDS"],
-            len(cases)
-            * (
-                budget["PROBES_PER_CASE"]
-                + budget["DETERMINISTIC_SUPPLEMENTAL_PROBES_PER_CASE"]
+        self.assertEqual(
+            budget["PROBES_PER_CASE"] * len(cases),
+            sum(len(case["probes"]) for case in cases),
+        )
+        # The shipped matrix, every smaller one the guide accepts, and larger
+        # ones: the assistant may adapt the case set, and the state has to be
+        # "too slow for the budget" whichever set it settles on.
+        for case_count in range(budget["MINIMUM_CASES"], 3 * len(cases) + 1):
+            default_budget = min(
+                budget["CALIBRATION_TIMEOUT_CEILING_SECONDS"],
+                case_count
+                * (
+                    budget["PROBES_PER_CASE"]
+                    + budget["DETERMINISTIC_SUPPLEMENTAL_PROBES_PER_CASE"]
+                )
+                * budget["DETERMINISTIC_SECONDS_PER_PROBE"],
             )
-            * budget["DETERMINISTIC_SECONDS_PER_PROBE"],
-        )
-        authored_calls = sum(len(case["probes"]) for case in cases)
-        self.assertEqual(budget["PROBES_PER_CASE"] * len(cases), authored_calls)
-        self.assertGreater(
-            authored_calls * scorer.SECONDS_PER_CALL,
-            default_budget,
-            f"the authored probes take {authored_calls} x {scorer.SECONDS_PER_CALL}s "
-            f"and the guide's default budget is {default_budget}s, so a guided run "
-            "finishes calibrating this scorer and never reaches the timeout",
-        )
+            authored_calls = case_count * budget["PROBES_PER_CASE"]
+            with self.subTest(case_count=case_count):
+                self.assertGreater(
+                    authored_calls * scorer.SECONDS_PER_CALL,
+                    default_budget,
+                    f"{case_count} cases make {authored_calls} authored calls of "
+                    f"{scorer.SECONDS_PER_CALL}s against a default budget of "
+                    f"{default_budget}s, so a guided run finishes calibrating "
+                    "this scorer and never reaches the timeout",
+                )
         # And the sweep's shorter budget, which is what the committed card was
         # taken under, is reached as well -- by the first call.
         self.assertGreater(

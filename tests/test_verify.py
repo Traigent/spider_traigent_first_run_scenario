@@ -591,6 +591,60 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         self.edit_record(out, extend)
         self.assert_reported(out, "are torn and the file has 30 lines")
 
+    def test_what_the_slice_says_is_checked_against_the_slice(self) -> None:
+        out = self.copy("undeclared")
+
+        def restate(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"][
+                "slice_says"
+            ] = "synthetic"
+
+        self.edit_record(out, restate)
+        self.assert_reported(out, "damage_detail.slice_says is 'synthetic'")
+
+    def test_a_record_with_no_count_of_labelled_rows_is_caught(self) -> None:
+        out = self.copy("holdout-labelled")
+
+        def forget(manifest: dict) -> None:  # type: ignore[type-arg]
+            del manifest["components"]["dataset"]["labelled_rows"]
+
+        self.edit_record(out, forget)
+        self.assert_reported(out, "states no count of rows that carry their answer")
+
+    def test_a_top_level_field_no_row_carries_is_caught(self) -> None:
+        out = self.copy("raw-export")
+
+        def invent(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["top_level"].append(
+                "nonexistent"
+            )
+
+        self.edit_record(out, invent)
+        self.assert_reported(out, "nonexistent is not at the top level of every row")
+
+    def test_an_unreadable_row_is_reported_and_the_other_checks_still_run(
+        self,
+    ) -> None:
+        out = self.copy("wrong-answers")
+        lines = self.lines(out)
+        row = json.loads(lines[0])
+        del row["metadata"]["id"]
+        lines[0] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+        self.rewrite(out, lines)
+        (out / build.PROJECT_SUBDIR / "notes.txt").write_text("added\n")
+        problems = build.verify_demo(out)
+        self.assertTrue(
+            any("the dataset record cannot be checked" in p for p in problems),
+            problems,
+        )
+        self.assertTrue(any("notes.txt" in p for p in problems), problems)
+
+    def test_an_unreadable_second_agent_is_reported_rather_than_raised(self) -> None:
+        out = self.copy("two-agents")
+        relative = "sql_explainer/dataset.jsonl"
+        self.rewrite(out, [*self.lines(out, relative), "not json"], relative)
+        self.assert_reported(out, "the second agent cannot be checked")
+
     def test_a_torn_line_cut_somewhere_else_is_caught(self) -> None:
         out = self.copy("torn")
         torn = json.loads((out / "demo.json").read_text())["components"]["dataset"][

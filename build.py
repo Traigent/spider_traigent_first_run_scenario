@@ -25,6 +25,7 @@ import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
@@ -318,6 +319,11 @@ GENERATED_ANSWER_PROVENANCE = "model-generated"
 # `output_provenance` at the row's top level or inside `metadata`; this repository writes
 # everything but `input` and `output` in `metadata`, so it uses that one.
 GENERATED_ANSWER_KEY = "output_provenance"
+# What `damage_detail.slice_says` records for the answer key: the slice declares no
+# answer provenance at all, so the rows that do not declare one carry no such key.
+SLICE_DECLARES_NO_ANSWER_PROVENANCE = (
+    "nothing -- the slice declares no answer provenance"
+)
 # The two halves of a row's metadata. `STRUCTURAL_ROW_FIELDS` say where the row sits and
 # what it is about; `DECLARATION_ROW_FIELDS` are the customer speaking about their own
 # rows, which is what the guide's provenance and answer-key checks read.
@@ -2216,7 +2222,7 @@ def damage_detail(plan: Plan, torn: Sequence[int]) -> dict[str, Any] | None:
     if plan.dataset in ("generated-answers", "mostly-generated-answers"):
         return {
             "output_provenance": GENERATED_ANSWER_PROVENANCE,
-            "slice_says": "nothing -- the slice declares no answer provenance",
+            "slice_says": SLICE_DECLARES_NO_ANSWER_PROVENANCE,
             "declared_rows": sum(
                 1
                 for row in plan.rows
@@ -2624,13 +2630,33 @@ def verify_demo(root: Path) -> list[str]:
                     problems.append(
                         f"the rows name database {db_id}, which is not here"
                     )
-            problems += dataset_record_problems(recorded_dataset, lines, rows, torn)
-            problems += second_agent_problems(
-                project, manifest["components"]["agent"], rows, keys
+            # Each check reports what it cannot read rather than stopping the others:
+            # a traceback here would discard every problem already found.
+            problems += contained(
+                "the dataset record",
+                partial(dataset_record_problems, recorded_dataset, lines, rows, torn),
+            )
+            problems += contained(
+                "the second agent",
+                partial(
+                    second_agent_problems,
+                    project,
+                    manifest["components"]["agent"],
+                    rows,
+                    keys,
+                ),
             )
     elif manifest["components"]["agent"].get("second_agent"):
         problems.append("the record has a second agent and the project has no rows")
     return problems
+
+
+def contained(name: str, check: Callable[[], list[str]]) -> list[str]:
+    """A check's problems, or one naming what it could not read -- never a traceback."""
+    try:
+        return check()
+    except (ValueError, KeyError, TypeError, OSError) as error:
+        return [f"{name} cannot be checked: {error!r}"]
 
 
 def dataset_record_problems(
@@ -2654,8 +2680,14 @@ def dataset_record_problems(
             f"the record says {record.get('rows')} rows and the file has {len(lines)}"
         )
     labelled = sum(1 for row in rows if keys["output"] in row)
+    recorded_labelled = record.get("labelled_rows")
+    if not isinstance(recorded_labelled, int) or isinstance(recorded_labelled, bool):
+        problems.append("the record states no count of rows that carry their answer")
+        recorded_labelled = -1
     # A torn line's answer cannot be read, so it can be neither counted nor ruled out.
-    if not labelled <= (record.get("labelled_rows") or 0) <= labelled + len(torn):
+    if recorded_labelled >= 0 and not (
+        labelled <= recorded_labelled <= labelled + len(torn)
+    ):
         problems.append(
             f"the record says {record.get('labelled_rows')} rows carry their answer "
             f"and {labelled} readable rows do"
@@ -2776,7 +2808,10 @@ def dataset_record_problems(
     if "top_level" in detail:
         unchecked.discard("top_level")
         for name in detail["top_level"]:
-            if any(row.get(name) != row["metadata"].get(name) for row in rows):
+            if any(
+                name not in row or row[name] != row["metadata"].get(name)
+                for row in rows
+            ):
                 problems.append(f"{name} is not at the top level of every row")
     if "torn_lines" in detail:
         unchecked.discard("torn_lines")
@@ -2799,12 +2834,19 @@ def dataset_record_problems(
             unchecked.discard("slice_says")
             # What the rows that do not declare still say: the slice's own value, or,
             # for the answer key, nothing at all.
+            said = detail["slice_says"]
+            expected = None if said == SLICE_DECLARES_NO_ANSWER_PROVENANCE else said
+            slice_values = {row["metadata"].get(key) for row in read_dataset()}
+            if slice_values != {expected}:
+                problems.append(
+                    f"damage_detail.slice_says is {said!r} and the slice says "
+                    f"{sorted(map(str, slice_values))}"
+                )
             declared_here = {id(row) for row in declaring}
             others = {
                 row["metadata"].get(key) for row in rows if id(row) not in declared_here
             }
-            expected: set[str | None] = {"real"} if key == "provenance" else {None}
-            if others - expected:
+            if others - {expected}:
                 problems.append(
                     f"rows outside damage_detail.{field} say {sorted(map(str, others))}"
                 )

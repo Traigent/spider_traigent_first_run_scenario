@@ -684,9 +684,10 @@ def score_one(
                 ]
                 + (
                     # With no `--timeout` the guide budgets this calibration at 900
-                    # seconds, and `slow-scorer` reaches the timeout there: its sixteen
-                    # authored probes take a minute each. That was measured once, at
-                    # the pin, and it took the whole fifteen minutes; making every
+                    # seconds, and `slow-scorer` reaches the timeout there: each authored
+                    # probe takes two minutes, so even the guide's two-case minimum runs
+                    # out. That was measured at the pin, with four cases and with two,
+                    # and each run took the whole fifteen minutes; making every
                     # reproduction of this sweep wait that long to watch a clock run
                     # out would be a poor trade for a cap that is about cost. So the
                     # budget is stated instead of endured: 5 seconds, which the first

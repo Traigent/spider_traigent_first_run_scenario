@@ -148,7 +148,7 @@ passes over it and why [docs/isolation.md](docs/isolation.md) can now say what i
 |---|---|
 | `--agent` | `ready` · `no-knobs` · `two-agents` (the tunable agent, and an unrelated second one in `sql_explainer/` with a `PROJECT.md` saying which to work on) · `missing` |
 | `--dataset` | `ready` (300) · `mini` (30) · `tiny` (10) · `unlabeled` (40) · `duplicated` (90, from a 60-row draw) · `wrong-answers` (60) · `leaky` (306: the 300, and six tuning rows again as held-out rows) · `holdout-labelled` (30, answers on the six held-out rows only) · `split-by-database` (300, five whole databases held out) · `raw-export` (300, under Spider's own `question`/`query` keys) · `torn` (30, two lines cut short) · `undeclared` (300, every row's provenance reads `spider-dev`) · `mostly-undeclared` (300, 180 of them do) · `mostly-synthetic` (300, 180 rows declare `synthetic` and 120 declare `real`) · `fully-synthetic` (300, every row declares `synthetic`) · `generated-answers` (300, every row declares its answer model-written) · `mostly-generated-answers` (300, 180 of them do) · `missing` |
-| `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `opaque` (calls a grading library the project does not carry) · `length-blind` (compares the two queries' lengths) · `slow` (compares text the ordinary way and asks a service per row, so checking it outlasts the budget) · `missing` |
+| `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `opaque` (calls a grading library the project does not carry) · `length-blind` (compares the two queries' lengths) · `slow` (compares text the ordinary way and asks a service per row, two minutes a call, so checking it outlasts the guide's fifteen-minute calibration budget) · `missing` |
 | `--provider` | `openrouter` (default) · `direct` |
 | `--calibration` | `none` · `present` (probe answers for the scorer) |
 | `--guide` | `clone` (default) · `local` (with `--guide-src`) |
@@ -186,7 +186,7 @@ Presets are shorthand for the combinations worth having a name:
 | `synthetic-source` | every row does, which is the rung below it |
 | `generated-answer-key` | every answer is declared model-written; the questions are real |
 | `mostly-generated-answer-key` | most answers are, and the rest were written by a person |
-| `slow-scorer` | the scorer is right and asks a service per row, so checking it runs long |
+| `slow-scorer` | the scorer is right and asks a service per row; a guided run waits the full fifteen-minute calibration budget before it can read the card |
 | `opaque-scorer` | a scorer that calls a grading library the project does not carry |
 | `length-blind` | a scorer that compares the lengths of the two queries, and probes that catch it |
 | `two-agents` | a second agent beside the first, and a note saying which one to work on |
