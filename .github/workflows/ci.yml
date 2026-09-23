@@ -120,10 +120,22 @@ jobs:
         with:
           path: repo
 
+      # No pipe: a pipe's status is its last command's, so `score_bank.py` failing into
+      # `tee` would pass this step with nothing recorded. Every value is required, so an
+      # empty one stops here rather than as a confusing install of "traigent==".
       - name: Read the environment the committed cards were measured in
         id: recorded
         working-directory: repo
-        run: python3 docs/measurements/score_bank.py --recorded-environment | tee -a "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 docs/measurements/score_bank.py --recorded-environment > "$RUNNER_TEMP/recorded.env"
+          cat "$RUNNER_TEMP/recorded.env"
+          for name in guide python traigent litellm; do
+            grep -Eq "^${name}=[^[:space:]]+$" "$RUNNER_TEMP/recorded.env" \
+              || { echo "::error::the recorded environment has no ${name}"; exit 1; }
+          done
+          cat "$RUNNER_TEMP/recorded.env" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-python@v5
         with:
