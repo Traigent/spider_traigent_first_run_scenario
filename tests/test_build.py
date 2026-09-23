@@ -24,6 +24,7 @@ import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
@@ -265,6 +266,24 @@ def run_build(
         check=False,
         env=env,
     )
+
+
+def load_scorer(name: str) -> Any:
+    """One of the shipped evaluators, by file name, with any round trip made free.
+
+    `slow.py` sleeps per call to model a review service; its comparison is what is under
+    test, so the sleep is set to zero here rather than waited out.
+    """
+    located = importlib.util.spec_from_file_location(
+        f"_scorer_{name}", REPO_ROOT / "components" / "evaluator" / f"{name}.py"
+    )
+    assert located is not None and located.loader is not None
+    scorer = importlib.util.module_from_spec(located)
+    sys.modules[located.name] = scorer
+    located.loader.exec_module(scorer)
+    if hasattr(scorer, "SECONDS_PER_CALL"):
+        scorer.SECONDS_PER_CALL = 0.0
+    return scorer
 
 
 def ascii_locale_env() -> dict[str, str]:
@@ -2490,6 +2509,90 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                 "select  NAME from SINGER where COUNTRY != 'France' ;", recorded
             ),
             "keyword case, spacing and a trailing semicolon still do not matter",
+        )
+
+    def test_the_slow_scorer_keeps_the_spacing_inside_a_quoted_value(self) -> None:
+        """The same rule for whitespace: 'New  York' and 'New York' are two values.
+
+        The case fix above folded only outside quotes and then collapsed whitespace
+        across the whole query, inside quotes included -- the same defect one
+        character class over, and a filter that matches no row scored 1.0.
+        """
+
+        scorer = load_scorer("slow")
+        recorded = "SELECT name FROM city WHERE name = 'New York'"
+        self.assertEqual(
+            0.0,
+            scorer.score("SELECT name FROM city WHERE name = 'New  York'", recorded),
+            "a filter on a different value is not the same answer",
+        )
+        self.assertEqual(
+            1.0,
+            scorer.score(
+                "SELECT  name\nFROM city   WHERE name = 'New York' ;", recorded
+            ),
+            "spacing outside the quoted value still does not matter",
+        )
+
+    def test_the_slow_scorer_accepts_nothing_the_text_comparator_rejects(
+        self,
+    ) -> None:
+        """The mechanism, rather than one more instance of it.
+
+        `slow.py` states the weaker comparison: whitespace, keyword case and a
+        trailing semicolon, and nothing about quoting. So wherever it says two
+        queries are the same, the text comparator -- whose docstring owns the rule
+        about quoted values -- has to say so too. Both defects the slow scorer has
+        shipped were exactly this: an answer it accepted and `exact_match.py`
+        refused. Held here over every quoted value in the slice, re-spaced and
+        re-cased inside the quotes, with a control that the comparison outside
+        them still passes.
+        """
+
+        slow = load_scorer("slow")
+        exact = load_scorer("exact_match")
+        quoted = re.compile(r"(['\"])([^'\"]+)\1")
+        inside = 0
+        for row in build.read_dataset():
+            recorded = row["output"]
+            found = quoted.search(recorded)
+            if not found:
+                continue
+            value = found.group(2)
+            respaced = (
+                value.replace(" ", "  ") if " " in value else f"{value[0]} {value[1:]}"
+            )
+            variants = [respaced]
+            if value.swapcase() != value:
+                variants.append(value.swapcase())
+            for variant in variants:
+                candidate = (
+                    recorded[: found.start(2)] + variant + recorded[found.end(2) :]
+                )
+                with self.subTest(row=row["metadata"]["id"], candidate=candidate):
+                    self.assertEqual(0.0, exact.score(candidate, recorded))
+                    self.assertEqual(
+                        0.0,
+                        slow.score(candidate, recorded),
+                        "the slow scorer accepts a changed quoted value",
+                    )
+                    inside += 1
+            if len(quoted.findall(recorded)) != 1:
+                continue
+            # Everything outside the one quoted value re-spaced and upper-cased, the
+            # value itself untouched: both comparators have to call that the same.
+            outside = (
+                "  "
+                + recorded[: found.start()].upper().replace(" ", "   ")
+                + found.group(0)
+                + recorded[found.end() :].upper()
+                + ("" if recorded.rstrip().endswith(";") else " ;")
+            )
+            with self.subTest(row=row["metadata"]["id"], control=outside):
+                self.assertEqual(1.0, exact.score(outside, recorded))
+                self.assertEqual(1.0, slow.score(outside, recorded))
+        self.assertGreater(
+            inside, 0, "no quoted value was changed, so none was checked"
         )
 
     def test_every_count_written_in_prose_matches_what_it_counts(self) -> None:
