@@ -2556,7 +2556,7 @@ def verify_demo(root: Path) -> list[str]:
     # a second agent's files sit in a directory of their own and are read the same way.
     for source in sorted(project.rglob("*.py")):
         relative = source.relative_to(project)
-        if PROJECT_VENV in relative.parts or GUIDE_DIRECTORY in relative.parts:
+        if {PROJECT_VENV, FORBIDDEN_VENV_NAME, GUIDE_DIRECTORY} & set(relative.parts):
             continue
         try:
             compile(source.read_text(encoding="utf-8"), relative.as_posix(), "exec")
@@ -2573,18 +2573,31 @@ def verify_demo(root: Path) -> list[str]:
     # says is torn must fail to parse, and every other line must parse -- so a torn demo
     # verifies clean while a demo torn somewhere the record does not say still does not.
     dataset = project / "dataset.jsonl"
+    recorded_dataset = manifest["components"].get("dataset") or {}
     if dataset.is_file():
-        recorded_dataset = manifest["components"].get("dataset") or {}
         keys = recorded_dataset.get("fields") or DATASET_KEYS
         detail = recorded_dataset.get("damage_detail") or {}
+        # Only a torn dataset may hold a line that does not parse, and only where the
+        # record says: a `torn_lines` under any other state is a record that excuses
+        # damage the state does not do.
         torn = set(detail.get("torn_lines") or [])
+        if torn and recorded_dataset.get("damage") != "torn":
+            problems.append(
+                f"the record names torn lines for --dataset {recorded_dataset.get('state')}"
+            )
+            torn = set()
         try:
-            rows = []
-            for number, line in enumerate(
-                dataset.read_text(encoding="utf-8").split("\n"), 1
-            ):
-                if not line:
-                    continue
+            lines = dataset.read_text(encoding="utf-8").split("\n")
+            if lines and lines[-1] == "":
+                lines.pop()
+            beyond = sorted(number for number in torn if number > len(lines))
+            if beyond:
+                problems.append(
+                    f"the record says lines {beyond} are torn and the file has "
+                    f"{len(lines)} lines"
+                )
+            rows: list[dict[str, Any]] = []
+            for number, line in enumerate(lines, 1):
                 try:
                     row = json.loads(line)
                 except ValueError:
@@ -2609,6 +2622,292 @@ def verify_demo(root: Path) -> list[str]:
                     problems.append(
                         f"the rows name database {db_id}, which is not here"
                     )
+            problems += dataset_record_problems(recorded_dataset, lines, rows, torn)
+            problems += second_agent_problems(
+                project, manifest["components"]["agent"], rows, keys
+            )
+    elif manifest["components"]["agent"].get("second_agent"):
+        problems.append("the record has a second agent and the project has no rows")
+    return problems
+
+
+def dataset_record_problems(
+    record: dict[str, Any],
+    lines: Sequence[str],
+    rows: Sequence[dict[str, Any]],
+    torn: set[int],
+) -> list[str]:
+    """What `demo.json` says about the dataset, checked against the rows on disk.
+
+    The record is the one account of what was done to the rows, so every claim in it is
+    read back out of the file: how many rows and how many carry their answer, and every
+    field of `damage_detail`. A field this function has no check for is itself a problem,
+    so a damage description cannot grow a claim nothing reads.
+    """
+    problems: list[str] = []
+    keys = record.get("fields") or DATASET_KEYS
+    state = record.get("state")
+    if record.get("rows") != len(lines):
+        problems.append(
+            f"the record says {record.get('rows')} rows and the file has {len(lines)}"
+        )
+    labelled = sum(1 for row in rows if keys["output"] in row)
+    # A torn line's answer cannot be read, so it can be neither counted nor ruled out.
+    if not labelled <= (record.get("labelled_rows") or 0) <= labelled + len(torn):
+        problems.append(
+            f"the record says {record.get('labelled_rows')} rows carry their answer "
+            f"and {labelled} readable rows do"
+        )
+    if record.get("labelled") != (
+        bool(lines) and record.get("labelled_rows") == len(lines)
+    ):
+        problems.append(
+            "the record's `labelled` disagrees with its own `labelled_rows`"
+        )
+    damaged = state in DAMAGED_STATES
+    if record.get("damage") != (state if damaged else None):
+        problems.append(f"the record names damage {record.get('damage')!r} for {state}")
+    detail = record.get("damage_detail")
+    if bool(detail) != damaged:
+        problems.append(
+            f"damage_detail is {'missing' if damaged else 'present'} for {state}"
+        )
+    if not detail:
+        return problems
+
+    ids = [row["metadata"]["id"] for row in rows]
+    unchecked = set(detail)
+
+    def claim(field: str, found: Any) -> None:
+        unchecked.discard(field)
+        if detail[field] != found:
+            problems.append(
+                f"damage_detail.{field} says {detail[field]!r} and the rows say {found!r}"
+            )
+
+    if "repeated_ids" in detail:
+        counted = Counter(ids)
+        claim("repeated_ids", sorted(i for i, n in counted.items() if n > 1))
+    if "rotated_within" in detail:
+        # Every answer is a gold query from the slice, borrowed from a row that shares
+        # the named field -- the field a rotation stays inside.
+        field = detail["rotated_within"]
+        slice_rows = read_dataset()
+        gold = {row["metadata"]["id"]: row["output"] for row in slice_rows}
+        within: dict[Any, set[str]] = {}
+        for row in slice_rows:
+            within.setdefault(row["metadata"].get(field), set()).add(row["output"])
+        unchecked.discard("rotated_within")
+        strays = [
+            row["metadata"]["id"]
+            for row in rows
+            if field not in row["metadata"]
+            or row.get(keys["output"]) not in within.get(row["metadata"][field], set())
+        ]
+        if strays:
+            problems.append(
+                f"damage_detail.rotated_within says {field!r}, and {len(strays)} "
+                f"answers are not a gold query of a row sharing it ({strays[0]}, ...)"
+            )
+        if "rows_keeping_their_answer" in detail:
+            claim(
+                "rows_keeping_their_answer",
+                sum(
+                    1
+                    for row in rows
+                    if row.get(keys["output"]) == gold.get(row["metadata"]["id"])
+                ),
+            )
+    if "copy_id_suffix" in detail:
+        suffix = detail["copy_id_suffix"]
+        unchecked.discard("copy_id_suffix")
+        copies = [row for row in rows if row["metadata"]["id"].endswith(suffix)]
+        if "leaked_ids" in detail:
+            claim(
+                "leaked_ids", [row["metadata"]["id"][: -len(suffix)] for row in copies]
+            )
+        originals = {row["metadata"]["id"]: row for row in rows}
+        for copy in copies:
+            original = originals.get(copy["metadata"]["id"][: -len(suffix)])
+            if original is None or (
+                original[keys["input"]],
+                original.get(keys["output"]),
+            ) != (
+                copy[keys["input"]],
+                copy.get(keys["output"]),
+            ):
+                problems.append(
+                    f"{copy['metadata']['id']} is not a copy of its original"
+                )
+        if "copy_split" in detail:
+            claim(
+                "copy_split",
+                (
+                    copies[0]["metadata"].get("split")
+                    if copies and len({c["metadata"].get("split") for c in copies}) == 1
+                    else None
+                ),
+            )
+    if "labelled_split" in detail:
+        splits = {row["metadata"].get("split") for row in rows if keys["output"] in row}
+        claim(
+            "labelled_split",
+            splits.pop() if len(splits) == 1 else sorted(map(str, splits)),
+        )
+        if any(
+            row["metadata"].get("split") == detail["labelled_split"]
+            and keys["output"] not in row
+            for row in rows
+        ):
+            problems.append("a row in the labelled split ships without its answer")
+    if "held_out_databases" in detail:
+        claim("held_out_databases", held_out_databases(rows))
+    if "keys" in detail:
+        claim("keys", dict(keys))
+        missing = [
+            row["metadata"]["id"] for row in rows if not set(keys.values()) <= set(row)
+        ]
+        if missing:
+            problems.append(
+                f"{len(missing)} rows lack the recorded keys ({missing[0]}, ...)"
+            )
+    if "top_level" in detail:
+        unchecked.discard("top_level")
+        for name in detail["top_level"]:
+            if any(row.get(name) != row["metadata"].get(name) for row in rows):
+                problems.append(f"{name} is not at the top level of every row")
+    if "torn_lines" in detail:
+        unchecked.discard("torn_lines")
+    if "cut_at" in detail:
+        unchecked.discard("cut_at")
+        problems += torn_line_problems(lines, torn, detail["cut_at"], keys)
+    for field in ("provenance", "output_provenance"):
+        if field not in detail:
+            continue
+        key = "provenance" if field == "provenance" else GENERATED_ANSWER_KEY
+        declaring = [row for row in rows if row["metadata"].get(key) == detail[field]]
+        unchecked.discard(field)
+        if "declared_rows" in detail:
+            claim("declared_rows", len(declaring))
+        elif len(declaring) != len(rows):
+            problems.append(f"damage_detail.{field} is not on every row")
+        if "of_rows" in detail:
+            claim("of_rows", len(rows))
+        if "slice_says" in detail:
+            unchecked.discard("slice_says")
+            # What the rows that do not declare still say: the slice's own value, or,
+            # for the answer key, nothing at all.
+            declared_here = {id(row) for row in declaring}
+            others = {
+                row["metadata"].get(key) for row in rows if id(row) not in declared_here
+            }
+            expected: set[str | None] = {"real"} if key == "provenance" else {None}
+            if others - expected:
+                problems.append(
+                    f"rows outside damage_detail.{field} say {sorted(map(str, others))}"
+                )
+    for field in sorted(unchecked):
+        problems.append(f"damage_detail.{field} is a claim verify has no check for")
+    return problems
+
+
+def torn_line_problems(
+    lines: Sequence[str], torn: set[int], cut_at: float, keys: dict[str, str]
+) -> list[str]:
+    """Each torn line is the start of a row of the slice, cut where the record says.
+
+    The question is the first key of every line, so a cut line still names the row it
+    was: that row is written again the way the builder writes it, and the torn line has
+    to be exactly its first `cut_at` of characters.
+    """
+    problems: list[str] = []
+    by_question = {row["input"]: row for row in read_dataset()}
+    for number in sorted(torn):
+        if number > len(lines):
+            continue
+        line = lines[number - 1]
+        opened = re.match(
+            r'\{"%s": ("(?:[^"\\]|\\.)*")' % re.escape(keys["input"]), line
+        )
+        row = by_question.get(json.loads(opened.group(1))) if opened else None
+        if row is None:
+            problems.append(
+                f"torn line {number} does not begin with a question of the slice"
+            )
+            continue
+        whole = json.dumps(project_row(row, "torn"), ensure_ascii=False, sort_keys=True)
+        if line != whole[: int(len(whole) * cut_at)]:
+            problems.append(f"torn line {number} is not its row cut at {cut_at:.0%}")
+    return problems
+
+
+def second_agent_problems(
+    project: Path,
+    agent: dict[str, Any],
+    rows: Sequence[dict[str, Any]],
+    keys: dict[str, str],
+) -> list[str]:
+    """The second agent the record describes, against the files and the first dataset.
+
+    It has to be there as described, its rows have to be the count recorded and carry no
+    answer, and each of its queries -- which is a gold query under the id of a row of the
+    first dataset -- has to be the answer that row already ships. A query the dataset
+    withholds or replaces would hand the agent the thing the project is missing.
+    """
+    record = agent.get("second_agent")
+    if agent.get("state") != "two-agents":
+        return (
+            []
+            if record is None
+            else ["the record has a second agent the state does not ship"]
+        )
+    if not record:
+        return ["--agent two-agents is recorded with no second agent"]
+    problems = [
+        f"{record[name]} is in the second agent's record and not on disk"
+        for name in ("path", "evaluator", "dataset", "note")
+        if not (project / record[name]).is_file()
+    ]
+    if problems:
+        return problems
+    queries = [
+        json.loads(line)
+        for line in (project / record["dataset"])
+        .read_text(encoding="utf-8")
+        .splitlines()
+        if line.strip()
+    ]
+    if record.get("rows") != len(queries):
+        problems.append(
+            f"the second agent is recorded with {record.get('rows')} rows and has {len(queries)}"
+        )
+    if record.get("labelled") is not False or any(
+        "output" in query for query in queries
+    ):
+        problems.append("the second agent's rows carry an expected answer")
+    try:
+        listed = agent_models(project / record["path"])
+    except BuildError:
+        # A source that does not parse is reported by the compile check; there is no
+        # roster to compare, and raising here would end `verify` with a traceback.
+        listed = record.get("models")
+    if record.get("models") != listed:
+        problems.append(
+            "the second agent's recorded models are not the ones its source lists"
+        )
+    shipped: dict[str, set[Any]] = {}
+    for row in rows:
+        shipped.setdefault(row["metadata"]["id"], set()).add(row.get(keys["output"]))
+    disclosed = [
+        query["metadata"]["id"]
+        for query in queries
+        if shipped.get(query["metadata"]["id"]) != {query["input"]}
+    ]
+    if disclosed:
+        problems.append(
+            f"{len(disclosed)} of the second agent's queries are not the answer their row "
+            f"ships ({disclosed[0]}, ...), so the project discloses answers it withholds"
+        )
     return problems
 
 
