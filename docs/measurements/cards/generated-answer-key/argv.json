@@ -2,6 +2,7 @@
   "build": [
     "python3",
     "build.py",
+    "demo",
     "--preset",
     "generated-answer-key",
     "--out",

@@ -2,6 +2,7 @@
   "build": [
     "python3",
     "build.py",
+    "demo",
     "--preset",
     "mostly-synthetic-source",
     "--calibration",

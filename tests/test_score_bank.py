@@ -370,6 +370,39 @@ class TheScoreTablesAreTheCards(unittest.TestCase):
         self.assert_rows_match(rows)
 
 
+class EveryCardRecordsTheBuildThatRan(unittest.TestCase):
+    """`argv.json` is the command a reader re-runs, so it has to be the one that ran.
+
+    It was rebuilt by hand beside the command that ran and left out the `demo`
+    subcommand: every card recorded a build that exits 2, while `01-build.txt` beside it
+    had the right one. The refused run is the one card the sweep deliberately leaves as
+    it was -- an older reading it could not reproduce -- and is named, not skipped.
+    """
+
+    def test_every_recorded_build_is_the_transcripts_and_parses(self) -> None:
+        cards = REPO_ROOT / "docs" / "measurements" / "cards"
+        runs = json.loads((cards / "results.json").read_text(encoding="utf-8"))["runs"]
+        parser = build_module().build_parser()
+        checked = 0
+        for run in runs:
+            if run.get("refused"):
+                continue
+            with self.subTest(run=run["tag"]):
+                recorded = json.loads(
+                    (cards / run["tag"] / "argv.json").read_text(encoding="utf-8")
+                )["build"]
+                transcript = (cards / run["tag"] / "01-build.txt").read_text(
+                    encoding="utf-8"
+                )
+                self.assertEqual("$ " + " ".join(recorded), transcript.splitlines()[0])
+                self.assertEqual(["python3", "build.py"], recorded[:2])
+                parsed = parser.parse_args(recorded[2:])
+                self.assertEqual("demo", parsed.command)
+                checked += 1
+        self.assertEqual(checked, len([run for run in runs if not run.get("refused")]))
+        self.assertGreater(checked, 0)
+
+
 class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):
     """`slow-scorer` is measured under a stated `--timeout`, and that is a claim.
 

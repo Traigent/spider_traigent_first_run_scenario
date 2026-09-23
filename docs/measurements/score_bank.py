@@ -605,8 +605,18 @@ def score_one(
     name_path(pathlib.Path.home(), "$HOME")
     name_path(sys.executable, "python3")
 
+    # One command, run and recorded: `argv.json` once rebuilt this list by hand and left
+    # out the `demo` subcommand, so the command it recorded was not the one that ran.
+    build_command = [
+        sys.executable,
+        "build.py",
+        "demo",
+        *build_flags,
+        "--out",
+        str(out),
+    ]
     built = capture(
-        [sys.executable, "build.py", "demo", *build_flags, "--out", str(out)],
+        build_command,
         REPO_ROOT,
         room / "01-build.txt",
     )
@@ -760,9 +770,7 @@ def score_one(
     (room / "argv.json").write_text(
         json.dumps(
             {
-                "build": portable(
-                    [sys.executable, "build.py", *build_flags, "--out", "$DEMO"]
-                ),
+                "build": portable(build_command),
                 "preflight": portable(preflight),
                 "calibration_ran": calibrated,
                 "readiness": portable(readiness),
