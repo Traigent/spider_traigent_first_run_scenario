@@ -4,8 +4,8 @@
 they disagree about what a right answer is; the disagreement is not a detail. `slow` compares
 text too, more narrowly, and asks a service to do it one row at a time, so it is right and too
 slow to check inside the budget. The other four -- `broken`, `swapped`, `opaque` and
-`length-blind` -- are what a project arrives with when its scorer is not one, and each is
-described at the end.
+`length-blind` -- are what a project arrives with when its scorer is not one, and `missing` is a
+project with no scorer at all; each is described at the end.
 
 ## `exact-match` -- compare the text
 
@@ -275,9 +275,9 @@ that had one shared at work. It parses, it has never been run here, and it canno
 it does is what that library does. `demo.json` records `method: null` and
 `executes_candidate_output: null` for it, both meaning unknown, and the sweep passes no
 `--evaluator-method` for it, because none could be declared honestly. The guide answers an
-undeclared method with `evaluator-unresolved` (40, blocks): "a file is connected, but no
-method could be honestly declared for it without executing it". It is what
-`--preset opaque-scorer` ships.
+undeclared method with `evaluator-unresolved` (40, blocks): "An evaluator file is connected,
+but no method could be honestly declared for it without executing it". It is what `--preset
+opaque-scorer` ships.
 
 `--eval length-blind` ships `1 - abs(len(output) - len(expected)) / len(expected)`, clipped to
 `[0, 1]`: a scorer that moves, and never for the right reason. It is not one of the methods

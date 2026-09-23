@@ -125,12 +125,13 @@ faithful, and also why another honest read could move them a few points.
 
 Two things follow, and both are properties of this table rather than of the guide:
 
-- **A run scored without that document reads the same 45 for `ready` and says less.**
-  `cards/ready--without-agent-knobs/` is that run: 45 PARTIAL `proceed`, unchanged, because the
-  `evaluator-unvalidated` ceiling binds first either way. What changes is the agent pillar,
-  70 to 0, and a second cap appearing -- `agent-no-varying-knobs`, ceiling 45. The card says
-  "no reading of how the agent is built reached this score" five times. That is the tool
-  reporting that it was not given what it asked for, not a second opinion about the project.
+- **A run scored without that document cannot see the agent at all.**
+  `cards/ready--without-agent-knobs/` is that run: 25 NOT READY `connect-agent`, where `ready`
+  reads 45 PARTIAL. The agent pillar drops from 100 to 0 and `agent-absent` (25, blocks) takes
+  the number -- "No agent reached this score - no settings document, no reading of its source,
+  and no declaration that one exists" -- and the card is byte-identical to `no-agent`'s. That is
+  the tool reporting that it was not given what it asked for, not a second opinion about the
+  project.
 - **`--row-review` is not passed.** The guide asks for one at the opening gate, and it is the
   assistant's own read of every row: does this expected output answer this input? A
   hand-written stand-in would be this script deciding that question row by row, which is
@@ -292,7 +293,7 @@ came to be written down at all.
 - `fake-ruler` and `wrong-wiring--calibrated` -- **byte-identical**.
 - `checked` and `grid-normalized-exact--code-sql` -- **byte-identical**.
 - `no-agent` and `ready--without-agent-knobs` -- **byte-identical**. Both cap at
-  `connect-agent`: no agent and an agent with nothing to vary read alike here.
+  `connect-agent`: no agent, and an agent whose source nobody read, read alike here.
 - `wrong-answers` and `ready` -- **not** identical, and the four differences are all about
   size rather than about the damage: dataset pillar 91 against 98, `60/60 rows` against
   `300/300`, `60 collected of 60` against `300 collected of 300`, and the comparison-size

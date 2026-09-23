@@ -515,7 +515,7 @@ CLAIMS: dict[str, tuple[str, ...]] = {
         "{presets whose own card cannot show their condition} are built for a condition",
     ),
     "docs/dataset.md": (
-        "{states that write a declaration} states write on that field",
+        "{states that write a declaration} states write such a declaration",
     ),
     "docs/eval-methods.md": (
         "{scoring methods} of the choices are the real scoring methods",
