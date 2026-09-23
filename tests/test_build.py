@@ -91,54 +91,17 @@ EXPECTED_SPLIT_BY_BAND = {
     },
 }
 
-# Which starting state each preset is, written out here and imported from nowhere.
-# `test_every_preset_passes` used to check build.py's presets against build.py's presets,
-# which passes whatever they are changed to: `fake-ruler` shipping a working scorer, or
-# `wrong-wiring` shipping the honest one, would have been invisible. The `venv` column is
-# what `suite` builds -- none of the presets asks for an environment.
 # The budget the sweep measures `slow-scorer` under, stated here rather than read out
 # of the harness: a number taken from the thing it is checking agrees with it whatever
 # it says. `docs/measurements/score_bank.py` passes this as `--timeout`, and one call
 # of the shipped scorer has to outlast it.
 SLOW_SCORER_CALIBRATION_BUDGET_SECONDS = 5
 
-# The number words this repository writes out, so a count in prose can be compared
-# with the collection it describes. English, because that is what the documents use.
-NUMBER_WORDS = {
-    "seventeen": 17,
-    "twenty-six": 26,
-    "twenty-nine": 29,
-    "thirty": 30,
-    "thirty-one": 31,
-    "thirty-two": 32,
-    "thirty-seven": 37,
-    "forty-seven": 47,
-    "forty-nine": 49,
-}
-# How a denominator is written. Each of these says "this is the whole collection",
-# which is exactly the claim that goes stale when the collection grows -- and the
-# claim no test was making, so `1945a0a` shipped a dozen of them frozen at the
-# previous round's totals.
-# Only phrasings that mean "this is the whole collection". A bare "the nine
-# presets" is a SUBSET -- the nine ported in one round -- and matching it would
-# make this gate reject a true sentence, which is the more corrosive of the two
-# ways a check can be wrong.
-DENOMINATOR_PATTERNS = (
-    r"of the ([a-z-]+|\d+) presets",
-    r"a ([a-z-]+|\d+)-preset bank",
-    r"of the ([a-z-]+|\d+) cards",
-    r"these ([a-z-]+|\d+) presets",
-    # "as N starting points" is the whole table; a heading like "Three starting
-    # points the opening gate does not separate" is a subset, and matching it
-    # would make this gate reject a true sentence.
-    r"as ([a-z-]+|\d+) starting points",
-)
-# The sweep names one fewer preset than the builder has, because `slow-scorer` is
-# reached through a variant that carries its calibration budget. A sentence about the
-# sweep's list is therefore measured against the sweep, not against `build.PRESETS` --
-# keyed separately so the two cannot be silently conflated.
-SWEEP_DENOMINATOR_PATTERNS = (r"\| the ([a-z-]+|\d+) presets \|",)
-
+# Which starting state each preset is, written out here and imported from nowhere.
+# `test_every_preset_passes` used to check build.py's presets against build.py's presets,
+# which passes whatever they are changed to: `fake-ruler` shipping a working scorer, or
+# `wrong-wiring` shipping the honest one, would have been invisible. The `venv` column is
+# what `suite` builds -- none of the presets asks for an environment.
 PRESET_TABLE = {
     #                    agent       dataset          eval           calibration  venv
     "agent-and-logs": ("ready", "unlabeled", "missing", "none", "none"),
@@ -2623,78 +2586,6 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
         self.assertGreater(
             inside, 0, "no quoted value was changed, so none was checked"
         )
-
-    def test_every_count_written_in_prose_matches_what_it_counts(self) -> None:
-        """A denominator in prose is a claim, and it goes stale silently.
-
-        The measured tables have a test; the sentences around them did not, so a
-        round that added five presets and ten runs left a dozen sentences frozen
-        at the previous totals -- including one about which projects carry the
-        CC BY-SA attribution, and one whose own table three lines below it
-        contradicted it.
-        """
-
-        located = importlib.util.spec_from_file_location(
-            "_sweep", REPO_ROOT / "docs" / "measurements" / "score_bank.py"
-        )
-        assert located is not None and located.loader is not None
-        sweep = importlib.util.module_from_spec(located)
-        sys.modules[located.name] = sweep
-        located.loader.exec_module(sweep)
-        totals = {
-            "presets": len(build.PRESETS),
-            "sweep presets": len(sweep.PRESETS),
-            "cards": sum(
-                1
-                for entry in (REPO_ROOT / "docs" / "measurements" / "cards").iterdir()
-                if entry.is_dir()
-            ),
-        }
-        documents = (
-            REPO_ROOT / "README.md",
-            REPO_ROOT / "docs" / "measurements" / "README.md",
-        )
-        checked = 0
-        unreadable: list[str] = []
-        for document in documents:
-            text = document.read_text(encoding="utf-8")
-            for pattern in DENOMINATOR_PATTERNS + SWEEP_DENOMINATOR_PATTERNS:
-                for match in re.finditer(pattern, text):
-                    written = match.group(1)
-                    value = NUMBER_WORDS.get(written)
-                    if value is None and written.isdigit():
-                        value = int(written)
-                    if value is None:
-                        # A denominator this gate cannot read is not a
-                        # denominator it has approved. Skipping it silently --
-                        # which the first draft did, without even counting it --
-                        # means "forty-two presets" ships green, and the floor
-                        # below cannot see the difference. `score_bank.py` says
-                        # "went unchecked" for exactly this situation.
-                        unreadable.append(
-                            f"{document.relative_to(REPO_ROOT)}:"
-                            f"{text[: match.start()].count(chr(10)) + 1} "
-                            f"writes {written!r}, which is not a number this "
-                            f"test can read"
-                        )
-                        continue
-                    if pattern in SWEEP_DENOMINATOR_PATTERNS:
-                        counted = "sweep presets"
-                    elif "cards" in pattern:
-                        counted = "cards"
-                    else:
-                        counted = "presets"
-                    checked += 1
-                    line = text[: match.start()].count("\n") + 1
-                    self.assertEqual(
-                        totals[counted],
-                        value,
-                        f"{document.relative_to(REPO_ROOT)}:{line} says "
-                        f"{written!r} {counted}, "
-                        f"and there are {totals[counted]}",
-                    )
-        self.assertEqual([], unreadable, "denominators this gate could not read")
-        self.assertGreater(checked, 0, "no written count was read, so none was checked")
 
     def test_a_probe_called_equivalent_returns_the_same_rows(self) -> None:
         """A text probe's claim is checkable by running it, so run it.

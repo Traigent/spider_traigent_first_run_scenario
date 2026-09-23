@@ -21,9 +21,9 @@ ones in the training split, so a model cannot succeed by memorising one schema.
 This is real recorded data. Not generated, not synthetic, not written for this repository.
 
 That sentence is about the bytes in `spider/`, and it stays true of every demo built from
-them. It is not a statement about the `provenance` field on a row. Five states write on that
+them. It is not a statement about the `provenance` field on a row. Six states write on that
 field -- `undeclared` and `mostly-undeclared` put a word there the guide does not recognise,
-`mostly-synthetic` puts `synthetic` there, and `generated-answers` and
+`mostly-synthetic` and `fully-synthetic` put `synthetic` there, and `generated-answers` and
 `mostly-generated-answers` add `output_provenance: model-generated` beside it -- and what
 they are writing is the *customer's own declaration about their own rows*, which is exactly
 the thing the guide's provenance checks read. A demo in one of those states carries rows that

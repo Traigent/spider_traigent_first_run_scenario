@@ -1,9 +1,11 @@
 # The SQL scorers
 
-`--eval` picks how an answer gets marked. Two of the choices are real scorers, and they
-disagree about what a right answer is; the disagreement is not a detail. The other four --
-`broken`, `swapped`, `opaque` and `length-blind` -- are what a project arrives with when its
-scorer is not one, and each is described at the end.
+`--eval` picks how an answer gets marked. Two of the choices are the real scoring methods, and
+they disagree about what a right answer is; the disagreement is not a detail. `slow` compares
+text too, more narrowly, and asks a service to do it one row at a time, so it is right and too
+slow to check inside the budget. The other four -- `broken`, `swapped`, `opaque` and
+`length-blind` -- are what a project arrives with when its scorer is not one, and each is
+described at the end.
 
 ## `exact-match` -- compare the text
 

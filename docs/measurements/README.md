@@ -123,8 +123,8 @@ Two things follow, and both are properties of this table rather than of the guid
 
 Thirty-one presets, then the comparisons the documentation makes. One preset the
 sweep names only through a variant -- `slow-scorer`, because it carries a non-default
-calibration budget -- so this table has thirty-one preset runs and fourteen
-comparisons against `build.py`'s thirty-two presets:
+calibration budget -- so this table has thirty-two preset runs -- one for each of `build.py`'s
+thirty-two presets -- and seventeen comparisons: thirteen variants and the four `grid-*` runs:
 
 | run | what it is for |
 |---|---|
@@ -216,8 +216,8 @@ WORKABLE 55-74, STRONG 75-89, EXCELLENT 90-100.
 
 ## What the nine ported presets measured
 
-Eight of the nine opened on the cap they were built for. The ninth did not, and one other
-thing did not happen either; both are worth writing down.
+Seven of the nine opened on the cap they were built for. One did not, and one was built for a
+question the opening card does not ask; both are worth writing down.
 
 - **`two-agents` is `ready`.** The card is byte-identical to `ready`'s: the sweep
   points `--selected-agent` at `agent.py`, as the customer's `PROJECT.md` says to, and the

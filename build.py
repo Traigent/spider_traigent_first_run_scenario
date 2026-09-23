@@ -300,7 +300,7 @@ RAW_EXPORT_KEYS = {"input": "question", "output": "query"}
 # the rows were exported from, which is what somebody who exported them would write, and
 # a word outside the guide's provenance vocabulary.
 UNDECLARED_PROVENANCE = "spider-dev"
-# The share of rows the four "mostly" states touch. The guide's provenance ladder and its
+# The share of rows the three "mostly" states touch. The guide's provenance ladder and its
 # answer-key ladder each have a rung at "more than half", so damaging every row and
 # damaging most of them are different readings, not the same one twice: 65 against 70 on
 # the provenance ladder, and a different condition and remedy on the card. 0.6 clears the
