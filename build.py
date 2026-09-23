@@ -2610,7 +2610,14 @@ def verify_demo(root: Path) -> list[str]:
             continue
         try:
             compile(source.read_text(encoding="utf-8"), relative.as_posix(), "exec")
-        except (OSError, UnicodeDecodeError, SyntaxError, ValueError) as error:
+        except (
+            OSError,
+            UnicodeDecodeError,
+            SyntaxError,
+            ValueError,
+            RecursionError,
+            MemoryError,
+        ) as error:
             problems.append(f"{relative.as_posix()} does not compile: {error}")
 
     # Everything below reads files that may be malformed -- which is one of the things worth
@@ -2758,7 +2765,11 @@ def contained(
     """
     try:
         check(problems)
-    except (ValueError, KeyError, TypeError, RecursionError, OSError) as error:
+    # Any exception, deliberately. The checks read records and files a customer or a
+    # broken build can make arbitrarily malformed, and every new shape of input found
+    # another exception type; the contract is that verify never ends in a traceback.
+    # This fails closed: the failure is reported, so the demo does not verify.
+    except Exception as error:  # noqa: BLE001
         problems.append(f"{name} cannot be checked: {error!r}")
 
 
@@ -2991,6 +3002,11 @@ def dataset_record_problems(
                     f"damage_detail.slice_says is {said!r} and the slice says "
                     f"{sorted(map(str, slice_values))}"
                 )
+            if detail[field] == expected:
+                problems.append(
+                    f"damage_detail.{field} is {detail[field]!r}, what the slice "
+                    "already says, so it names no damage"
+                )
             declared_here = {id(row) for row in declaring}
             others = {
                 row["metadata"].get(key) for row in rows if id(row) not in declared_here
@@ -3005,18 +3021,29 @@ def dataset_record_problems(
         problems.append("damage_detail.repeated_ids names no repeated row")
     if detail.get("held_out_databases") == []:
         problems.append("damage_detail.held_out_databases names no held-out database")
+    if "labelled_split" in detail and not isinstance(detail["labelled_split"], str):
+        problems.append(
+            f"damage_detail.labelled_split is {detail['labelled_split']!r}, not the "
+            "name of one split"
+        )
     declared, of_rows = detail.get("declared_rows"), detail.get("of_rows")
-    if isinstance(declared, int) and isinstance(of_rows, int):
+    if (
+        isinstance(declared, int)
+        and isinstance(of_rows, int)
+        and not isinstance(declared, bool)
+        and not isinstance(of_rows, bool)
+    ):
+        # In integers: a count too large for a float is still a count to compare.
         if str(state).startswith("mostly-"):
-            if not of_rows / 2 < declared < of_rows:
+            if not of_rows < 2 * declared < 2 * of_rows:
                 problems.append(
-                    f"--dataset {state} declares {declared} of {of_rows} rows, which "
-                    "is not most of them and not all"
+                    f"--dataset {state} declares {declared} of {of_rows} rows; the "
+                    "state declares more than half of them and not all"
                 )
         elif not 0 < declared == of_rows:
             problems.append(
-                f"--dataset {state} declares {declared} of {of_rows} rows, and it "
-                "declares every row"
+                f"--dataset {state} declares {declared} of {of_rows} rows; the "
+                "state declares every row"
             )
     for field in sorted(unchecked):
         problems.append(f"damage_detail.{field} is a claim verify has no check for")
@@ -3148,14 +3175,8 @@ def verified(root: Path) -> list[str]:
     """
     try:
         return verify_demo(root)
-    except (
-        ValueError,
-        KeyError,
-        TypeError,
-        AttributeError,
-        RecursionError,
-        OSError,
-    ) as error:
+    # Any exception, for the reason `contained` gives: the demo is reported, never passed.
+    except Exception as error:  # noqa: BLE001
         return [f"verify could not finish on this demo: {error!r}"]
 
 

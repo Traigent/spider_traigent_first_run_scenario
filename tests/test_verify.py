@@ -795,7 +795,7 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
                     "declared_rows": 0,
                     "of_rows": 300,
                 },
-                "declares 0 of 300 rows, which is not most of them",
+                "declares 0 of 300 rows; the state declares more than half",
             ),
             "generated-answers": (
                 {
@@ -804,7 +804,33 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
                     "declared_rows": 0,
                     "of_rows": 300,
                 },
-                "declares 0 of 300 rows, and it declares every row",
+                "declares 0 of 300 rows; the state declares every row",
+            ),
+            "undeclared": (
+                {"provenance": "real", "slice_says": "real"},
+                "damage_detail.provenance is 'real', what the slice already says",
+            ),
+            "fully-synthetic": (
+                {
+                    "provenance": "real",
+                    "slice_says": "real",
+                    "declared_rows": 300,
+                    "of_rows": 300,
+                },
+                "damage_detail.provenance is 'real', what the slice already says",
+            ),
+            "mostly-generated-answers": (
+                {
+                    "output_provenance": None,
+                    "slice_says": build.SLICE_DECLARES_NO_ANSWER_PROVENANCE,
+                    "declared_rows": 300,
+                    "of_rows": 300,
+                },
+                "damage_detail.output_provenance is None, what the slice already says",
+            ),
+            "holdout-labelled": (
+                {"labelled_split": ["holdout", "tuning"]},
+                "not the name of one split",
             ),
         }
         clean = Path(tempfile.mkdtemp(dir=self.workspace)) / "demo"
@@ -836,9 +862,38 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         (out / "demo.json").write_text("[" * 200_000 + "]" * 200_000)
         self.assert_reported(out, "the build record cannot be read")
 
+    def test_a_count_too_large_for_a_float_is_reported_not_raised(self) -> None:
+        out = self.copy("mostly-synthetic")
+
+        def inflate(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["of_rows"] = 10**400
+
+        self.edit_record(out, inflate)
+        self.assert_reported(out, "the state declares more than half of them")
+
+    def test_source_nested_too_deep_to_compile_is_reported(self) -> None:
+        out = self.copy("duplicated")
+        relative = "agent.py"
+        path = out / build.PROJECT_SUBDIR / relative
+        path.write_text(
+            path.read_text(encoding="utf-8") + "\nx = " + "-" * 200_000 + "1\n"
+        )
+        repair_record(out, relative)
+        self.assert_reported(out, "agent.py does not compile")
+
+    def test_a_dataset_line_nested_too_deep_to_parse_is_reported(self) -> None:
+        out = self.copy("duplicated")
+        self.rewrite(out, ["[" * 200_000 + "]" * 200_000, *self.lines(out)[1:]])
+        self.assert_reported(out, "cannot be read")
+
     def test_a_demo_verify_cannot_finish_is_reported_not_raised(self) -> None:
         out = self.copy("duplicated")
-        for failure in (ValueError("boom"), RecursionError("deep")):
+        for failure in (
+            ValueError("boom"),
+            RecursionError("deep"),
+            OverflowError("wide"),
+            MemoryError("stack"),
+        ):
             with self.subTest(failure=type(failure).__name__):
                 with mock.patch.object(build, "verify_demo", side_effect=failure):
                     problems = build.verified(out)
