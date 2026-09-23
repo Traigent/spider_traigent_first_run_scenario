@@ -30,14 +30,17 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HARNESS = REPO_ROOT / "docs" / "measurements" / "score_bank.py"
@@ -74,7 +77,18 @@ BUILD_CHECK_FIELDS = {
         }
     ),
 }
+CAP_CEILING = {"dataset-absent": 20, "evaluator-unvalidated": 45}
+ACTION_FOR_CONDITION = {
+    "dataset-absent": "get-data",
+    "evaluator-unvalidated": "complete-calibration",
+}
 """
+
+# What the harness records of the stub above, which is the shape the real record carries.
+STUB_CONDITIONS = {
+    "dataset-absent": {"action": "get-data", "ceiling": 20},
+    "evaluator-unvalidated": {"action": "complete-calibration", "ceiling": 45},
+}
 
 
 def load_harness() -> types.ModuleType:
@@ -150,6 +164,7 @@ IDENTICAL_CARDS = (
     ),
     ("length-blind--uncalibrated", "opaque-scorer"),
     ("no-agent", "ready--without-agent-knobs"),
+    ("no-knobs", "no-knobs--knobs-in-a-comment"),
 )
 
 
@@ -163,11 +178,18 @@ class TheCommittedCardsAreWhatTheDocumentsSay(unittest.TestCase):
     """
 
     def card_bodies(self) -> dict[str, str]:
+        """Each rendered card from its second line down, the way the documents compare them.
+
+        The first line is the invocation, which names the read of the agent a run was
+        scored with. Kept in, it hid two cards the guide rendered identically -- `no-knobs`
+        and `no-knobs--knobs-in-a-comment`, scored with different reads of different
+        agents -- because the two invocations differ by a file name.
+        """
         cards = REPO_ROOT / "docs" / "measurements" / "cards"
         return {
-            directory.name: (directory / "04-readiness-card.txt").read_text(
-                encoding="utf-8"
-            )
+            directory.name: (directory / "04-readiness-card.txt")
+            .read_text(encoding="utf-8")
+            .split("\n", 1)[1]
             for directory in sorted(cards.iterdir())
             if directory.is_dir() and (directory / "04-readiness-card.txt").is_file()
         }
@@ -297,6 +319,543 @@ class EveryPresetOpensOnTheStateItWasBuiltFor(unittest.TestCase):
                 )
                 if shown_on is not None:
                     self.assertLessEqual(set(caps[preset]), card_conditions(shown_on))
+
+
+def committed_card(tag: str) -> dict[str, object]:
+    """The readiness JSON a committed card holds."""
+    return dict(
+        json.loads(
+            (
+                REPO_ROOT
+                / "docs"
+                / "measurements"
+                / "cards"
+                / tag
+                / "05-readiness.json"
+            ).read_text(encoding="utf-8")
+        )
+    )
+
+
+def card_caps(tag: str) -> dict[str, dict[str, object]]:
+    """The caps a committed card carries, by condition."""
+    caps = committed_card(tag)["caps"]
+    assert isinstance(caps, list)
+    return {cap["condition"]: cap for cap in caps}
+
+
+# How `run_inputs` names the read of the agent a run is scored with when it is the one
+# `AGENT_READS` keeps for the agent's state: each of those documents is written as the
+# faithful read of its agent, so it follows from the agent and is not a second input. A run
+# that names a read of its own has changed something the agent did not.
+FAITHFUL_READ = "the faithful read of the agent"
+
+
+def run_inputs(tag: str) -> dict[str, object]:
+    """What one run is built and scored from: the components, the read, the options.
+
+    Read from the sweep's own list and the builder's presets, so two runs can be compared
+    on what actually differs between them rather than on what their names suggest. The
+    read of the agent the guide is handed is one of them: the card is scored from it, so
+    two runs that differ only in the read differ in what the card is scored from.
+    """
+    builder, harness = build_module(), load_harness()
+    flags, options = next((f, o) for t, f, o in harness.sweep() if t == tag)
+    chosen = dict(builder.PRESETS[flags[flags.index("--preset") + 1]])
+    for name in ("agent", "dataset", "eval", "calibration"):
+        if f"--{name}" in flags:
+            chosen[name] = flags[flags.index(f"--{name}") + 1]
+    chosen.setdefault("calibration", "none")
+    options = dict(options)
+    chosen["read"] = options.pop("agent_read", FAITHFUL_READ)
+    return {**chosen, "options": tuple(sorted(options.items()))}
+
+
+# The repairs the committed cards show, each as (the run before it, the run after it, the
+# condition it removes, the action the card before it names for it). Each pair differs in
+# the one thing the action is about -- the dataset, the agent, the scorer, or what a run
+# declares about the file -- so the pair is the repair and nothing else.
+REPAIRS: tuple[tuple[str, str, str, str], ...] = (
+    ("no-data", "ready", "dataset-absent", "get-data"),
+    ("no-labels", "ready", "dataset-no-expected-outputs", "label-data"),
+    ("no-eval", "ready", "evaluator-absent", "connect-evaluator"),
+    ("no-knobs", "ready", "agent-no-varying-knobs", "vary-knobs"),
+    ("wrong-wiring--calibrated", "checked", "evaluator-invalid", "repair-evaluator"),
+    ("fake-ruler", "checked", "evaluator-invalid", "repair-evaluator"),
+    ("leaky-split", "ready", "dataset-tune-holdout-overlap", "resplit-dataset"),
+    ("hand-written", "checked", "dataset-below-measurable-size", "add-examples"),
+    (
+        "raw-export",
+        "raw-export--fields-declared",
+        "dataset-shape-unrecognised",
+        "read-dataset",
+    ),
+)
+
+# Repairs that are not repairs, each keyed by its run and the run it is measured against.
+# Most start where a repair in REPAIRS starts and change the one thing that repair is about,
+# so that it looks done -- and leave it undone. One starts from another fake: the project
+# is left exactly as that fake left it, and only the read of the agent the guide is handed
+# changes. The guide HOLDS a fake when its card still carries the condition of the repair
+# it imitates, with the ceiling and the block the card it is measured against carried.
+FAKE_REPAIRS: dict[str, str] = {
+    "no-data--empty-file": "no-data",
+    "no-labels--blank-answers": "no-labels",
+    "no-knobs--knobs-in-a-comment": "no-knobs",
+    "no-knobs--knobs-in-a-comment--credited": "no-knobs--knobs-in-a-comment",
+    "hand-written--padded": "hand-written",
+}
+
+# The fakes the guide does not hold, each with what its card shows. Checked in both
+# directions: a fake listed here must still get through -- the day the guide holds it, the
+# entry and the prose repeating it are stale -- and a fake not listed must be held.
+UNGUARDED: dict[str, str] = {
+    "no-knobs--knobs-in-a-comment--credited": (
+        "a read that credits settings the agent names only in a comment, citing "
+        "executable lines beside them, is not believed -- the agent pillar reads 0 and "
+        "agent-no-varying-knobs stays at 45 -- but the guide treats a claim it cannot "
+        "verify at the opening as advisory rather than as a finding that the agent has no "
+        "setting ('this advisory opening ceiling remains while the cited source evidence "
+        "is unverified'): the card stops blocking and its action is complete-calibration "
+        "instead of vary-knobs, and it names a request-difference probe as the separate "
+        "pre-call guard, which this bank does not run. The same agent read faithfully "
+        "(no-knobs--knobs-in-a-comment) still blocks"
+    ),
+}
+
+
+def repaired_by(fake: str) -> tuple[str, str, str, str]:
+    """The entry of REPAIRS a fake imitates, following a fake that starts from a fake."""
+    before = FAKE_REPAIRS[fake]
+    while before in FAKE_REPAIRS:
+        before = FAKE_REPAIRS[before]
+    return next(entry for entry in REPAIRS if entry[0] == before)
+
+
+class ARepairRemovesItsConditionAndAFakeOneDoesNot(unittest.TestCase):
+    """What the cards say a repair does, and what they say a repair in name only does."""
+
+    def test_every_repair_is_one_change_that_removes_its_condition(self) -> None:
+        for before, after, condition, action in REPAIRS:
+            with self.subTest(repair=f"{before} -> {after}"):
+                changed = {
+                    name
+                    for name, value in run_inputs(before).items()
+                    if run_inputs(after)[name] != value
+                }
+                self.assertEqual(1, len(changed), f"the pair differs in {changed}")
+                had, has = card_caps(before), card_caps(after)
+                self.assertIn(condition, had)
+                self.assertEqual(action, had[condition]["action_kind"])
+                self.assertEqual(action, committed_card(before)["recommended_action"])
+                self.assertNotIn(condition, has)
+                blocking = {name for name, cap in has.items() if cap["blocks"]}
+                self.assertLessEqual(
+                    blocking,
+                    {name for name, cap in had.items() if cap["blocks"]},
+                    "the repair left a blocking cap the project did not have",
+                )
+
+    def test_every_fake_changes_one_thing_and_it_is_what_its_repair_changes(
+        self,
+    ) -> None:
+        for fake, before in FAKE_REPAIRS.items():
+            with self.subTest(fake=fake):
+                touched = {
+                    name
+                    for name, value in run_inputs(before).items()
+                    if run_inputs(fake)[name] != value
+                }
+                self.assertEqual(1, len(touched), f"the fake changes {touched}")
+                changed = next(iter(touched))
+                repairs = [entry for entry in REPAIRS if entry[0] == before]
+                if not repairs:
+                    # A fake built on another fake changes what the guide is told about
+                    # the project, not the project: the read, and nothing else.
+                    self.assertIn(before, FAKE_REPAIRS, f"{before} starts no repair")
+                    self.assertEqual("read", changed)
+                for _, after, _, _ in repairs:
+                    self.assertNotEqual(
+                        run_inputs(before)[changed],
+                        run_inputs(after)[changed],
+                        "the fake touches something its repair does not",
+                    )
+
+    def test_the_guide_holds_every_fake_but_the_ones_written_down(self) -> None:
+        self.assertLessEqual(set(UNGUARDED), set(FAKE_REPAIRS))
+        for fake, before in FAKE_REPAIRS.items():
+            condition = repaired_by(fake)[2]
+            had, has = card_caps(before)[condition], card_caps(fake).get(condition)
+            held = has is not None and (has["ceiling"], has["blocks"]) == (
+                had["ceiling"],
+                had["blocks"],
+            )
+            with self.subTest(fake=fake):
+                if fake in UNGUARDED:
+                    self.assertTrue(UNGUARDED[fake].strip())
+                    self.assertFalse(
+                        held,
+                        f"the guide now holds {fake}, so the reason it was recorded as "
+                        f"getting through -- {UNGUARDED[fake]!r} -- is stale",
+                    )
+                else:
+                    self.assertTrue(
+                        held,
+                        f"{fake} got past the guide: {condition} is "
+                        f"{'gone' if has is None else 'no longer the same cap'}; record "
+                        "it in UNGUARDED with what the card shows",
+                    )
+
+
+# Every condition the pinned guide can raise and no committed card carries, with the reason.
+# Checked both ways against `conditions` in results.json, which the sweep reads from the
+# guide itself: a condition that reaches a card must come off this list, and a new one the
+# guide adds is a failure until a run reaches it or it is written down here.
+UNREACHED: dict[str, str] = {
+    "dataset-unsound-expected-outputs": (
+        "raised from the no verdicts of a row review, and the sweep passes none: writing "
+        "one would be the sweep answering the question wrong-answers asks (score_bank.py)"
+    ),
+}
+
+
+class EveryConditionTheGuideCanRaiseIsOnACard(unittest.TestCase):
+    """The cap vocabulary at the pin, against the cards -- read from the guide, not listed."""
+
+    def test_the_record_holds_the_guides_vocabulary(self) -> None:
+        conditions = committed_results()["conditions"]
+        self.assertIsInstance(conditions, dict, "results.json records no vocabulary")
+        assert isinstance(conditions, dict)
+        self.assertGreater(len(conditions), 0)
+        for condition, entry in conditions.items():
+            with self.subTest(condition=condition):
+                self.assertTrue(entry["action"], "a condition with no remedy")
+
+    def test_every_condition_is_on_a_card_or_written_down(self) -> None:
+        conditions = committed_results()["conditions"]
+        assert isinstance(conditions, dict)
+        carried = {
+            cap["condition"]
+            for run in scored_runs()
+            for cap in run["caps"]  # type: ignore[union-attr]
+        }
+        self.assertEqual(
+            set(), carried - set(conditions), "a card the guide cannot write"
+        )
+        self.assertEqual(
+            sorted(set(conditions) - carried),
+            sorted(UNREACHED),
+            "the conditions no card reaches are not the ones written down",
+        )
+        for condition, reason in UNREACHED.items():
+            self.assertTrue(reason.strip(), condition)
+
+
+# The remedy each cap condition carries, declared by hand: condition -> (action, ceiling,
+# blocks, why). The ceiling is the one the guide ranks the condition at; `blocks` is whether
+# the run waits on it.
+#
+# A tripwire for the next re-pin, not an independent answer key, and the difference is worth
+# being exact about. The action and the ceiling here are held equal to the guide's own
+# ACTION_FOR_CONDITION and CAP_CEILING, as results.json records them -- and the guide builds
+# every cap's action from that same table (readiness.py `Cap.__post_init__`) -- so the
+# per-card action check cannot fail unless the guide's own table moves, which the first test
+# below already reports. What is declared here and nowhere in the guide's tables is `blocks`,
+# and the one line of why. The table's value is that a re-pin which moves a remedy, a
+# ceiling or a block fails by condition name instead of arriving as a changed number.
+REMEDIES: dict[str, tuple[str, int | None, bool, str]] = {
+    "dataset-absent": ("get-data", 20, True, "no rows to measure anything on"),
+    "evaluator-invalid": (
+        "repair-evaluator",
+        25,
+        True,
+        "probes that ran show the scorer grading wrong answers right or right ones wrong",
+    ),
+    "dataset-shape-unrecognised": (
+        "read-dataset",
+        25,
+        True,
+        "no row matched the shape the file was read with; a look, not a verdict",
+    ),
+    "agent-absent": (
+        "connect-agent",
+        25,
+        True,
+        "nothing about an agent reached the score, so there is nothing to vary",
+    ),
+    "dataset-no-expected-outputs": (
+        "label-data",
+        30,
+        True,
+        "questions with nothing to score an answer against",
+    ),
+    "dataset-integrity-fail": (
+        "repair-dataset",
+        35,
+        True,
+        "some rows read and some did not, or ids repeat: the file is broken as read",
+    ),
+    "evaluator-absent": ("connect-evaluator", 40, True, "no scorer is connected"),
+    "evaluator-unresolved": (
+        "repair-evaluator",
+        40,
+        True,
+        "a scorer is there and no method can be named for it without running it",
+    ),
+    "evaluator-timeout": (
+        "bound-evaluator-cost",
+        45,
+        True,
+        "the check of the scorer ran out of budget before the scorer answered",
+    ),
+    "evaluator-unvalidated": (
+        "complete-calibration",
+        45,
+        False,
+        "a method is declared and nothing has checked the scorer yet; the run owes it",
+    ),
+    "evaluator-calibration-refused": (
+        "confirm-evaluator-connection",
+        45,
+        False,
+        "the guide will not calibrate a scorer that reaches an engine; the declaration "
+        "alone bounds the claim",
+    ),
+    "agent-no-varying-knobs": (
+        "vary-knobs",
+        45,
+        True,
+        "the agent was read and nothing it varies was found: one configuration to compare",
+    ),
+    "dataset-tune-holdout-overlap": (
+        "resplit-dataset",
+        50,
+        True,
+        "the same inputs on both sides of the split, so the held-out check checks nothing",
+    ),
+    "dataset-tuning-split-empty": (
+        "resplit-dataset",
+        50,
+        True,
+        "nothing scoreable on the side the search tunes on",
+    ),
+    "dataset-split-by-task-family": (
+        "review-split",
+        50,
+        False,
+        "every recurring form of question sits on one side; inferred, so asked about",
+    ),
+    "dataset-fully-synthetic": (
+        "connect-real-data",
+        65,
+        False,
+        "every row declares itself written rather than collected",
+    ),
+    "dataset-undeclared-provenance": (
+        "declare-data-provenance",
+        65,
+        False,
+        "no row says where it came from in a word the guide knows; read as generated",
+    ),
+    "agent-generated": (
+        "connect-real-agent",
+        65,
+        False,
+        "the agent is one the run relies on in place of the customer's own",
+    ),
+    "dataset-mostly-synthetic": (
+        "connect-real-data",
+        70,
+        False,
+        "more than half the rows declare themselves written",
+    ),
+    "dataset-mostly-undeclared": (
+        "declare-data-provenance",
+        70,
+        False,
+        "more than half the rows say nothing the guide can place",
+    ),
+    "dataset-unsound-expected-outputs": (
+        "review-answer-key",
+        70,
+        False,
+        "a read of the rows found answers that do not answer their questions",
+    ),
+    "dataset-below-measurable-size": (
+        "add-examples",
+        74,
+        False,
+        "under ten comparable examples, so one row can decide the result",
+    ),
+    "dataset-generated-answer-key": (
+        "review-answer-key",
+        74,
+        False,
+        "every answer is declared model-written, so the ruler is a model's",
+    ),
+    "dataset-mostly-generated-answer-key": (
+        "review-answer-key",
+        74,
+        False,
+        "more than half the answers are declared model-written",
+    ),
+    "evaluator-generated": (
+        "connect-real-evaluator",
+        74,
+        False,
+        "the scorer is one the run relies on in place of the customer's own",
+    ),
+    "dataset-coarse-resolution": (
+        "add-examples",
+        89,
+        False,
+        "under thirty comparable examples: workable, and not a result to call excellent",
+    ),
+    "dataset-repeated-rows": (
+        "review-repeats",
+        89,
+        False,
+        "rows repeat an input already counted, so the file is smaller than it looks",
+    ),
+}
+
+# The conditions the guide raises in a second shape: the shape, the runs whose cards carry
+# it, and why. Held both ways: a card carries a condition's second shape exactly when it is
+# one of the runs named here, and its tabled shape everywhere else -- so a block that flips
+# on one card fails by name rather than passing as the other shape.
+OTHER_ARMS: dict[str, tuple[int | None, bool, frozenset[str], str]] = {
+    "evaluator-calibration-refused": (
+        None,
+        False,
+        frozenset({"sql-exec-stop", "best-case"}),
+        "where preflight's walk found the engine the refusal is the guide's own boundary, "
+        "and the cap discloses it without bounding the score",
+    ),
+    "agent-no-varying-knobs": (
+        45,
+        False,
+        frozenset({"no-knobs--knobs-in-a-comment--credited"}),
+        "where the read handed to the guide claims settings that the opening check cannot "
+        "follow to the request, the claim is bounded and the run is not stopped",
+    ),
+}
+
+# The presets whose card departs from the verdict build.PRESET_VERDICT declares for them,
+# each with a public issue that tracks it (or None) and the reason. Checked both ways, as
+# NOT_ON_THEIR_OWN_CARD is: a card listed here must still depart, and one not listed must
+# read its verdict exactly. At the pin every card reads the verdict written for it.
+VERDICT_DIVERGENCES: dict[str, tuple[str | None, str]] = {}
+
+
+class EveryPresetOpensWithItsDeclaredVerdict(unittest.TestCase):
+    """Band, status and action, against a verdict declared by hand in build.py.
+
+    A tripwire rather than a blind prediction: the entries were derived from each preset's
+    purpose and the guide's rules, after the measurements README's Results table -- which
+    prints every band and action -- had been read. What they add is a named failure when a
+    re-pin moves a preset's verdict.
+    """
+
+    def test_every_preset_declares_a_verdict_on_a_run_built_from_it(self) -> None:
+        builder = build_module()
+        self.assertEqual(set(builder.PRESETS), set(builder.PRESET_VERDICT))
+        measured = {run["tag"] for run in scored_runs()}
+        for preset, (tag, _, _, _) in sorted(builder.PRESET_VERDICT.items()):
+            with self.subTest(preset=preset):
+                flags = next(f for t, f, _ in load_harness().sweep() if t == tag)
+                self.assertEqual(preset, flags[flags.index("--preset") + 1])
+                self.assertIn(tag, measured, "the verdict names a run with no card")
+
+    def test_every_card_reads_the_verdict_declared_for_it(self) -> None:
+        for preset, (tag, *verdict) in sorted(build_module().PRESET_VERDICT.items()):
+            card = committed_card(tag)
+            read = [card["band"], card["status"], card["recommended_action"]]
+            with self.subTest(preset=preset, run=tag):
+                if preset in VERDICT_DIVERGENCES:
+                    self.assertNotEqual(
+                        verdict,
+                        read,
+                        f"{tag} now reads its declared verdict, so the divergence "
+                        f"recorded for it -- {VERDICT_DIVERGENCES[preset][1]!r} -- is stale",
+                    )
+                else:
+                    self.assertEqual(verdict, read)
+
+    def test_every_divergence_is_a_declared_preset_with_a_reason(self) -> None:
+        declared = build_module().PRESET_VERDICT
+        for preset, (issue, reason) in VERDICT_DIVERGENCES.items():
+            with self.subTest(preset=preset):
+                self.assertIn(preset, declared)
+                self.assertTrue(reason.strip())
+                if issue is not None:
+                    self.assertTrue(issue.startswith("https://github.com/"), issue)
+
+
+class EveryCapCarriesTheTabledRemedy(unittest.TestCase):
+    """Each cap on each committed card, against REMEDIES; REMEDIES, against the guide.
+
+    Its independent content is `blocks` and the second shapes in OTHER_ARMS; the action and
+    ceiling are the guide's own, and are checked so that a re-pin that moves them is named.
+    """
+
+    def test_the_table_is_the_guides_vocabulary(self) -> None:
+        conditions = committed_results()["conditions"]
+        assert isinstance(conditions, dict)
+        self.assertEqual(sorted(conditions), sorted(REMEDIES))
+        for condition, (action, ceiling, blocks, reason) in REMEDIES.items():
+            with self.subTest(condition=condition):
+                self.assertEqual(conditions[condition]["action"], action)
+                self.assertEqual(conditions[condition]["ceiling"], ceiling)
+                self.assertIsInstance(blocks, bool)
+                self.assertTrue(reason.strip())
+
+    def test_every_cap_on_every_card_carries_the_tabled_remedy(self) -> None:
+        checked = 0
+        for run in scored_runs():
+            for cap in run["caps"]:  # type: ignore[union-attr]
+                condition = cap["condition"]
+                action, ceiling, blocks, _ = REMEDIES[condition]
+                shape = (ceiling, blocks)
+                if condition in OTHER_ARMS and run["tag"] in OTHER_ARMS[condition][2]:
+                    shape = OTHER_ARMS[condition][:2]
+                with self.subTest(run=run["tag"], condition=condition):
+                    self.assertEqual(action, cap["action_kind"])
+                    self.assertEqual(shape, (cap["ceiling"], cap["blocks"]))
+                    checked += 1
+        self.assertGreater(checked, 0, "no cap was read, so none was checked")
+
+    def test_every_second_shape_is_on_the_cards_it_names(self) -> None:
+        carried = {
+            (run["tag"], cap["condition"]): (cap["ceiling"], cap["blocks"])
+            for run in scored_runs()
+            for cap in run["caps"]  # type: ignore[union-attr]
+        }
+        for condition, (ceiling, blocks, runs, reason) in OTHER_ARMS.items():
+            with self.subTest(condition=condition):
+                self.assertIn(condition, REMEDIES)
+                self.assertTrue(reason.strip())
+                self.assertTrue(runs, "a second shape no run is named for")
+                self.assertNotEqual((ceiling, blocks), REMEDIES[condition][1:3])
+                for tag in runs:
+                    self.assertEqual((ceiling, blocks), carried.get((tag, condition)))
+
+
+def committed_results() -> dict[str, object]:
+    """The committed `results.json`."""
+    return dict(
+        json.loads(
+            (REPO_ROOT / "docs" / "measurements" / "cards" / "results.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    )
+
+
+def scored_runs() -> list[dict[str, object]]:
+    """The rows of `results.json` that scored; a refused run's card is an older reading."""
+    runs = committed_results()["runs"]
+    assert isinstance(runs, list)
+    return [run for run in runs if not run.get("refused")]
 
 
 SCORE_ROW = re.compile(
@@ -546,6 +1105,360 @@ class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):
         )
 
 
+class EveryStepRunsBoundedAndWithoutTheShell(unittest.TestCase):
+    """Each step the sweep runs has a budget above the guide's, and none of the shell.
+
+    The steps run code that is not the sweep's -- the builder, the guide's scripts, and
+    through the calibrator the project's own evaluator -- and each used to inherit every
+    variable the operator had exported, with no limit on how long it could hold the sweep.
+    """
+
+    def setUp(self) -> None:
+        self.harness = load_harness()
+        self.room = Path(tempfile.mkdtemp(prefix="score-bank-step-"))
+        self.addCleanup(shutil.rmtree, self.room, True)
+
+    def test_the_bound_sits_above_every_budget_the_guide_gives_itself(self) -> None:
+        """The guide's timeout is the finding; this bound may never be what fires first."""
+        harness = self.harness
+        self.assertEqual(
+            harness.STEP_TIMEOUT_SECONDS,
+            harness.GUIDE_CALIBRATION_CEILING_SECONDS + harness.STEP_HEADROOM_SECONDS,
+        )
+        self.assertEqual(900, harness.GUIDE_CALIBRATION_CEILING_SECONDS)
+        self.assertGreater(harness.STEP_HEADROOM_SECONDS, 0)
+        # A guided run of `slow-scorer` passes no `--timeout`: the guide's 900 seconds
+        # decide, and the step is still being waited on when they run out.
+        self.assertEqual(
+            harness.STEP_TIMEOUT_SECONDS, harness.calibration_step_seconds(None)
+        )
+        # The sweep's own `slow-scorer` states five seconds; its calibrator stops itself
+        # at five and the step bound is five plus the same headroom.
+        budget = {tag: opts for tag, _, opts in harness.VARIANTS}["slow-scorer"][
+            "calibration_timeout"
+        ]
+        self.assertEqual(
+            budget + harness.STEP_HEADROOM_SECONDS,
+            harness.calibration_step_seconds(budget),
+        )
+
+    def test_the_measurement_job_outlasts_one_step(self) -> None:
+        """CI's limit is above one step's, so the sweep's own diagnostic is what a hang
+        prints rather than a bare cancellation of the job around it."""
+        workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8")
+        job = workflow.split("\n  measurements:\n", 1)[1]
+        found = re.search(r"^    timeout-minutes: (\d+)$", job, re.M)
+        assert found, "the measurement job states no timeout"
+        self.assertGreater(int(found.group(1)) * 60, self.harness.STEP_TIMEOUT_SECONDS)
+
+    def test_a_step_past_its_budget_is_killed_with_what_it_started(self) -> None:
+        """Ours, loud, and nothing left running: the calibrator's worker is a child."""
+        marker = self.room / "the-worker-outlived-the-step"
+        worker = self.room / "worker.py"
+        worker.write_text(
+            "import pathlib, sys, time\n"
+            "time.sleep(3)\n"
+            "pathlib.Path(sys.argv[1]).write_text('alive')\n",
+            encoding="utf-8",
+        )
+        child = (
+            "import subprocess, sys, time\n"
+            f"subprocess.Popen([sys.executable, {str(worker)!r}, {str(marker)!r}])\n"
+            "time.sleep(60)\n"
+        )
+        started = time.monotonic()
+        with self.assertRaises(self.harness.StepTimedOut) as caught:
+            self.harness.capture(
+                [sys.executable, "-c", child],
+                self.room,
+                self.room / "step.txt",
+                seconds=1,
+            )
+        self.assertLess(time.monotonic() - started, 30)
+        self.assertIsInstance(caught.exception, self.harness.HarnessFault)
+        self.assertNotIsInstance(caught.exception, self.harness.GuideRefused)
+        self.assertIn("1-second budget", str(caught.exception))
+        time.sleep(4)
+        self.assertFalse(marker.exists(), "the step's own child kept running")
+
+    def test_a_step_that_stops_itself_inside_the_budget_is_read_as_before(self) -> None:
+        """The `slow-scorer` shape: the calibrator reaches ITS timeout and says so."""
+        answer = '{"timed_out": true, "timeout_seconds": 1}'
+        done = self.harness.capture_json(
+            [
+                sys.executable,
+                "-c",
+                f"import sys, time; time.sleep(1); print({answer!r}); sys.exit(1)",
+            ],
+            self.room,
+            self.room / "03-calibration-stderr.txt",
+            self.room / "03-calibration.json",
+            seconds=self.harness.calibration_step_seconds(1),
+        )
+        self.assertEqual(1, done.returncode)
+        self.assertEqual(
+            {"timed_out": True, "timeout_seconds": 1},
+            self.harness.decoded(done, "calibrate_evaluator.py"),
+        )
+
+    def test_a_step_sees_only_the_variables_it_is_given(self) -> None:
+        planted = {
+            "OPENROUTER_API_KEY": "sk-or-planted",
+            "TRAIGENT_API_KEY": "tg-planted",
+            "POSTGRES_CONNECTION_STRING": "postgresql://planted",
+            "VIRTUAL_ENV": "/planted/venv",
+        }
+        with mock.patch.dict(os.environ, planted):
+            done = self.harness.capture_json(
+                [
+                    sys.executable,
+                    "-c",
+                    "import json, os; print(json.dumps(dict(os.environ)))",
+                ],
+                self.room,
+                self.room / "stderr.txt",
+                self.room / "out.json",
+            )
+            seen = json.loads(done.stdout)
+            self.assertEqual([], sorted(set(planted) & set(seen)))
+            # LC_CTYPE is the interpreter's own: PEP 538 sets it in a child started
+            # under the C locale. HOME and PYTHONUSERBASE are the sweep's own values
+            # (the test below). Nothing else may appear that was not passed.
+            self.assertLessEqual(
+                set(seen),
+                set(self.harness.STEP_ENVIRONMENT)
+                | {"LC_CTYPE", "HOME", "PYTHONUSERBASE"},
+            )
+            for name in self.harness.STEP_ENVIRONMENT:
+                if name in os.environ:
+                    self.assertEqual(os.environ[name], seen.get(name), name)
+
+    def test_a_step_gets_a_home_of_its_own_and_the_same_packages(self) -> None:
+        """Not the operator's HOME: nothing under it is found by its default name.
+
+        A library that looks for `~/.netrc`, `~/.aws/credentials` or its own config under
+        HOME finds an empty directory. What the operator installed with `pip --user` is
+        still importable, because the user site the sweep's own interpreter uses is named
+        explicitly -- the SDK is found only there on some machines.
+        """
+        probe = (
+            "import importlib.util, json, os, site\n"
+            "print(json.dumps({'home': os.environ.get('HOME'),"
+            " 'listing': sorted(os.listdir(os.environ['HOME'])),"
+            " 'user_site': site.getusersitepackages(),"
+            " 'traigent': importlib.util.find_spec('traigent') is not None}))\n"
+        )
+        done = self.harness.capture_json(
+            [sys.executable, "-c", probe],
+            self.room,
+            self.room / "stderr.txt",
+            self.room / "out.json",
+        )
+        seen = json.loads(done.stdout)
+        self.assertNotEqual(str(Path.home()), seen["home"])
+        self.assertEqual([], seen["listing"], "the step's HOME is not an empty one")
+        self.assertEqual(
+            importlib.util.find_spec("traigent") is not None, seen["traigent"]
+        )
+        import site
+
+        if site.ENABLE_USER_SITE:
+            self.assertEqual(site.getusersitepackages(), seen["user_site"])
+
+    def test_what_one_step_leaves_in_its_home_the_next_does_not_find(self) -> None:
+        """A HOME per step, not per sweep: a config written by one step is gone by the next.
+
+        The calibrator imports the project's evaluator, and whatever it writes under HOME
+        would otherwise be in the HOME of every step after it, the readiness step included.
+        """
+        leave = (
+            "import os, pathlib\n"
+            "pathlib.Path(os.environ['HOME'], '.probe-config').write_text('x')\n"
+            "print(os.environ['HOME'])\n"
+        )
+        first = self.harness.capture_json(
+            [sys.executable, "-c", leave],
+            self.room,
+            self.room / "first.txt",
+            self.room / "first.out",
+        )
+        look = "import json, os; print(json.dumps(os.listdir(os.environ['HOME'])))"
+        second = self.harness.capture_json(
+            [sys.executable, "-c", look],
+            self.room,
+            self.room / "second.txt",
+            self.room / "second.out",
+        )
+        self.assertEqual(0, first.returncode, first.stderr)
+        self.assertTrue(first.stdout.strip(), "the first step named no HOME")
+        self.assertEqual([], json.loads(second.stdout))
+        self.assertFalse(
+            Path(first.stdout.strip()).exists(), "a step's HOME outlived the step"
+        )
+
+    def test_a_step_leaves_no_name_behind_for_its_home(self) -> None:
+        """The HOME a step is given is named while its output is written, and no longer.
+
+        Kept, every step of a sweep would add a dead name to the list each write is
+        rewritten through, a few hundred of them by the end of the bank.
+        """
+        before = list(self.harness.PATH_NAMES)
+        self.harness.capture(
+            [sys.executable, "-c", "print('done')"], self.room, self.room / "step.txt"
+        )
+        self.harness.capture_json(
+            [sys.executable, "-c", "print('{}')"],
+            self.room,
+            self.room / "stderr.txt",
+            self.room / "out.json",
+        )
+        self.assertEqual(before, self.harness.PATH_NAMES)
+
+    def test_a_home_path_a_step_prints_is_written_as_home(self) -> None:
+        """What the step says about its own HOME reaches the log already neutral."""
+        self.harness.capture(
+            [sys.executable, "-c", "import os; print(os.environ['HOME'] + '/x')"],
+            self.room,
+            self.room / "step.txt",
+        )
+        written = (self.room / "step.txt").read_text(encoding="utf-8")
+        self.assertIn("$HOME/x", written)
+        self.assertNotIn("score-bank-home-", written)
+
+    def test_a_home_path_on_stderr_or_resolved_is_written_as_home(self) -> None:
+        """Stderr is neutral too, and so is HOME as the step resolves it.
+
+        Shaped like macOS, where /var links to /private/var: the resolved path is the
+        made one with a prefix in front, so the made path ends it. Replacing the shorter
+        spelling first would leave `/private$HOME` behind.
+        """
+        link = self.room / "tmp-link"
+        real = Path(str(self.room / "private") + str(link))
+        real.mkdir(parents=True)
+        link.symlink_to(real, target_is_directory=True)
+        self.assertTrue(str(real).endswith(str(link)))
+        step = (
+            "import os, sys\n"
+            "print('{}')\n"
+            "print(os.environ['HOME'] + '/said', file=sys.stderr)\n"
+            "print(os.path.realpath(os.environ['HOME']) + '/resolved', file=sys.stderr)\n"
+        )
+        with mock.patch.object(tempfile, "tempdir", str(link)):
+            self.harness.capture_json(
+                [sys.executable, "-c", step],
+                self.room,
+                self.room / "stderr.txt",
+                self.room / "out.json",
+            )
+        written = (self.room / "stderr.txt").read_text(encoding="utf-8")
+        self.assertIn("\n$HOME/said\n", written)
+        self.assertIn("\n$HOME/resolved\n", written)
+        self.assertNotIn("private$HOME", written)
+        self.assertNotIn("score-bank-home-", written)
+
+    def test_a_home_path_a_killed_step_printed_is_written_as_home(self) -> None:
+        """The partial output of a step killed for time is neutral as well."""
+        step = (
+            "import os, time\n"
+            "print(os.environ['HOME'] + '/before-the-hang', flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        log = self.room / "killed.txt"
+        with self.assertRaises(self.harness.StepTimedOut):
+            self.harness.capture(
+                [sys.executable, "-c", step], self.room, log, seconds=1
+            )
+        written = log.read_text(encoding="utf-8")
+        self.assertIn("$HOME/before-the-hang", written)
+        self.assertNotIn("score-bank-home-", written)
+
+    def test_an_interrupt_ends_the_step_and_what_it_started(self) -> None:
+        """Ctrl-C at the sweep reaches the step, whose session is otherwise its own.
+
+        The step may be the calibrator running the project's evaluator with
+        --allow-execution, so an operator stopping the sweep has to stop that too.
+        """
+        marker = self.room / "the-step-outlived-the-interrupt"
+        worker = self.room / "worker.py"
+        worker.write_text(
+            "import pathlib, sys, time\n"
+            "time.sleep(3)\n"
+            "pathlib.Path(sys.argv[1]).write_text('alive')\n",
+            encoding="utf-8",
+        )
+        operator = (
+            "import importlib.util, os, signal, sys, threading\n"
+            f"spec = importlib.util.spec_from_file_location('h', {str(HARNESS)!r})\n"
+            "harness = importlib.util.module_from_spec(spec)\n"
+            "sys.modules['h'] = harness\n"
+            "spec.loader.exec_module(harness)\n"
+            "threading.Timer(0.5, os.kill, (os.getpid(), signal.SIGINT)).start()\n"
+            "from pathlib import Path\n"
+            f"room = Path({str(self.room)!r})\n"
+            "harness.capture([sys.executable, str(room / 'worker.py'),"
+            f" {str(marker)!r}], room, room / 'step.txt')\n"
+        )
+        started = time.monotonic()
+        stopped = subprocess.run(
+            [sys.executable, "-c", operator],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=60,
+        )
+        self.assertNotEqual(0, stopped.returncode, stopped.stdout)
+        self.assertIn("KeyboardInterrupt", stopped.stdout)
+        self.assertLess(time.monotonic() - started, 30)
+        time.sleep(4)
+        self.assertFalse(marker.exists(), "the step kept running after Ctrl-C")
+
+    def test_a_step_that_finishes_leaves_nothing_of_its_own_running(self) -> None:
+        """A child the step started and never waited for goes with the step."""
+        marker = self.room / "an-orphan-kept-running"
+        worker = self.room / "orphan.py"
+        worker.write_text(
+            "import pathlib, sys, time\n"
+            "time.sleep(2)\n"
+            "pathlib.Path(sys.argv[1]).write_text('alive')\n",
+            encoding="utf-8",
+        )
+        step = (
+            "import subprocess, sys\n"
+            f"subprocess.Popen([sys.executable, {str(worker)!r}, {str(marker)!r}],"
+            " stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+            "print('done')\n"
+        )
+        done = self.harness.capture(
+            [sys.executable, "-c", step], self.room, self.room / "step.txt"
+        )
+        self.assertEqual(0, done.returncode)
+        time.sleep(3)
+        self.assertFalse(marker.exists(), "a process the step started outlived it")
+
+    def test_a_killed_step_leaves_what_it_said_in_its_log(self) -> None:
+        """The partial output is the only evidence of why it hung, so it is kept."""
+        step = (
+            "import sys, time\n"
+            "print('reached the second phase', flush=True)\n"
+            "print('x' * 9000, flush=True)\n"
+            "time.sleep(60)\n"
+        )
+        log = self.room / "03-calibration-stderr.txt"
+        with self.assertRaises(self.harness.StepTimedOut):
+            self.harness.capture_json(
+                [sys.executable, "-c", step],
+                self.room,
+                log,
+                self.room / "03-calibration.json",
+                seconds=1,
+            )
+        written = log.read_text(encoding="utf-8")
+        self.assertIn("reached the second phase", written)
+        self.assertIn("characters dropped]", written)
+        self.assertIn("killed after 1 seconds", written)
+        self.assertLess(len(written), self.harness.KILLED_OUTPUT_LIMIT + 1000)
+
+
 class HarnessTestCase(unittest.TestCase):
     """A scratch guide, a scratch `cards/`, and the harness pointed at both."""
 
@@ -619,6 +1532,9 @@ class HarnessTestCase(unittest.TestCase):
             argv.append("--publish")
         argv.extend(extra)
         out, err = io.StringIO(), io.StringIO()
+        # Kept, so a test that expects `main()` to exit through argparse can still read
+        # what it said on the way out.
+        self.said, self.complained = out, err
         original, sys.argv = sys.argv, argv
         try:
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -700,6 +1616,21 @@ class AFaultOfOursPublishesNothing(HarnessTestCase):
         self.assertEqual(
             len(attempted), 1, "the sweep carried on past a fault it could not measure"
         )
+
+    def test_a_step_that_times_out_ends_the_sweep_and_publishes_nothing(self) -> None:
+        """Killed is not refused: no row for it, and no card moved."""
+        before = fingerprint(self.cards)
+
+        def hang(tag: str, *rest: object, **options: object) -> dict[str, object]:
+            raise self.harness.StepTimedOut(
+                ["python3", "$GUIDE/calibrate_evaluator.py"], 960
+            )
+
+        status, said, complained = self.run_sweep(hang, publish=True)
+        self.assertEqual(status, 3)
+        self.assertIn("calibrate_evaluator.py ran past the sweep's", complained)
+        self.assertNotIn("REFUSED", said)
+        self.assertEqual(fingerprint(self.cards), before)
 
     def test_a_failing_builder_is_a_harness_fault_at_the_raise_site(self) -> None:
         """Not through a stub: the real `score_one`, with a real `build.py` refusal.
@@ -811,6 +1742,11 @@ class TheContractCheckStopsBeforeAnythingIsBuilt(HarnessTestCase):
         )
         self.assertEqual(status, 0)
         self.assertIn("went unchecked", complained, "a gate that no-ops says so")
+        self.assertIn("results.json records none", complained)
+        table = json.loads(
+            (self.workspace / "cards-staging" / "results.json").read_text("utf-8")
+        )
+        self.assertIsNone(table["conditions"])
 
     def refusing_nothing(self) -> object:
         def score_one(
@@ -903,6 +1839,190 @@ class TheComparisonIsWithTheWholeRecord(HarnessTestCase):
             "nothing agrees with everything",
             differences,
         )
+
+
+class APartialSweepTouchesOnlyWhatItNames(HarnessTestCase):
+    """`--only`: the runs named, their cards, their rows -- and nothing else moves.
+
+    A partial `--publish` has to leave the table a whole one would write wherever the runs
+    it did not repeat still reproduce, or the CI comparison of the whole bank fails on a
+    table that was never re-measured. So the record here is made by a whole `--publish`,
+    as the real one is, and then touched by partial ones.
+    """
+
+    REFUSED = "best-case--off-method-calibration"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.harness.PINNED_REVISION = self.revision
+        self.harness.recorded_environment = lambda: {"guide": self.revision}
+        self.harness.environment_mismatch = lambda recorded: []
+        status, _, _ = self.run_sweep(self.refusing(self.REFUSED), publish=True)
+        self.assertEqual(status, 1, "the record is made with one refused run")
+
+    def results(self) -> dict[str, object]:
+        return dict(json.loads((self.cards / "results.json").read_text("utf-8")))
+
+    def scoring(self, overall: int) -> object:
+        """A measurement that scores every run it is asked for, at `overall`."""
+        attempted: list[str] = []
+
+        def score_one(
+            tag: str,
+            flags: tuple[str, ...],
+            scripts: Path,
+            workspace: Path,
+            staging: Path,
+            **options: object,
+        ) -> dict[str, object]:
+            attempted.append(tag)
+            room = staging / tag
+            room.mkdir(parents=True, exist_ok=True)
+            # The same files `refusing` writes for a run that scored, which is how the
+            # record in `setUp` was made.
+            (room / "01-build.txt").write_text("built\n", encoding="utf-8")
+            (room / "04-readiness-card.txt").write_text("a card\n", encoding="utf-8")
+            (room / "argv.json").write_text("{}\n", encoding="utf-8")
+            return {**self.scored(tag), "overall": overall}
+
+        self.attempted = attempted
+        return score_one
+
+    def test_only_the_named_runs_are_measured_in_the_sweeps_order(self) -> None:
+        status, _, _ = self.run_sweep(
+            self.scoring(45), False, "--only", "ready", "empty"
+        )
+        self.assertEqual(status, 0)
+        self.assertEqual(["empty", "ready"], self.attempted)
+
+    def test_a_run_the_sweep_does_not_make_is_refused_before_anything_runs(
+        self,
+    ) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            self.run_sweep(self.scoring(45), False, "--only", "no-such-run")
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn(
+            "--only names runs the sweep does not make: no-such-run",
+            self.complained.getvalue(),
+        )
+        self.assertEqual([], self.attempted)
+
+    def test_the_guides_vocabulary_is_recorded_with_the_runs(self) -> None:
+        self.assertEqual(STUB_CONDITIONS, self.results()["conditions"])
+
+    def test_a_partial_publish_puts_its_rows_in_and_leaves_the_rest(self) -> None:
+        before_rows = self.results()["runs"]
+        untouched = {
+            name: digest
+            for name, digest in fingerprint(self.cards).items()
+            if not name.startswith("ready/") and name != "results.json"
+        }
+        status, _, _ = self.run_sweep(self.scoring(77), True, "--only", "ready")
+        self.assertEqual(status, 0)
+        after_rows = self.results()["runs"]
+        assert isinstance(before_rows, list) and isinstance(after_rows, list)
+        self.assertEqual(
+            [row["tag"] for row in before_rows], [row["tag"] for row in after_rows]
+        )
+        for was, now in zip(before_rows, after_rows):
+            if now["tag"] == "ready":
+                self.assertEqual(77, now["overall"])
+            else:
+                self.assertEqual(was, now)
+        self.assertEqual(
+            untouched,
+            {
+                name: digest
+                for name, digest in fingerprint(self.cards).items()
+                if not name.startswith("ready/") and name != "results.json"
+            },
+        )
+
+    def test_a_partial_publish_of_what_reproduces_leaves_the_table_as_it_was(
+        self,
+    ) -> None:
+        """The property the CI comparison of the whole bank depends on."""
+        table = (self.cards / "results.json").read_bytes()
+        status, _, _ = self.run_sweep(self.scoring(45), True, "--only", "ready")
+        self.assertEqual(status, 0)
+        self.assertEqual(table, (self.cards / "results.json").read_bytes())
+
+    def test_a_partial_publish_will_not_mix_two_revisions(self) -> None:
+        table = self.results()
+        table["guide_revision"] = "another-revision"
+        (self.cards / "results.json").write_text(json.dumps(table), encoding="utf-8")
+        before = fingerprint(self.cards)
+        status, _, complained = self.run_sweep(
+            self.scoring(45), True, "--only", "ready"
+        )
+        self.assertEqual(status, 3)
+        self.assertIn("two revisions", complained)
+        self.assertEqual(before, fingerprint(self.cards))
+
+    def test_a_partial_publish_needs_the_environment_the_cards_were_taken_in(
+        self,
+    ) -> None:
+        """Else it rewrites some cards under another interpreter, and the record then
+        disagrees with itself about which one it was measured on -- which is the error
+        `--recorded-environment` and CI's whole-bank comparison stop on."""
+        self.harness.environment_mismatch = lambda recorded: [
+            "python is 3.13.0 here and 3.12.3 on the committed cards"
+        ]
+        before = fingerprint(self.cards)
+        with self.assertRaises(SystemExit) as caught:
+            self.run_sweep(self.scoring(45), True, "--only", "ready")
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("3.13.0 here", self.complained.getvalue())
+        self.assertEqual([], self.attempted, "it built something before refusing")
+        self.assertEqual(before, fingerprint(self.cards))
+
+    def test_the_recorded_environment_is_not_a_subset(self) -> None:
+        """`--only` means nothing to it, so naming runs there is refused, not ignored."""
+        with self.assertRaises(SystemExit) as caught:
+            self.run_sweep(
+                self.scoring(45), False, "--recorded-environment", "--only", "x"
+            )
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--only", self.complained.getvalue())
+
+    def test_a_partial_compare_reads_only_the_runs_it_names(self) -> None:
+        status, said, _ = self.run_sweep(
+            self.scoring(45), False, "--compare", "--only", "ready"
+        )
+        self.assertEqual(status, 0, said)
+        self.assertIn("compared 1 cards byte for byte", said)
+        # A card the comparison was not asked about is not its business ...
+        (self.cards / "empty" / "04-readiness-card.txt").write_text(
+            "edited\n", encoding="utf-8"
+        )
+        status, said, _ = self.run_sweep(
+            self.scoring(45), False, "--compare", "--only", "ready"
+        )
+        self.assertEqual(status, 0, said)
+        # ... and a card it was asked about is, and so is the row.
+        (self.cards / "ready" / "04-readiness-card.txt").write_text(
+            "edited\n", encoding="utf-8"
+        )
+        status, said, _ = self.run_sweep(
+            self.scoring(46), False, "--compare", "--only", "ready"
+        )
+        self.assertEqual(status, 4)
+        self.assertIn("ready/04-readiness-card.txt: line 1 was 'edited'", said)
+        self.assertIn("results.json row ready:", said)
+
+    def test_a_partial_compare_of_a_run_the_record_lacks_is_a_difference(
+        self,
+    ) -> None:
+        table = self.results()
+        runs = table["runs"]
+        assert isinstance(runs, list)
+        table["runs"] = [row for row in runs if row["tag"] != "ready"]
+        (self.cards / "results.json").write_text(json.dumps(table), encoding="utf-8")
+        status, said, _ = self.run_sweep(
+            self.scoring(45), False, "--compare", "--only", "ready"
+        )
+        self.assertEqual(status, 4)
+        self.assertIn("no committed row for ready", said)
 
 
 class TheComparisonNeedsTheRecordedEnvironment(HarnessTestCase):

@@ -2961,7 +2961,13 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
     def test_a_second_agent_is_refused_only_where_it_would_disclose(self) -> None:
         """Every state whose rows ship their own answers still builds with it."""
         for state in build.DATASET_STATES:
-            refused = ("unlabeled", "holdout-labelled", "wrong-answers", "torn")
+            refused = (
+                "unlabeled",
+                "holdout-labelled",
+                "wrong-answers",
+                "torn",
+                "blank-answers",
+            )
             if state == "missing" or state in refused:
                 continue
             with self.subTest(dataset=state):

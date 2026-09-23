@@ -197,9 +197,10 @@ them added nine: the preset names `generated-answer-key`, `mostly-generated-answ
 `mostly-synthetic-source`, `mostly-undeclared-source` and `slow-scorer`, and the dataset-state
 names `generated-answers`, `mostly-generated-answers`, `mostly-synthetic` and
 `mostly-undeclared`; the round after that added `disclaimed-agent`, `disclaimed-scorer` and
-`split-by-question-form`, which is a preset and a dataset state at once. `slow`, the evaluator
-state, is four characters and below the threshold, and `disclaimed`, the agent and evaluator
-state, has no hyphen) --
+`split-by-question-form`, which is a preset and a dataset state at once; and the repairs that
+are not repairs added the agent state `commented-knobs` and the dataset states `empty-file` and
+`blank-answers`. `slow`, the evaluator state, is four characters and below the threshold, and
+`disclaimed`, the agent and evaluator state, and `padded`, a dataset state, have no hyphen) --
 exists to catch *this repository* leaking into a project. The first-run guide is a document about running first-run evaluations, so it uses
 those words for their ordinary meaning: `readiness.py` has a `--preset`-shaped vocabulary,
 `run-safety.md` says "deliberate", `component-creation.md` says "fixture", and `hand-written`

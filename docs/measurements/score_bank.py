@@ -26,8 +26,32 @@ committed directory of every run that produced a card, and leaves alone the dire
 run that did not -- a refused run's staged output is the two or three files it reached before
 the refusal, and moving that over a committed card deletes the card itself.
 
+**`--only RUN ...` makes the named runs and no others.** With `--compare` it compares their
+cards, their rows of `results.json` and the guide's recorded vocabulary; with `--publish` it
+replaces their cards and puts their rows into the committed `results.json` in the order a
+whole sweep writes them, leaving every other row exactly as it was -- and, like `--compare`, only in the environment
+the committed cards record. Adding a run then costs
+its own build rather than the bank's, and the whole-bank `--compare` in CI is what checks
+that everything it did not repeat still reproduces.
+
+**It records what the guide can say.** `results.json` carries `conditions` beside the runs:
+every cap condition the pinned `readiness.py` can raise, with the remedy and the ranked
+ceiling it gives each, read from the guide's own tables by the same probe that reads its
+document contracts. The suite holds the cards to it -- every condition is on a card or is
+named as unreached, with the reason.
+
 Standard library only, like `build.py`. It needs a checkout of the guide, because the
 scripts it runs are the guide's, and it never reaches the network.
+
+**Every step runs bounded and without the shell.** A step is given `STEP_ENVIRONMENT`, an
+empty HOME of its own that is removed when it ends, and the user site this interpreter
+imports from, and nothing else of the environment this script was started in -- no provider
+key, no database URL -- because it runs code that is not this script's, the project's own
+evaluator included, and because preflight writes what it finds there into the card. It runs
+in a process group of its own, which is killed once the step's output is read, on Ctrl-C,
+and once it outlasts `STEP_TIMEOUT_SECONDS`: the guide's own calibration ceiling plus the
+headroom the guide's harness allows the same command. A kill for time writes what the step
+said into its log, ends the sweep on exit 3 and publishes nothing; it is never a row.
 
 **It pins the revision.** `PINNED_REVISION` below is the commit every figure under `cards/`
 was measured at, and the run refuses a checkout sitting on anything else rather than quietly
@@ -71,9 +95,16 @@ is what an assistant that had opened the file would pass.
 
 `--agent-knobs` is the coding assistant's own read of the agent's source, and the guide is
 explicit that the opening score requires it wherever an agent was found. No assistant is
-running here, so the two documents under `agent-knobs/` stand in for one. They were written
-by hand against the two agent components and they cite real lines on the real call path --
-which is why the figures are faithful, and also why another honest read could move them.
+running here, so the documents under `agent-knobs/` stand in for one, chosen by the agent's
+state (`AGENT_READS`). Each was written by hand against its agent component and cites real
+lines on the real call path -- which is why the figures are faithful, and also why another
+honest read could move them. One more, `commented-knobs-credited.json`, is unfaithful on
+purpose and is scored only by `no-knobs--knobs-in-a-comment--credited`, which names it with
+`agent_read`: it credits
+settings its agent names only in a comment, citing the nearest executable lines, because a
+citation of the comment itself is refused outright. The guide cannot verify such a claim
+at the opening and treats it as advisory rather than blocking, so that run shows what a
+careless read does to the card, beside the same agent read faithfully.
 
 `--calibration` runs only where the demo ships probe answers AND the guide's opening gate
 allows it: `references/component-creation.md` opens calibration "if the verdict is sufficient
@@ -109,14 +140,19 @@ from __future__ import annotations
 
 import argparse
 import ast
+import contextlib
 import importlib.metadata
 import json
+import os
 import pathlib
 import shutil
+import signal
+import site
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 # The guide commit every figure under cards/ was measured at. Changing this is a deliberate
 # re-measurement, never a side effect of somebody's checkout having moved. WORKING_REVISION is
@@ -133,6 +169,14 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 CARDS = HERE / "cards"
 KNOBS = HERE / "agent-knobs"
+
+# The faithful read of the agent's source each agent state is scored with; every other state
+# ships the tunable agent and is read with `ready.json`. A run may name a different read with
+# the `agent_read` option -- one does, to score an unfaithful read against the faithful one.
+AGENT_READS = {
+    "no-knobs": "no-knobs.json",
+    "commented-knobs": "commented-knobs.json",
+}
 
 # The presets in the order the score table lists them: by opening score.
 PRESETS = (
@@ -271,6 +315,39 @@ VARIANTS: tuple[tuple[str, tuple[str, ...], dict[str, Any]], ...] = (
         ("--preset", "split-by-question-form", "--calibration", "present"),
         {},
     ),
+    # Repairs that are not repairs. Each starts from a preset whose remedy the guide
+    # names, changes the one thing that remedy is about so that it looks done, and leaves
+    # it undone: the data file created and left empty, an answer field added to every row
+    # with nothing in it, settings to tune over written into a comment of an agent that
+    # reads none, and ten rows copied up to thirty. Whether the guide still holds each
+    # one is recorded beside the committed cards in tests/test_score_bank.py.
+    (
+        "no-data--empty-file",
+        ("--preset", "no-data", "--dataset", "empty-file"),
+        {},
+    ),
+    (
+        "no-labels--blank-answers",
+        ("--preset", "no-labels", "--dataset", "blank-answers"),
+        {},
+    ),
+    (
+        "no-knobs--knobs-in-a-comment",
+        ("--preset", "no-knobs", "--agent", "commented-knobs"),
+        {},
+    ),
+    # The same project, handed a read that credits the settings the comment names. The
+    # project is unchanged; what changes is what the guide is told about it.
+    (
+        "no-knobs--knobs-in-a-comment--credited",
+        ("--preset", "no-knobs", "--agent", "commented-knobs"),
+        {"agent_read": "commented-knobs-credited.json"},
+    ),
+    (
+        "hand-written--padded",
+        ("--preset", "hand-written", "--dataset", "padded"),
+        {},
+    ),
 )
 
 # The four combinations of declared method and declared task kind, all on the same
@@ -281,6 +358,22 @@ GRID: tuple[tuple[str, str, str], ...] = (
     ("grid-normalized-exact--code-sql", "normalized-exact", "code-sql"),
     ("grid-exact--structured", "exact", "structured"),
 )
+
+
+def sweep() -> list[tuple[str, tuple[str, ...], dict[str, Any]]]:
+    """Every run, as (tag, build flags, options), in the order `results.json` lists them.
+
+    One list for the whole sweep, a partial one and the merge a partial `--publish` makes,
+    so a run cannot be measured under one set of flags and filed under another.
+    """
+    return (
+        [(preset, ("--preset", preset), {}) for preset in PRESETS]
+        + [(tag, flags, dict(options)) for tag, flags, options in VARIANTS]
+        + [
+            (tag, ("--preset", "checked"), {"method": declared, "task_kind": kind})
+            for tag, declared, kind in GRID
+        ]
+    )
 
 
 class MeasurementError(RuntimeError):
@@ -327,6 +420,33 @@ class HarnessFault(MeasurementError):
     """
 
 
+class StepTimedOut(HarnessFault):
+    """A step outlasted the sweep's own budget for one step, and was killed.
+
+    Not a refusal: the guide says nothing when it is killed, so there is no sentence of
+    its own to record, and a row would be this script inventing one. It is a
+    `HarnessFault` because what ran out is ours -- the budget this sweep sets above the
+    guide's -- so the sweep stops, publishes nothing, and says which step and how long.
+    """
+
+    def __init__(self, argv: list[str], seconds: int, output: str = "") -> None:
+        # The script the step runs, which is what a reader recognises: `build.py`,
+        # `calibrate_evaluator.py`, or the `readiness.py` the contract probe reads.
+        step = next(
+            (Path(piece).name for piece in argv[1:] if piece.endswith(".py")), argv[0]
+        )
+        super().__init__(
+            f"{step} ran past the "
+            f"sweep's {seconds}-second budget for one step and was killed with every "
+            "process it started. The guide's own calibration budget is below that "
+            "bound, so a step that reaches it has stopped answering rather than run "
+            "slowly; nothing was recorded for the run and cards/ was not touched"
+        )
+        self.argv = argv
+        self.seconds = seconds
+        self.output = output
+
+
 # Every transcript under cards/ is committed, so no line in one may carry a path from the
 # machine that produced it. The substitution lives at the writer, not at each call site:
 # argv.json was rewritten and the .txt transcripts beside it were not, and a rule applied at
@@ -351,12 +471,193 @@ def neutralise(text: str) -> str:
     return text
 
 
-def capture(argv: list[str], cwd: Path, log: Path) -> subprocess.CompletedProcess[str]:
+# How long one step may run before the sweep kills it. The guide's calibrator never gives
+# itself more than CALIBRATION_TIMEOUT_CEILING_SECONDS = 900 by default
+# (skills/traigent-first-run/scripts/calibrate_evaluator.py:103 at the pin), and a
+# calibration that spends all of it still has to stop its worker and write the result
+# that says so: `slow-scorer` measured at the default budget exited at 900 seconds with
+# `timed_out: true`, and that record is the finding. So this bound sits ABOVE the guide's,
+# by the headroom the guide's own harness allows the same command for exactly that
+# teardown (CALIBRATION_TIMEOUT_HEADROOM_SECONDS = 60, tests/behavioral/harness.py:130 at
+# the pin). The guide's budget decides every run that finishes; this one only ends a step
+# that has stopped answering, which the sweep otherwise waited on for ever.
+GUIDE_CALIBRATION_CEILING_SECONDS = 900
+STEP_HEADROOM_SECONDS = 60
+STEP_TIMEOUT_SECONDS = GUIDE_CALIBRATION_CEILING_SECONDS + STEP_HEADROOM_SECONDS
+
+# The only variables a step inherits. Every step runs code that is not this script's --
+# `build.py`, the guide's scripts, and through `calibrate_evaluator.py --allow-execution`
+# the project's own evaluator -- and each used to inherit the whole shell it was started
+# from: every provider key, database URL and token the operator had exported. Preflight
+# also WRITES what it finds there into the card ("no LLM provider credential names are
+# present", "traigent-key: not configured yet"), so the committed evidence depended on
+# whose shell measured it.
+#
+# Four are passed through from the operator's shell when it has them: PATH to find the
+# interpreter, LANG and LC_ALL for the text encoding, TMPDIR for where the calibrator's
+# temporary files may go. They are the variables in the guide's own behavioural-harness
+# environment (tests/behavioral/harness.py `command_environment` at the pin) that describe
+# the machine; that harness sets fixed values for them, and this sweep passes the
+# operator's own instead, so the locale a card was taken under is the operator's.
+#
+# HOME is NOT the operator's. Each step gets an empty directory of its own, made when it
+# starts and removed when it ends, so nothing a library looks for under HOME by its default
+# name -- a `~/.netrc`, `~/.aws/credentials`, the SDK's own config -- is found, and nothing
+# one step writes there (the calibrator imports the project's evaluator) is found by the
+# next. That is a default
+# closed, not a sandbox: a path spelled out in full is still readable. What the sweep's own
+# interpreter imports from the user site (`pip install --user`, which is where the SDK is
+# on some machines) is still importable, because that site is named for the step through
+# PYTHONUSERBASE rather than found through HOME.
+#
+# The guide sets what it needs beyond these itself -- the calibrator's worker gets
+# `TRAIGENT_OFFLINE_MODE` and the local price map from `subprocess_environment`, and
+# preflight sets the price map too.
+STEP_ENVIRONMENT = ("PATH", "LANG", "LC_ALL", "TMPDIR")
+
+
+def calibration_step_seconds(budget: int | None) -> int:
+    """The bound on a calibration step: the budget the guide gives it, plus the headroom.
+
+    The same derivation the guide's harness makes for the same command -- an explicit
+    `--timeout` where one is passed, the ceiling where none is -- so `slow-scorer`, which
+    states a five-second budget, is killed by its own calibrator and never by this sweep.
+    """
+    return (
+        GUIDE_CALIBRATION_CEILING_SECONDS if budget is None else budget
+    ) + STEP_HEADROOM_SECONDS
+
+
+def step_environment(home: Path) -> dict[str, str]:
+    """What a step is given: `STEP_ENVIRONMENT`, `home` as HOME, and the user site."""
+    given = {name: os.environ[name] for name in STEP_ENVIRONMENT if name in os.environ}
+    given["HOME"] = str(home)
+    if site.ENABLE_USER_SITE:
+        given["PYTHONUSERBASE"] = site.getuserbase()
+    return given
+
+
+# How much of a killed step's output its log keeps: the first 4,000 characters, and a count
+# of the rest, which is what the guide's harness keeps of a command it kills
+# (TIMEOUT_CAPTURE_LIMIT = 4_000, tests/behavioral/harness.py at the pin) -- the start, where
+# the invocation's own errors and the phases it opened with are, and short enough that a
+# runaway printer cannot bury the line that says it was killed.
+KILLED_OUTPUT_LIMIT = 4_000
+
+
+def killed_output(text: str) -> str:
+    """The start of a killed step's output, and how much was dropped after it."""
+    if len(text) <= KILLED_OUTPUT_LIMIT:
+        return text
+    dropped = len(text) - KILLED_OUTPUT_LIMIT
+    return f"{text[:KILLED_OUTPUT_LIMIT]}\n[+{dropped} characters dropped]\n"
+
+
+def end_group(group: int) -> None:
+    """Kill every process left in a step's group; a group already empty is fine.
+
+    After a normal finish this runs once the step itself has been reaped. On Linux, while any
+    member of its group is alive the group's id cannot be handed out again; once none is, a
+    new process could in principle take that id as its own group before this call, and would
+    be killed with it. That window is left open deliberately: closing it would mean replacing
+    `communicate()`'s reap -- waiting with `os.waitid(..., WEXITED | WNOWAIT)` and killing the
+    group before the leader is reaped -- for a race no sweep has met.
+    """
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(group, signal.SIGKILL)
+
+
+def run_step(
+    argv: list[str], cwd: Path, *, merge_stderr: bool, seconds: int
+) -> subprocess.CompletedProcess[str]:
+    """Run one step in a session of its own, under a budget, with the minimal environment.
+
+    A session of its own because the step is rarely one process: the calibrator runs the
+    evaluator in a worker, and killing only the calibrator leaves that worker holding the
+    pipe this call is reading, so the wait never ends. The whole group is killed instead.
+
+    The session is also why the group is killed on every other way out. A terminal's
+    Ctrl-C goes to its foreground group, which a step in its own session is not in, so an
+    interrupt of this script used to leave the step -- the evaluator, with execution
+    allowed -- running on after it. And a step that exits leaving a child of its own
+    behind leaves that child in the group, so the group is ended once the step's output is
+    read, however it finished.
+    """
+    home = Path(tempfile.mkdtemp(prefix="score-bank-home-"))
+    try:
+        with subprocess.Popen(
+            argv,
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT if merge_stderr else subprocess.PIPE,
+            text=True,
+            env=step_environment(home),
+            start_new_session=True,
+        ) as child:
+            try:
+                stdout, stderr = child.communicate(timeout=seconds)
+            except subprocess.TimeoutExpired:
+                end_group(child.pid)
+                said, complained = child.communicate()
+                raise StepTimedOut(
+                    argv,
+                    seconds,
+                    killed_output(homeless((said or "") + (complained or ""), home)),
+                ) from None
+            except BaseException:
+                end_group(child.pid)
+                child.communicate()
+                raise
+            end_group(child.pid)
+    finally:
+        shutil.rmtree(home, ignore_errors=True)
+    return subprocess.CompletedProcess(
+        argv, child.returncode, homeless(stdout, home), homeless(stderr or "", home)
+    )
+
+
+def homeless(text: str, home: Path) -> str:
+    """A step's output with its throwaway HOME written as `$HOME`, as the operator's is.
+
+    Replaced here rather than registered with `name_path`, because the directory lives only
+    as long as the step: registered, every step of a sweep left a dead name behind in the
+    list every committed file is rewritten through.
+
+    Both spellings are replaced, the path as made and the path as resolved: behind a
+    symlinked temporary directory a step that resolves its HOME prints the second, which
+    need not contain the first. The longer goes first, so a spelling that ends with the
+    other is not left half-replaced -- on macOS, where /var links to /private/var, the
+    resolved path is the made one with /private in front.
+    """
+    for spelling in sorted({str(home), str(home.resolve())}, key=len, reverse=True):
+        text = text.replace(spelling, "$HOME")
+    return text
+
+
+def killed_log(argv: list[str], log: Path, killed: StepTimedOut) -> None:
+    """What a killed step said before it was killed, where its transcript would be."""
+    log.write_text(
+        neutralise(
+            "$ "
+            + " ".join(argv)
+            + "\n"
+            + killed.output
+            + f"killed after {killed.seconds} seconds by the sweep's step budget\n"
+        ),
+        encoding="utf-8",
+    )
+
+
+def capture(
+    argv: list[str], cwd: Path, log: Path, seconds: int = STEP_TIMEOUT_SECONDS
+) -> subprocess.CompletedProcess[str]:
     """Run one command, writing the invocation, the whole output and the exit status."""
     log.parent.mkdir(parents=True, exist_ok=True)
-    done = subprocess.run(
-        argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
-    )
+    try:
+        done = run_step(argv, cwd, merge_stderr=True, seconds=seconds)
+    except StepTimedOut as killed:
+        killed_log(argv, log, killed)
+        raise
     log.write_text(
         neutralise(
             "$ " + " ".join(argv) + "\n" + done.stdout + f"exit={done.returncode}\n"
@@ -367,13 +668,19 @@ def capture(argv: list[str], cwd: Path, log: Path) -> subprocess.CompletedProces
 
 
 def capture_json(
-    argv: list[str], cwd: Path, log: Path, out: Path
+    argv: list[str],
+    cwd: Path,
+    log: Path,
+    out: Path,
+    seconds: int = STEP_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str]:
     """The same, for a command whose stdout is the JSON another step reads."""
     log.parent.mkdir(parents=True, exist_ok=True)
-    done = subprocess.run(
-        argv, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-    )
+    try:
+        done = run_step(argv, cwd, merge_stderr=False, seconds=seconds)
+    except StepTimedOut as killed:
+        killed_log(argv, log, killed)
+        raise
     out.write_text(neutralise(done.stdout), encoding="utf-8")
     log.write_text(
         neutralise(
@@ -389,6 +696,12 @@ def capture_json(
 # asks the revision in front of it instead of keeping a second copy of a contract that has
 # already moved twice. The three constants are the three independently editable contracts
 # the guide enforces on these two documents: the top level, the knobs half, the build half.
+#
+# The same import answers one more question, which is what the guide can say at all: every
+# cap condition it can raise, with the remedy and the ranked ceiling it gives each. Read
+# from `CAP_CEILING` and `ACTION_FOR_CONDITION`, the two tables `readiness.py` holds equal
+# by its own test, so the vocabulary the cards are checked against is the pinned guide's
+# and never a list kept here. `results.json` records it beside the runs.
 CONTRACT_PROBE = """
 import importlib.util
 import json
@@ -411,12 +724,24 @@ def listed(name):
     return None
 
 
+def conditions():
+    ceilings = getattr(module, "CAP_CEILING", None)
+    remedies = getattr(module, "ACTION_FOR_CONDITION", None)
+    if not isinstance(ceilings, dict) or not isinstance(remedies, dict):
+        return None
+    return {
+        condition: {"action": remedies.get(condition), "ceiling": ceilings[condition]}
+        for condition in sorted(ceilings)
+    }
+
+
 print(
     json.dumps(
         {
             "document": listed("AGENT_KNOBS_DOCUMENT_FIELDS"),
             "knob": listed("DISCOVERED_KNOB_FIELDS"),
             "build": listed("BUILD_CHECK_FIELDS"),
+            "conditions": conditions(),
         }
     )
 )
@@ -429,26 +754,13 @@ print(
 REQUIRED_BUILD_FIELD = "source_lines"
 
 
-def contract_mismatch(scripts: Path) -> tuple[list[str], list[str]]:
-    """Where the guide in front of us and the documents beside us disagree, in its terms.
-
-    The pin and the documents' schema are two independently editable facts. This check
-    detects disagreement before anything is built, against `readiness.py`'s own field
-    constants rather than against a copy of them kept in this file.
-
-    Returns the disagreements and, beside them, what could not be checked at all -- a
-    revision that renames or reshapes one of those constants makes this gate a no-op for
-    that half, and a gate that has quietly stopped gating has to say so on the way past.
-
-    What it does *not* claim to derive: requiredness. Requiredness is not expressible from
-    field constants alone, so the settled/undetermined distinction is read from the document
-    exactly as the guide reads it, and the field name is written down above.
-    """
-    probe = subprocess.run(
+def read_guide(scripts: Path) -> dict[str, Any]:
+    """What `CONTRACT_PROBE` reads out of the guide's `readiness.py`, as an object."""
+    probe = run_step(
         [sys.executable, "-c", CONTRACT_PROBE, str(scripts / "readiness.py")],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
+        HERE,
+        merge_stderr=False,
+        seconds=STEP_TIMEOUT_SECONDS,
     )
     if probe.returncode != 0:
         raise HarnessFault(
@@ -471,7 +783,24 @@ def contract_mismatch(scripts: Path) -> tuple[list[str], list[str]]:
         raise HarnessFault(
             f"the contract probe answered with a {type(contracts).__name__}, not an object"
         )
+    return contracts
 
+
+def contract_mismatch(contracts: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Where the guide in front of us and the documents beside us disagree, in its terms.
+
+    The pin and the documents' schema are two independently editable facts. This check
+    detects disagreement before anything is built, against `readiness.py`'s own field
+    constants rather than against a copy of them kept in this file.
+
+    Returns the disagreements and, beside them, what could not be checked at all -- a
+    revision that renames or reshapes one of those constants makes this gate a no-op for
+    that half, and a gate that has quietly stopped gating has to say so on the way past.
+
+    What it does *not* claim to derive: requiredness. Requiredness is not expressible from
+    field constants alone, so the settled/undetermined distinction is read from the document
+    exactly as the guide reads it, and the field name is written down above.
+    """
     complaints: list[str] = []
     unchecked: list[str] = []
     for half, label in (
@@ -619,10 +948,12 @@ def readiness_command(
     declared: str | None,
     task_kind: str,
     tag: str,
+    agent_read: str | None = None,
 ) -> list[str]:
     """The readiness call for one built project, from what its record declares.
 
-    `agent` is None when the sweep passes no agent read. Each origin comes from the
+    `agent` is None when the sweep passes no agent read; `agent_read` names a read other
+    than the faithful one `AGENT_READS` keeps for the agent's state. Each origin comes from the
     record through `declared_origin`, so what the card says of who wrote a component is
     what the builder declared and never a default of this script's.
     """
@@ -633,9 +964,7 @@ def readiness_command(
         str(room / "02-preflight.json"),
     ]
     if agent:
-        document = KNOBS / (
-            "no-knobs.json" if agent["state"] == "no-knobs" else "ready.json"
-        )
+        document = KNOBS / (agent_read or AGENT_READS.get(agent["state"], "ready.json"))
         readiness += [
             "--agent-knobs",
             str(document),
@@ -665,6 +994,7 @@ def score_one(
     staging: Path,
     *,
     agent_knobs: bool = True,
+    agent_read: str | None = None,
     force_execution_calibration: bool = False,
     method: str | None = None,
     task_kind: str = "code-sql",
@@ -804,6 +1134,7 @@ def score_one(
                 project,
                 room / "03-calibration-stderr.txt",
                 room / "03-calibration.json",
+                seconds=calibration_step_seconds(calibration_timeout),
             )
             calibrated = True
             # A refusal is named here rather than left to the readiness step, which
@@ -824,6 +1155,7 @@ def score_one(
         declared=declared,
         task_kind=task_kind,
         tag=tag,
+        agent_read=agent_read,
     )
 
     capture(readiness, project, room / "04-readiness-card.txt")
@@ -972,59 +1304,130 @@ def environment_mismatch(recorded: dict[str, str]) -> list[str]:
     ]
 
 
-def compare_with_record(staging: Path) -> tuple[list[str], int, list[str]]:
+def compare_with_record(
+    staging: Path, only: Sequence[str] | None = None
+) -> tuple[list[str], int, list[str]]:
     """What a fresh measurement under `staging` says that the committed record does not.
 
     Returns the differences, how many cards were compared byte for byte, and the runs the
     record says were refused. A refused run's committed directory is the older card
     `--publish` deliberately leaves in place, so there is nothing fresh to compare it with;
     its refusal is compared instead, as a row of `results.json`, which is compared whole.
+
+    With `only`, the comparison is of those runs and nothing else: their cards, their rows
+    of `results.json`, and the guide's recorded vocabulary, which every sweep reads. A run
+    named there that the record does not hold is a difference -- a subset that compares a
+    card nobody has published agrees with nothing, it does not agree with everything.
     """
     record = ours(CARDS / "results.json", "the committed cards/results.json")
     differences: list[str] = []
-    fresh_table = (staging / "results.json").read_bytes()
-    if fresh_table != (CARDS / "results.json").read_bytes():
-        differences.append(
-            "results.json: "
-            + first_difference(
-                (CARDS / "results.json").read_bytes().decode("utf-8"),
-                fresh_table.decode("utf-8"),
+    if only is None:
+        fresh_table = (staging / "results.json").read_bytes()
+        if fresh_table != (CARDS / "results.json").read_bytes():
+            differences.append(
+                "results.json: "
+                + first_difference(
+                    (CARDS / "results.json").read_bytes().decode("utf-8"),
+                    fresh_table.decode("utf-8"),
+                )
             )
-        )
-    runs = [run["tag"] for run in record.get("runs", [])]
-    refused = [run["tag"] for run in record.get("runs", []) if run.get("refused")]
+        rows = record.get("runs", [])
+    else:
+        fresh = ours(staging / "results.json", "this run's own results.json")
+        for field in ("guide_revision", "conditions"):
+            if fresh.get(field) != record.get(field):
+                differences.append(
+                    f"results.json: {field} differs from the committed record"
+                )
+        committed_rows = {row["tag"]: row for row in record.get("runs", [])}
+        fresh_rows = {row["tag"]: row for row in fresh.get("runs", [])}
+        rows = []
+        for tag in only:
+            if tag not in committed_rows:
+                differences.append(f"results.json: no committed row for {tag}")
+                continue
+            rows.append(committed_rows[tag])
+            if fresh_rows.get(tag) != committed_rows[tag]:
+                differences.append(
+                    f"results.json row {tag}: "
+                    + first_difference(
+                        json.dumps(committed_rows[tag], indent=2),
+                        json.dumps(fresh_rows.get(tag), indent=2),
+                    )
+                )
+    runs = [run["tag"] for run in rows]
+    refused = [run["tag"] for run in rows if run.get("refused")]
     compared = 0
     for tag in runs:
         if tag in refused:
             continue
-        committed, fresh = files_under(CARDS / tag), files_under(staging / tag)
-        for name in sorted(set(committed) | set(fresh)):
-            if name not in fresh:
+        committed, produced = files_under(CARDS / tag), files_under(staging / tag)
+        for name in sorted(set(committed) | set(produced)):
+            if name not in produced:
                 differences.append(f"{tag}/{name}: committed, and not produced now")
             elif name not in committed:
                 differences.append(f"{tag}/{name}: produced now, and not committed")
-            elif committed[name] != fresh[name]:
+            elif committed[name] != produced[name]:
                 differences.append(
                     f"{tag}/{name}: "
                     + first_difference(
                         committed[name].decode("utf-8", "replace"),
-                        fresh[name].decode("utf-8", "replace"),
+                        produced[name].decode("utf-8", "replace"),
                     )
                 )
         compared += 1
-    unmeasured = sorted(
-        entry.name
-        for entry in CARDS.iterdir()
-        if entry.is_dir() and entry.name not in runs
-    )
-    for name in unmeasured:
-        differences.append(f"{name}/: a committed card no run in the record produces")
-    if compared == 0 or compared != len(runs) - len(refused):
+    if only is None:
+        unmeasured = sorted(
+            entry.name
+            for entry in CARDS.iterdir()
+            if entry.is_dir() and entry.name not in runs
+        )
+        for name in unmeasured:
+            differences.append(
+                f"{name}/: a committed card no run in the record produces"
+            )
+    if (only is None and compared == 0) or compared != len(runs) - len(refused):
         differences.append(
             f"compared {compared} cards where the record has {len(runs) - len(refused)} "
             "that scored; a comparison of nothing agrees with everything"
         )
     return differences, compared, refused
+
+
+def merged_record(fresh: dict[str, Any]) -> dict[str, Any]:
+    """The committed `results.json` with the rows a partial sweep measured put in.
+
+    Every other row stays exactly as committed, and the rows keep the order a whole sweep
+    writes them in, so the table a partial `--publish` leaves is the one a whole one would
+    write wherever the runs it did not repeat still reproduce -- which is what the CI
+    comparison of the whole bank then checks. Refused, rather than guessed at: a record
+    taken at another revision, and a record holding a run this sweep no longer names.
+    """
+    committed = ours(CARDS / "results.json", "the committed cards/results.json")
+    if committed.get("guide_revision") != fresh["guide_revision"]:
+        raise HarnessFault(
+            f"cards/results.json records guide {committed.get('guide_revision')} and "
+            f"this run measured {fresh['guide_revision']}; a partial --publish cannot "
+            "leave one table measured at two revisions"
+        )
+    order = [tag for tag, _, _ in sweep()]
+    kept = {row["tag"]: row for row in committed.get("runs", [])}
+    stray = sorted(set(kept) - set(order))
+    if stray:
+        raise HarnessFault(
+            f"cards/results.json holds {', '.join(stray)}, which this sweep no longer "
+            "names; a whole --publish rewrites the table"
+        )
+    measured = {row["tag"]: row for row in fresh["runs"]}
+    return {
+        "guide_revision": fresh["guide_revision"],
+        "conditions": fresh["conditions"],
+        "runs": [
+            measured.get(tag, kept.get(tag))
+            for tag in order
+            if tag in measured or tag in kept
+        ],
+    }
 
 
 def files_under(directory: Path) -> dict[str, bytes]:
@@ -1108,9 +1511,22 @@ def main() -> int:
         help="print the guide revision, Python, traigent and litellm the committed "
         "cards were measured with, as name=value lines, and exit",
     )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        metavar="RUN",
+        help="measure these runs and no others: with --compare, compare their cards "
+        "and their rows of results.json; with --publish, replace their cards and put "
+        "their rows into the committed results.json, leaving every other row as it is",
+    )
     arguments = parser.parse_args()
 
     if arguments.recorded_environment:
+        if arguments.only:
+            parser.error(
+                "--recorded-environment reads the committed record whole and measures "
+                "nothing, so --only has no runs to name for it"
+            )
         try:
             recorded = recorded_environment()
         except HarnessFault as broken:
@@ -1120,6 +1536,16 @@ def main() -> int:
         return 0
     if arguments.guide is None:
         parser.error("--guide is required to measure")
+    runs = sweep()
+    only: list[str] | None = None
+    if arguments.only:
+        only = list(dict.fromkeys(arguments.only))
+        unknown = sorted(set(only) - {tag for tag, _, _ in runs})
+        if unknown:
+            parser.error(
+                f"--only names runs the sweep does not make: {', '.join(unknown)}"
+            )
+        runs = [run for run in runs if run[0] in only]
 
     scripts = (
         arguments.guide.expanduser().resolve()
@@ -1161,6 +1587,12 @@ def main() -> int:
                 f"--compare needs the pinned revision {PINNED_REVISION[:8]}, the one the "
                 "committed cards record"
             )
+    # A partial publish writes some cards beside others it leaves as they were, so it has
+    # to be taken where they were: a card from another interpreter is a record that
+    # disagrees with itself about what it was measured on, which `--recorded-environment`
+    # and the CI comparison of the whole bank both stop on. A whole publish rewrites every
+    # card in one environment and needs no such check.
+    if arguments.compare or (arguments.publish and only is not None):
         try:
             mismatch = environment_mismatch(recorded_environment())
         except HarnessFault as broken:
@@ -1168,7 +1600,8 @@ def main() -> int:
         if mismatch:
             parser.error(
                 "this interpreter is not the environment the committed cards were "
-                "measured in, so every card would differ for that reason alone:\n    "
+                "measured in, so every card it made would differ for that reason "
+                "alone:\n    "
                 + "\n    ".join(mismatch)
                 + "\n  `--recorded-environment` prints what to install."
             )
@@ -1178,9 +1611,18 @@ def main() -> int:
     # property of the pair, not of any one run, so it stops the sweep in one sentence
     # instead of 26 refusals over a rewritten cards/.
     try:
-        disagreements, unchecked = contract_mismatch(scripts)
+        contracts = read_guide(scripts)
+        disagreements, unchecked = contract_mismatch(contracts)
     except HarnessFault as broken:
         return harness_fault(broken, None)
+    vocabulary = contracts.get("conditions")
+    if not isinstance(vocabulary, dict):
+        vocabulary = None
+        unchecked.append(
+            "this revision publishes no condition table (CAP_CEILING and "
+            "ACTION_FOR_CONDITION), so results.json records none and nothing checks "
+            "the cards against what the guide can raise"
+        )
     for gap in unchecked:
         # A gate that has become a no-op says so rather than passing silently.
         print(f"note: {gap}", file=sys.stderr)
@@ -1262,29 +1704,28 @@ def main() -> int:
         )
 
     try:
-        for preset in PRESETS:
-            measure(preset, ("--preset", preset))
-        for tag, flags, options in VARIANTS:
+        for tag, flags, options in runs:
             measure(tag, flags, **options)
-        for tag, declared, kind in GRID:
-            measure(tag, ("--preset", "checked"), method=declared, task_kind=kind)
     except HarnessFault as broken:
         return harness_fault(broken, staging)
 
+    record = {"guide_revision": revision, "conditions": vocabulary, "runs": results}
     (staging / "results.json").write_text(
-        json.dumps({"guide_revision": revision, "runs": results}, indent=2) + "\n",
-        encoding="utf-8",
+        json.dumps(record, indent=2) + "\n", encoding="utf-8"
     )
     refused = [row for row in results if row.get("refused")]
     print(f"\nguide revision {revision}")
 
     if arguments.compare:
         try:
-            differences, compared, recorded_refusals = compare_with_record(staging)
+            differences, compared, recorded_refusals = compare_with_record(
+                staging, only
+            )
         except HarnessFault as broken:
             return harness_fault(broken, staging)
         print(
-            f"compared {compared} cards byte for byte with cards/, and results.json whole"
+            f"compared {compared} cards byte for byte with cards/, and "
+            + ("results.json whole" if only is None else "their rows of results.json")
             + (
                 f"; refusals compared as recorded: {', '.join(recorded_refusals)}"
                 if recorded_refusals
@@ -1319,6 +1760,17 @@ def main() -> int:
         # cannot be produced again. Promotion is a loop of moves rather than one atomic
         # rename, so an interruption leaves cards/ part old and part new; re-run it.
         incomplete = {row["tag"] for row in refused}
+        # A partial sweep's own table holds only the runs it made, so the committed one
+        # with those rows put in replaces it before promotion -- and before anything
+        # moves, so a table that cannot be merged leaves every card where it was.
+        if only is not None:
+            try:
+                table = merged_record(record)
+            except HarnessFault as broken:
+                return harness_fault(broken, staging)
+            (staging / "results.json").write_text(
+                json.dumps(table, indent=2) + "\n", encoding="utf-8"
+            )
         CARDS.mkdir(parents=True, exist_ok=True)
         for produced in sorted(staging.iterdir()):
             if produced.name in incomplete:

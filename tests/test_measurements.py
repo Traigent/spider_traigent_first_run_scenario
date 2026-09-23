@@ -38,6 +38,13 @@ AGENT_DIR = REPO_ROOT / "components" / "agent"
 DOCUMENTS = {
     "ready.json": "agent_ready.py",
     "no-knobs.json": "agent_no_knobs.py",
+    # The faithful read of the agent that names settings only in a comment: it finds none.
+    "commented-knobs.json": "agent_commented_knobs.py",
+    # And an unfaithful one, on purpose: it credits those settings. Still held to the
+    # citation rule -- a citation of the comment itself is refused by the guide outright --
+    # so it cites the nearest executable lines, as a careless read that got past that rule
+    # would. One run is scored with it, by naming it over the faithful one.
+    "commented-knobs-credited.json": "agent_commented_knobs.py",
 }
 PROVIDERS = ("direct", "openrouter")
 
@@ -102,6 +109,53 @@ def citations(document: dict) -> list[tuple[str, list]]:
 
 class TheAgentReadsCiteTheAgents(unittest.TestCase):
     """Each document, against each provider's copy of the agent it describes."""
+
+    def test_every_read_is_checked_against_the_agent_it_is_scored_with(self) -> None:
+        """The sweep picks a read by agent state; this checks the one it picks.
+
+        A document added under `agent-knobs/` and missing here would be handed to the guide
+        with no citation checked, and one listed here against a different agent from the
+        one the sweep scores it with would be checked against the wrong file.
+        """
+        import importlib.util
+        import sys
+
+        sys.path.insert(0, str(REPO_ROOT))
+        import build
+
+        located = importlib.util.spec_from_file_location(
+            "_score_bank_reads", REPO_ROOT / "docs" / "measurements" / "score_bank.py"
+        )
+        assert located is not None and located.loader is not None
+        harness = importlib.util.module_from_spec(located)
+        sys.modules[located.name] = harness
+        located.loader.exec_module(harness)
+
+        self.assertEqual(
+            sorted(path.name for path in KNOBS_DIR.glob("*.json")), sorted(DOCUMENTS)
+        )
+        for state in build.AGENT_STATES:
+            source = build.agent_file(state, build.DEFAULT_PROVIDER)
+            if source is None:
+                continue
+            with self.subTest(state=state):
+                document = harness.AGENT_READS.get(state, "ready.json")
+                self.assertEqual(DOCUMENTS[document], source.name)
+        # A run may name a read over the faithful one; it is checked against the agent
+        # that run ships.
+        for tag, flags, options in harness.sweep():
+            if "agent_read" not in options:
+                continue
+            with self.subTest(run=tag):
+                preset = build.PRESETS[flags[flags.index("--preset") + 1]]
+                state = (
+                    flags[flags.index("--agent") + 1]
+                    if "--agent" in flags
+                    else preset["agent"]
+                )
+                source = build.agent_file(state, build.DEFAULT_PROVIDER)
+                assert source is not None
+                self.assertEqual(DOCUMENTS[options["agent_read"]], source.name)
 
     def test_every_cited_line_is_inside_the_file_and_executable(self) -> None:
         for name, agent in DOCUMENTS.items():

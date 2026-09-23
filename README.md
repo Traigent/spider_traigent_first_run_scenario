@@ -130,8 +130,9 @@ put in, and an agent that can read that is not being tested on anything.
 with the data because the licence says it has to: CC BY-SA 4.0 requires the attribution and a
 notice that the data was modified to accompany the data wherever it goes. `build.py` copies it
 in the same branch that writes `dataset.jsonl`, `catalog.json` and `databases/`, so the four
-arrive together or not at all -- 33 of the 35 presets get it, and the two that do not are
-`empty` and `no-data`, the two with no rows.
+arrive together wherever there are rows -- 33 of the 35 presets get it, and the two that do not are
+`empty` and `no-data`, the two with no rows. (`--dataset empty-file` ships `dataset.jsonl` alone,
+with nothing in it to attribute.)
 
 It ships alone, and that is a change worth stating. Projects used to carry `NOTICE`, `LICENSE`
 and `LICENSE-DATA` as well. All three name this repository, and `NOTICE` described the
@@ -146,8 +147,8 @@ passes over it and why [docs/isolation.md](docs/isolation.md) can now say what i
 
 | Flag | Values |
 |---|---|
-| `--agent` | `ready` · `no-knobs` · `two-agents` (the tunable agent, and an unrelated second one in `sql_explainer/` with a `PROJECT.md` saying which to work on) · `disclaimed` (the tunable agent, which the project's README calls a tutorial example and not the agent the product runs) · `missing` |
-| `--dataset` | `ready` (300) · `mini` (30) · `tiny` (10) · `unlabeled` (40) · `duplicated` (90, from a 60-row draw) · `wrong-answers` (60) · `leaky` (306: the 300, and six tuning rows again as held-out rows) · `holdout-labelled` (30, answers on the six held-out rows only) · `split-by-database` (300, five whole databases held out) · `split-by-question-form` (300, every question opening "How many" held out) · `raw-export` (300, under Spider's own `question`/`query` keys) · `torn` (30, two lines cut short) · `undeclared` (300, every row's provenance reads `spider-dev`) · `mostly-undeclared` (300, 180 of them do) · `mostly-synthetic` (300, 180 rows declare `synthetic` and 120 declare `real`) · `fully-synthetic` (300, every row declares `synthetic`) · `generated-answers` (300, every row declares its answer model-written) · `mostly-generated-answers` (300, 180 of them do) · `missing` |
+| `--agent` | `ready` · `no-knobs` · `commented-knobs` (`no-knobs`, whose source now names settings to tune over in a comment and still reads none) · `two-agents` (the tunable agent, and an unrelated second one in `sql_explainer/` with a `PROJECT.md` saying which to work on) · `disclaimed` (the tunable agent, which the project's README calls a tutorial example and not the agent the product runs) · `missing` |
+| `--dataset` | `ready` (300) · `mini` (30) · `tiny` (10) · `unlabeled` (40) · `duplicated` (90, from a 60-row draw) · `wrong-answers` (60) · `leaky` (306: the 300, and six tuning rows again as held-out rows) · `holdout-labelled` (30, answers on the six held-out rows only) · `split-by-database` (300, five whole databases held out) · `split-by-question-form` (300, every question opening "How many" held out) · `raw-export` (300, under Spider's own `question`/`query` keys) · `torn` (30, two lines cut short) · `undeclared` (300, every row's provenance reads `spider-dev`) · `mostly-undeclared` (300, 180 of them do) · `mostly-synthetic` (300, 180 rows declare `synthetic` and 120 declare `real`) · `fully-synthetic` (300, every row declares `synthetic`) · `generated-answers` (300, every row declares its answer model-written) · `mostly-generated-answers` (300, 180 of them do) · `empty-file` (the file, and nothing in it) · `blank-answers` (40, the `unlabeled` questions, each with an answer field left empty) · `padded` (30: the ten `tiny` rows, then each again twice under ids of their own) · `missing` |
 | `--eval` | `exact-match` · `exec-match` · `broken` · `swapped` · `opaque` (calls a grading library the project does not carry) · `length-blind` (compares the two queries' lengths) · `slow` (compares text the ordinary way and asks a service per row, two minutes a call, so checking it outlasts the guide's fifteen-minute calibration budget) · `disclaimed` (`exact-match`, which the project's README calls a tutorial example and not how answers are graded) · `missing` |
 | `--provider` | `openrouter` (default) · `direct` |
 | `--calibration` | `none` · `present` (probe answers for the scorer) |
@@ -437,8 +438,8 @@ pinned SDK 0.27.0, #553 marked the short-dataset top-up recommended, #554 moved 
 from the ask to the approval and the result, #555 named it on the approval card, #556 let the
 run copy a local database file for the evaluator check and #557 bounded and verified that copy:
 no score, band or action moved (the two execution-evaluator cards changed only in the wording of
-their disclosure), and the two cards whose action is `label-data` now read "Review the expected results this
-run proposes". What changed on the cards is their shape,
+their disclosure), and the cards whose action was `label-data` on that day -- `no-labels` and
+`agent-and-logs` -- now read "Review the expected results this run proposes". What changed on the cards is their shape,
 with the `Action` line and the ceilings now printed above the pillars, and the preflight note
 that the SDK installed here is 0.26.0 against a walkthrough measured on 0.27.0, which the guide
 records and continues past. [The section on the source

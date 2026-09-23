@@ -1,0 +1,37 @@
+$ python3 $GUIDE/readiness.py --preflight $EVIDENCE/02-preflight.json --agent-knobs $KNOBS/ready.json --agent-source-root $PROJECT --selected-agent $PROJECT/agent.py --selected-agent-callable run --agent-origin brought --calibration $EVIDENCE/03-calibration.json --evaluator-origin brought --evaluator-method normalized-exact --task-kind code-sql --color never --ascii
+TRAIGENT OPTIMIZATION READINESS        74/100  WORKABLE
+Action: Review repeated examples and their effect on this comparison.
+
+  LIMITED TO 74 only 8 comparable example(s) - one example moves the score by about 12 points, so a configuration can look better by winning a single row. Treat any difference as a hint, not a result.
+  WOULD LIMIT TO 89 16 of the 24 rows this run can score on the tuning side repeat an input already counted, so this comparison resolves 8 different examples rather than 24. Nothing here is broken and the run can carry on, but every copy is a trial paid for that teaches what the first one already did. Continue on the examples that differ, or replace the repeats in your own file and this run reads it again.
+
+  AGENT       ####################  100/100  (agent source read; 1 of 5 checks measured)
+    ? whether it ends, and on what                     not independently verified: one call per input, so it ends
+    ? whether the answer's shape is pinned down        not independently verified: the answer's shape is constrained
+    ? what the model is told, and shown                not independently verified: a prompt, no worked examples in it
+    OK how many settings-combinations there are to try  static source verification established possible settings model, prompt_style, schema_context, temperature; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 36 distinct configurations; this read carries no trial budget, so nothing here says how much of it a run would compare
+    ? tools it declares, and can reach                 the document declares no tools, so tool wiring was not checked here.
+    not covered by this pillar: whether your dataset and evaluation method are wired into the agent - this run builds that integration and verifies it against the installed SDK, so the opening read has nothing to measure
+
+  DATASET     ###############-----  73/100
+    OK range of difficulty           bands present: easy, hard, medium, very-hard
+    !! repeated or dominant answers  rows at least 70% similar to another row
+    OK answers to score against      30/30 rows carry an expected output
+    !! examples to compare on        24 to tune on / 6 held back, 16 of them repeat an input already counted, so 8 different example(s) are what a comparison can resolve; 8 comparable examples - a wiring check, not a score; the repeated-rows check fired, and this count subtracts exact repeats only
+    OK where the rows came from      30 collected of 30 rows; declared sources: real
+
+  EVALUATION  #################---  83/100
+    OK tried on answers already known right and wrong  4 calibration case(s); every authored check passed; this score read that result and did not take the measurement itself
+    OK separates good answers from bad                 scores a right answer 1.00 above a wrong one, out of 1.00
+    OK same answer every time                          deterministic scoring rule
+    !! right kind of check for this output             normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output
+
+  The detailed readiness report carries the source observations and settings-check guidance.
+
+  REPEATED ROWS 16 of the 24 rows this run can score on the tuning side repeat an input already counted, so 8 different examples are what this comparison can resolve.
+  A. Continue on the 8 examples that differ, and read the result as the smaller comparison it is.  (recommended: it keeps this run moving and buys comparisons your file does not hold yet)
+  B. Replace the repeats in your own file, then say so and this run reads it again.
+  Your file is read and never written to.
+
+  Local pre-run planning estimate, not a probability or measured optimization result.
+exit=0

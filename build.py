@@ -78,7 +78,17 @@ GUIDE_REQUIRED = ("GUIDE.md", "skills")
 # setting only from values it can see there. Hence one agent per vendor rather than one
 # agent reading a roster from somewhere else.
 PROVIDERS = ("openrouter", "direct")
-AGENT_STATES = ("ready", "no-knobs", "two-agents", "disclaimed", "missing")
+AGENT_STATES = (
+    "ready",
+    "no-knobs",
+    "commented-knobs",
+    "two-agents",
+    "disclaimed",
+    "missing",
+)
+# `commented-knobs` is `no-knobs` after a repair that is not one: the same agent, whose
+# source now names settings to tune over -- in a comment, beside a roster of one and a
+# request that still reads no setting at all.
 # `two-agents` ships the tunable agent at `agent.py` and, beside it, a second agent that
 # has nothing to do with it -- the shape of a project that has grown a side tool. The
 # second one lives in a directory of its own with its own rows and its own scorer, and
@@ -109,6 +119,7 @@ def agent_file(state: str, provider: str) -> Path | None:
 AGENT_ORIGINS: dict[str, str | None] = {
     "ready": "brought",
     "no-knobs": "brought",
+    "commented-knobs": "brought",
     "two-agents": "brought",
     "disclaimed": "generated",
     "missing": None,
@@ -246,8 +257,14 @@ DATASET_STATES = (
     "fully-synthetic",
     "generated-answers",
     "mostly-generated-answers",
+    "empty-file",
+    "blank-answers",
+    "padded",
     "missing",
 )
+# The dataset states that ship no rows. `empty-file` ships the file, and nothing in it:
+# the repair of a project with no data that consists of creating the file.
+ROWLESS_DATASET_STATES = ("empty-file", "missing")
 CALIBRATION_STATES = ("none", "present")
 GUIDE_MODES = ("clone", "local")
 VENV_STATES = ("none", "ready")
@@ -292,6 +309,8 @@ DAMAGED_STATES = (
     "fully-synthetic",
     "generated-answers",
     "mostly-generated-answers",
+    "blank-answers",
+    "padded",
 )
 # The states that ship the whole slice. Every other labelled state is a seeded draw.
 FULL_SLICE_STATES = (
@@ -316,7 +335,20 @@ DRAW_SIZES = {
     "duplicated": DAMAGED_ROWS,
     "holdout-labelled": MINI_ROWS,
     "torn": MINI_ROWS,
+    # The same logged questions `unlabeled` ships, each now carrying an answer field
+    # with nothing in it: labels added in name only.
+    "blank-answers": UNLABELED_ROWS,
+    "padded": TINY_ROWS,
 }
+# What `padded` pads the ten hand-written rows to, and how a copy's id differs from its
+# original's. The guide measures a comparison against two sizes -- ten comparable tuning
+# examples and thirty (`WIRING_CHECK_EXAMPLES` and `COARSE_RESOLUTION_EXAMPLES` in its
+# readiness.py) -- and ten rows copied up to thirty clear both by count and neither by
+# content. Each copy carries an id of its own, as a careful padder would give it: a copy
+# that kept its original's id is the `duplicated` defect, which the guide reports first
+# and on other grounds, so the size would never be read on its own.
+PAD_TO_ROWS = MINI_ROWS
+PAD_ID_MARKER = "-copy-"
 # How many tuning rows `leaky` emits a second time under the held-out label, and how a
 # copy's id differs from its original's. The copy repeats the row's text and nothing else:
 # a copy that kept the id would be two rows with one name, which is a different defect
@@ -676,6 +708,128 @@ PRESET_CAPS: dict[str, tuple[str, ...]] = {
 }
 
 
+# What each preset should open with, as a verdict rather than a list of conditions: the run
+# that isolates its state, and the band, status and recommended action that run's card should
+# read. PRESET_CAPS says what the guide should notice; this says what it should then tell the
+# customer to do, which is the part a consumer of the card routes on.
+#
+# Each entry was derived from the preset's stated purpose and the guide's own rules at the pin
+# -- the lowest ceiling bounds the score, a blocking cap sets the status, and the action is the
+# first blocking cap's remedy, else the first asking cap's, else a pending ask's, else
+# `proceed`. It was not a blind prediction: the measurements README's Results table, which
+# prints every band and action, had been read before the entries were written, and the cards
+# themselves were opened only after. So the table is a hand-declared tripwire -- a re-pin that
+# moves a preset's verdict fails by name -- not an independent answer key. The judgement it
+# does carry is which run isolates each state: the calibrated variant where one exists,
+# because the unchecked scorer's 45 otherwise hides every ceiling above it, and the preset's
+# own run, whatever that hides, where none does. `tests/test_score_bank.py` holds every card
+# to its entry, and names in VERDICT_DIVERGENCES any card that departs from it with the reason.
+#
+# Two entries match for a reason other than the one they were written for, and say so here
+# rather than being read as evidence. `wrong-answers--calibrated` reads `review-answer-key`
+# because no row review was passed, which holds every card that climbs past 74 -- not because
+# the unsound answers were found, which a row review is needed for (NOT_ON_THEIR_OWN_CARD in
+# the same test file). And `split-by-database` reads `complete-calibration` whether or not its
+# split is noticed, because the unchecked scorer's ask comes first.
+PRESET_VERDICT: dict[str, tuple[str, str, str, str]] = {
+    "ready": ("ready", "PARTIAL", "OK", "complete-calibration"),
+    "checked": ("checked", "WORKABLE", "OK", "review-answer-key"),
+    "no-eval": ("no-eval", "PARTIAL", "BLOCKED", "connect-evaluator"),
+    "no-labels": ("no-labels", "PARTIAL", "BLOCKED", "label-data"),
+    "no-knobs": ("no-knobs", "PARTIAL", "BLOCKED", "vary-knobs"),
+    "sql-exec-stop": (
+        "sql-exec-stop",
+        "WORKABLE",
+        "OK",
+        "confirm-evaluator-connection",
+    ),
+    "fake-ruler": ("fake-ruler", "NOT READY", "BLOCKED", "repair-evaluator"),
+    "agent-and-logs": ("agent-and-logs", "PARTIAL", "BLOCKED", "label-data"),
+    "logs-only": ("logs-only", "NOT READY", "BLOCKED", "connect-agent"),
+    "no-agent": ("no-agent", "NOT READY", "BLOCKED", "connect-agent"),
+    "no-data": ("no-data", "NOT READY", "BLOCKED", "get-data"),
+    "empty": ("empty", "NOT READY", "BLOCKED", "get-data"),
+    "wrong-wiring": (
+        "wrong-wiring--calibrated",
+        "NOT READY",
+        "BLOCKED",
+        "repair-evaluator",
+    ),
+    "duplicated-data": ("duplicated-data", "PARTIAL", "BLOCKED", "repair-dataset"),
+    "wrong-answers": (
+        "wrong-answers--calibrated",
+        "WORKABLE",
+        "OK",
+        "review-answer-key",
+    ),
+    "hand-written": ("hand-written", "WORKABLE", "OK", "add-examples"),
+    "best-case": ("best-case", "WORKABLE", "OK", "confirm-evaluator-connection"),
+    "leaky-split": ("leaky-split", "PARTIAL", "BLOCKED", "resplit-dataset"),
+    "holdout-only": ("holdout-only", "PARTIAL", "BLOCKED", "resplit-dataset"),
+    "split-by-database": (
+        "split-by-database",
+        "PARTIAL",
+        "OK",
+        "complete-calibration",
+    ),
+    "raw-export": ("raw-export", "NOT READY", "BLOCKED", "read-dataset"),
+    "torn-lines": ("torn-lines", "PARTIAL", "BLOCKED", "repair-dataset"),
+    "undeclared-source": (
+        "undeclared-source--calibrated",
+        "WORKABLE",
+        "OK",
+        "declare-data-provenance",
+    ),
+    "mostly-undeclared-source": (
+        "mostly-undeclared-source--calibrated",
+        "WORKABLE",
+        "OK",
+        "declare-data-provenance",
+    ),
+    "mostly-synthetic-source": (
+        "mostly-synthetic-source--calibrated",
+        "WORKABLE",
+        "OK",
+        "proceed",
+    ),
+    "synthetic-source": ("synthetic-source--calibrated", "WORKABLE", "OK", "proceed"),
+    "generated-answer-key": (
+        "generated-answer-key--calibrated",
+        "WORKABLE",
+        "OK",
+        "review-answer-key",
+    ),
+    "mostly-generated-answer-key": (
+        "mostly-generated-answer-key--calibrated",
+        "WORKABLE",
+        "OK",
+        "review-answer-key",
+    ),
+    "opaque-scorer": ("opaque-scorer", "PARTIAL", "BLOCKED", "repair-evaluator"),
+    "slow-scorer": ("slow-scorer", "PARTIAL", "BLOCKED", "bound-evaluator-cost"),
+    "length-blind": ("length-blind", "NOT READY", "BLOCKED", "repair-evaluator"),
+    "two-agents": ("two-agents", "PARTIAL", "OK", "complete-calibration"),
+    "disclaimed-agent": (
+        "disclaimed-agent--calibrated",
+        "WORKABLE",
+        "OK",
+        "proceed",
+    ),
+    "disclaimed-scorer": (
+        "disclaimed-scorer--calibrated",
+        "WORKABLE",
+        "OK",
+        "proceed",
+    ),
+    "split-by-question-form": (
+        "split-by-question-form--calibrated",
+        "PARTIAL",
+        "OK",
+        "review-split",
+    ),
+}
+
+
 class BuildError(RuntimeError):
     """Raised when a demo cannot be built as asked."""
 
@@ -840,6 +994,8 @@ def select_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
     `wrong-answers` draws differently, because the damage it ships constrains which rows can
     be drawn at all -- see `deranged_draw`.
     """
+    if state in ROWLESS_DATASET_STATES:
+        return []
     if state in FULL_SLICE_STATES:
         return list(rows)
     if state == "wrong-answers":
@@ -897,6 +1053,10 @@ def damage_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
     came with, and every answer that ships still runs against its own database and still
     returns rows.
 
+    `blank-answers` gives every row an answer field with nothing in it, and `padded` copies
+    every row until the file reaches the guide's larger size, each copy under an id of its
+    own -- the two repairs of a missing answer key and of a small one that are not repairs.
+
     `leaky` appends a few tuning rows a second time under the held-out label; the two
     `split-by-` states move the split line, so that it falls between databases or between
     forms of question; and the provenance and answer-key states rewrite what rows declare
@@ -944,6 +1104,10 @@ def damage_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
         ]
     if state == "mostly-generated-answers":
         return declare_on_most(rows, GENERATED_ANSWER_KEY, GENERATED_ANSWER_PROVENANCE)
+    if state == "blank-answers":
+        return [{**row, "output": ""} for row in rows]
+    if state == "padded":
+        return pad_rows(rows)
     if state not in ("duplicated", "wrong-answers"):
         return list(rows)
     if state == "duplicated":
@@ -1020,6 +1184,34 @@ def leaked_ids(rows: Sequence[dict[str, Any]]) -> list[str]:
         row["metadata"]["id"][: -len(LEAK_ID_SUFFIX)]
         for row in rows
         if row["metadata"]["id"].endswith(LEAK_ID_SUFFIX)
+    ]
+
+
+def pad_rows(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The rows, and whole copies of them after, until the file holds `PAD_TO_ROWS`.
+
+    Appended the way someone topping up a file would append: the rows once, then again,
+    each copy on the same side of the split as its original and under the original's id
+    with `PAD_ID_MARKER` and the copy's number after it. Refused rather than rounded if the
+    rows do not go into the target a whole number of times, since a part copy would make
+    some questions count more than others and the record could not say which.
+    """
+    copies, remainder = divmod(PAD_TO_ROWS, len(rows)) if rows else (0, 1)
+    if remainder or copies < 2:
+        raise BuildError(
+            f"{len(rows)} rows do not go into {PAD_TO_ROWS} a whole number of times, "
+            "twice or more"
+        )
+    return list(rows) + [
+        {
+            **row,
+            "metadata": {
+                **row["metadata"],
+                "id": f"{row['metadata']['id']}{PAD_ID_MARKER}{number}",
+            },
+        }
+        for number in range(2, copies + 1)
+        for row in rows
     ]
 
 
@@ -1202,8 +1394,10 @@ def project_row(row: dict[str, Any], state: str) -> dict[str, Any]:
     if row_is_labelled(row, state):
         projected["output"] = row["output"]
     projected["metadata"] = dict(row["metadata"])
-    if state == "unlabeled":
-        # No expected answer means no split to hold out and nothing to grade against.
+    if state in ("unlabeled", "blank-answers"):
+        # No expected answer means no split to hold out and nothing to grade against --
+        # and an empty one is no answer, so the same logged questions carry no split
+        # either when they carry the empty field.
         projected["metadata"].pop("split", None)
     return projected
 
@@ -1250,6 +1444,17 @@ def row_is_labelled(row: dict[str, Any], state: str) -> bool:
     if state == "holdout-labelled":
         return bool(row["metadata"].get("split") == "holdout")
     return True
+
+
+def carries_answer(row: dict[str, Any], keys: dict[str, str]) -> bool:
+    """Whether a row as written holds an answer: the field, with something in it.
+
+    The field alone was the test, and it counted an answer field left empty as an answer --
+    so a file whose every answer is blank was recorded as fully labelled and described in
+    its own README as questions "each with the query that answers it".
+    """
+    answer = row.get(keys["output"])
+    return isinstance(answer, str) and bool(answer.strip())
 
 
 def dataset_keys(state: str) -> dict[str, str]:
@@ -1666,13 +1871,15 @@ def render_readme(
             # would write it: in place of the line that would describe it as theirs.
             description = DISCLAIMERS[name]
         elif name == "dataset.jsonl":
-            labelled = sum(1 for row in rows if keys["output"] in row)
+            labelled = sum(1 for row in rows if carries_answer(row, keys))
             # Counts what the file holds. `rows` is lines, and a set that repeats a question
             # has more lines than questions -- calling every line a question said "90
             # questions" of a file holding 60 of them. And a file whose answers sit on some
             # rows and not others says how many, because "each a question with the query
             # that answers it" is false of a file where most rows have no answer.
-            if labelled == len(rows):
+            if not rows:
+                description = "an empty file: no rows in it."
+            elif labelled == len(rows):
                 description = (
                     f"{len(rows)} rows, each a question with the query that answers it."
                 )
@@ -1705,7 +1912,7 @@ def render_readme(
     # and the opening claimed the project answers questions in projects holding no agent.
     if agent_state != "missing":
         opening = "\nAnswers questions about a database by writing the SQL that gets the answer.\n"
-    elif rows and any(keys["output"] in row for row in rows):
+    elif rows and any(carries_answer(row, keys) for row in rows):
         opening = "\nQuestions about a database, and the SQL that answers them.\n"
     elif rows:
         opening = "\nQuestions about a database.\n"
@@ -1879,6 +2086,11 @@ class Plan:
         return disclaimed
 
     @property
+    def ships_dataset_file(self) -> bool:
+        """Whether `dataset.jsonl` is in the project: every state with rows, and one without."""
+        return bool(self.rows) or self.dataset == "empty-file"
+
+    @property
     def ships_second_agent(self) -> bool:
         return self.agent == "two-agents"
 
@@ -1966,6 +2178,9 @@ class Plan:
             # The attribution travels with the rows and the databases, and only with them:
             # a project holding no data has nothing to attribute.
             names += ["dataset.jsonl", "catalog.json", "databases/", ATTRIBUTION_NAME]
+        elif self.ships_dataset_file:
+            # No rows, so nothing to look up, to query or to attribute: the file alone.
+            names.append("dataset.jsonl")
         names.append(".env.example")
         names.append(".gitignore")
         if self.ships_calibration:
@@ -2000,7 +2215,7 @@ def check_plan(plan: Plan) -> None:
         if not plan.rows:
             raise BuildError(
                 "--agent two-agents gives the second agent queries drawn from the rows, "
-                "and --dataset missing ships none"
+                f"and --dataset {plan.dataset} ships none"
             )
         # The second agent's input IS a row's gold query, under that row's id. So it
         # may carry only a query the dataset itself ships as that row's answer. One
@@ -2111,7 +2326,11 @@ def plan_demo(args: argparse.Namespace) -> Plan:
     if calibration == "present":
         check_calibration_source(evaluator)
 
-    rows = select_rows(read_dataset(), dataset) if dataset != "missing" else []
+    rows = (
+        select_rows(read_dataset(), dataset)
+        if dataset not in ROWLESS_DATASET_STATES
+        else []
+    )
     undamaged_rows: list[dict[str, Any]] = []
     if dataset in DAMAGED_STATES:
         undamaged_rows = list(rows)
@@ -2122,7 +2341,7 @@ def plan_demo(args: argparse.Namespace) -> Plan:
     if calibration == "present" and not rows:
         raise BuildError(
             "--calibration present needs the databases its probes run against, and "
-            "--dataset missing ships none"
+            f"--dataset {dataset} ships none"
         )
 
     plan = Plan(
@@ -2211,6 +2430,8 @@ def write_demo(plan: Plan) -> dict[str, Any]:
         # The rows are CC BY-SA, and what they are and what may be done with them travels
         # with them, always.
         shutil.copy2(ATTRIBUTION_SOURCE, project / ATTRIBUTION_NAME)
+    elif plan.ships_dataset_file:
+        (project / "dataset.jsonl").write_text("", encoding="utf-8")
 
     shutil.copy2(env_file(plan.provider), project / ".env.example")
     (project / ".gitignore").write_text(GITIGNORE_TEXT, encoding="utf-8")
@@ -2232,7 +2453,7 @@ def write_demo(plan: Plan) -> dict[str, Any]:
     splits = Counter(
         row["metadata"]["split"] for row in projected if "split" in row["metadata"]
     )
-    labelled = sum(1 for row in projected if plan.keys["output"] in row)
+    labelled = sum(1 for row in projected if carries_answer(row, plan.keys))
 
     readme = render_readme(
         COMPONENTS / "readme" / "DEMO_README.md.tmpl",
@@ -2272,7 +2493,7 @@ def write_demo(plan: Plan) -> dict[str, Any]:
             },
             "dataset": {
                 "state": plan.dataset,
-                "path": "dataset.jsonl" if plan.rows else None,
+                "path": "dataset.jsonl" if plan.ships_dataset_file else None,
                 "rows": len(projected),
                 # Under which names a row's question and answer are written. The tooling
                 # reads `input` and `output`; `raw-export` writes Spider's own names.
@@ -2355,6 +2576,8 @@ DAMAGE_DETAIL_FIELDS: dict[str, frozenset[str]] = {
     "mostly-generated-answers": frozenset(
         {"output_provenance", "slice_says", "declared_rows", "of_rows"}
     ),
+    "blank-answers": frozenset({"blank_answers"}),
+    "padded": frozenset({"padded_from", "copies_of_each", "copy_id_marker"}),
 }
 
 
@@ -2432,6 +2655,22 @@ def damage_detail(plan: Plan, torn: Sequence[int]) -> dict[str, Any] | None:
                 == GENERATED_ANSWER_PROVENANCE
             ),
             "of_rows": len(plan.rows),
+        }
+    if plan.dataset == "blank-answers":
+        return {
+            "blank_answers": sum(
+                1 for row in plan.rows if not carries_answer(row, plan.keys)
+            )
+        }
+    if plan.dataset == "padded":
+        originals = [
+            row for row in plan.rows if PAD_ID_MARKER not in row["metadata"]["id"]
+        ]
+        return {
+            "padded_from": len(originals),
+            "copies_of_each": (len(plan.rows) - len(originals))
+            // max(1, len(originals)),
+            "copy_id_marker": PAD_ID_MARKER,
         }
     raise BuildError(
         f"{plan.dataset} is a damaged state with no description of its damage"
@@ -2835,7 +3074,13 @@ def verify_demo(root: Path) -> list[str]:
                         f"line {number} is recorded as torn and reads as a whole row"
                     )
                 rows.append(row)
-            catalog = json.loads((project / "catalog.json").read_text(encoding="utf-8"))
+            # A file with no rows has no question to look up, and ships no catalog to
+            # look one up in.
+            catalog = (
+                json.loads((project / "catalog.json").read_text(encoding="utf-8"))
+                if rows
+                else {}
+            )
             questions = [row[keys["input"]] for row in rows]
             databases = sorted({row["metadata"]["db_id"] for row in rows})
         except (ValueError, KeyError, TypeError, RecursionError, OSError) as error:
@@ -3023,7 +3268,7 @@ def dataset_record_problems(
         problems.append(
             f"the record says {record.get('rows')!r} rows and the file has {len(lines)}"
         )
-    labelled = sum(1 for row in rows if keys["output"] in row)
+    labelled = sum(1 for row in rows if carries_answer(row, keys))
     recorded_labelled = record.get("labelled_rows")
     if not is_count(recorded_labelled):
         problems.append(
@@ -3195,6 +3440,74 @@ def dataset_record_problems(
                 "held_out_rows",
                 sum(1 for row in rows if row["metadata"].get("split") == "holdout"),
             )
+    if "blank_answers" in detail:
+        # Every row carries the answer field and nothing in it: counted off the rows, and
+        # required to be all of them -- a state that blanked some answers would be a
+        # different state, and one that blanked none has no damage to describe.
+        blank = [
+            row
+            for row in rows
+            if keys["output"] in row and not carries_answer(row, keys)
+        ]
+        claim("blank_answers", len(blank))
+        if not 0 < len(blank) == len(rows):
+            problems.append(
+                f"damage_detail.blank_answers: {len(blank)} of {len(rows)} rows carry an "
+                "empty answer field; the state blanks every answer and removes none"
+            )
+    if "copy_id_marker" in detail:
+        # Every copy is its original again -- the same question, answer and side of the
+        # split -- under the original's id with the marker and a number after it, and
+        # every original has the same number of copies.
+        unchecked.discard("copy_id_marker")
+        marker = detail["copy_id_marker"]
+        if not isinstance(marker, str) or not marker:
+            problems.append(f"damage_detail.copy_id_marker is {marker!r}, not a marker")
+        else:
+            originals = {
+                row["metadata"]["id"]: row
+                for row in rows
+                if marker not in row["metadata"]["id"]
+            }
+            made: dict[str, int] = {}
+            for row in rows:
+                named = row["metadata"]["id"]
+                if marker not in named:
+                    continue
+                source = originals.get(named.split(marker, 1)[0])
+                made[named.split(marker, 1)[0]] = (
+                    made.get(named.split(marker, 1)[0], 0) + 1
+                )
+                if source is None or (
+                    source[keys["input"]],
+                    source.get(keys["output"]),
+                    source["metadata"].get("split"),
+                ) != (
+                    row[keys["input"]],
+                    row.get(keys["output"]),
+                    row["metadata"].get("split"),
+                ):
+                    problems.append(f"{named} is not a copy of its original")
+            if not made:
+                problems.append(
+                    f"damage_detail.copy_id_marker is {marker!r}, and no row is a copy "
+                    "carrying it"
+                )
+            if "padded_from" in detail:
+                if not is_count(detail["padded_from"]):
+                    problems.append(
+                        f"damage_detail.padded_from is {detail['padded_from']!r}, not a "
+                        "count"
+                    )
+                claim("padded_from", len(originals))
+            if "copies_of_each" in detail:
+                if not is_count(detail["copies_of_each"]):
+                    problems.append(
+                        f"damage_detail.copies_of_each is {detail['copies_of_each']!r}, "
+                        "not a count"
+                    )
+                each = {made.get(named, 0) for named in originals}
+                claim("copies_of_each", each.pop() if len(each) == 1 else sorted(each))
     if "keys" in detail:
         claim("keys", dict(keys))
         missing = [
@@ -3835,6 +4148,7 @@ def build_parser() -> argparse.ArgumentParser:
             {
                 "ready": "tunable",
                 "no-knobs": "nothing to search",
+                "commented-knobs": "nothing to search, and settings named in a comment",
                 "two-agents": "a second agent beside it",
             },
         ),
@@ -3849,6 +4163,7 @@ def build_parser() -> argparse.ArgumentParser:
                 "mini": f"{MINI_ROWS} rows",
                 "tiny": f"{TINY_ROWS} rows",
                 "unlabeled": "no expected answers",
+                "empty-file": "the file, with no rows in it",
             },
         )
         + "; `list` describes the damaged ones",
