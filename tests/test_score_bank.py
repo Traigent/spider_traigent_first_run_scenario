@@ -222,6 +222,16 @@ NOT_ON_THEIR_OWN_CARD: dict[str, tuple[str | None, str]] = {
 }
 
 
+# What each preset built for no condition is expected to carry, exactly. "Built for nothing"
+# does not mean "an empty card": `two-agents` is `ready` with a second agent beside it, and
+# carries `ready`'s unvalidated-scorer ceiling. Held with equality, so a guide revision that
+# adds a condition to either -- or starts noticing the second agent -- fails by name.
+BUILT_FOR_NOTHING_CARRIES: dict[str, frozenset[str]] = {
+    "checked": frozenset(),
+    "two-agents": frozenset({"evaluator-unvalidated"}),
+}
+
+
 def card_conditions(tag: str) -> set[str]:
     """The conditions a committed card carries, read from the card the guide printed."""
     reading = json.loads(
@@ -261,6 +271,17 @@ class EveryPresetOpensOnTheStateItWasBuiltFor(unittest.TestCase):
                 )
                 checked += 1
         self.assertGreater(checked, 0, "no card was read, so none was checked")
+
+    def test_a_preset_built_for_nothing_carries_exactly_what_is_declared(self) -> None:
+        caps = build_module().PRESET_CAPS
+        self.assertEqual(
+            {name for name, conditions in caps.items() if not conditions},
+            set(BUILT_FOR_NOTHING_CARRIES),
+            "every preset built for no condition declares what its card carries",
+        )
+        for preset, expected in sorted(BUILT_FOR_NOTHING_CARRIES.items()):
+            with self.subTest(preset=preset):
+                self.assertEqual(set(expected), card_conditions(preset))
 
     def test_every_exception_still_holds_and_says_where_it_shows(self) -> None:
         caps = build_module().PRESET_CAPS

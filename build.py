@@ -534,9 +534,10 @@ PRESET_NOTES = {
 #
 # Two presets are built for no condition. `checked` is the complete project with nothing
 # wrong in it, and `two-agents` asks which agent a run selects, which the opening card does
-# not record. Three are built for a condition their own card does not carry -- one needs
-# probes the preset does not ship, one a row review the measurement never passes, and one
-# is a finding about the guide -- and `tests/test_score_bank.py` names each with its reason.
+# not record; `tests/test_score_bank.py` declares exactly what each one's card carries.
+# Three are built for a condition their own card does not carry -- one needs probes the
+# preset does not ship, one a row review the measurement never passes, and one is a
+# finding about the guide -- and `tests/test_score_bank.py` names each with its reason.
 PRESET_CAPS: dict[str, tuple[str, ...]] = {
     "ready": ("evaluator-unvalidated",),
     "checked": (),
