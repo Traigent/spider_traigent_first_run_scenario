@@ -708,6 +708,128 @@ PRESET_CAPS: dict[str, tuple[str, ...]] = {
 }
 
 
+# What each preset should open with, as a verdict rather than a list of conditions: the run
+# that isolates its state, and the band, status and recommended action that run's card should
+# read. PRESET_CAPS says what the guide should notice; this says what it should then tell the
+# customer to do, which is the part a consumer of the card routes on.
+#
+# Each entry was derived from the preset's stated purpose and the guide's own rules at the pin
+# -- the lowest ceiling bounds the score, a blocking cap sets the status, and the action is the
+# first blocking cap's remedy, else the first asking cap's, else a pending ask's, else
+# `proceed`. It was not a blind prediction: the measurements README's Results table, which
+# prints every band and action, had been read before the entries were written, and the cards
+# themselves were opened only after. So the table is a hand-declared tripwire -- a re-pin that
+# moves a preset's verdict fails by name -- not an independent answer key. The judgement it
+# does carry is which run isolates each state: the calibrated variant where one exists,
+# because the unchecked scorer's 45 otherwise hides every ceiling above it, and the preset's
+# own run, whatever that hides, where none does. `tests/test_score_bank.py` holds every card
+# to its entry, and names in VERDICT_DIVERGENCES any card that departs from it with the reason.
+#
+# Two entries match for a reason other than the one they were written for, and say so here
+# rather than being read as evidence. `wrong-answers--calibrated` reads `review-answer-key`
+# because no row review was passed, which holds every card that climbs past 74 -- not because
+# the unsound answers were found, which a row review is needed for (NOT_ON_THEIR_OWN_CARD in
+# the same test file). And `split-by-database` reads `complete-calibration` whether or not its
+# split is noticed, because the unchecked scorer's ask comes first.
+PRESET_VERDICT: dict[str, tuple[str, str, str, str]] = {
+    "ready": ("ready", "PARTIAL", "OK", "complete-calibration"),
+    "checked": ("checked", "WORKABLE", "OK", "review-answer-key"),
+    "no-eval": ("no-eval", "PARTIAL", "BLOCKED", "connect-evaluator"),
+    "no-labels": ("no-labels", "PARTIAL", "BLOCKED", "label-data"),
+    "no-knobs": ("no-knobs", "PARTIAL", "BLOCKED", "vary-knobs"),
+    "sql-exec-stop": (
+        "sql-exec-stop",
+        "WORKABLE",
+        "OK",
+        "confirm-evaluator-connection",
+    ),
+    "fake-ruler": ("fake-ruler", "NOT READY", "BLOCKED", "repair-evaluator"),
+    "agent-and-logs": ("agent-and-logs", "PARTIAL", "BLOCKED", "label-data"),
+    "logs-only": ("logs-only", "NOT READY", "BLOCKED", "connect-agent"),
+    "no-agent": ("no-agent", "NOT READY", "BLOCKED", "connect-agent"),
+    "no-data": ("no-data", "NOT READY", "BLOCKED", "get-data"),
+    "empty": ("empty", "NOT READY", "BLOCKED", "get-data"),
+    "wrong-wiring": (
+        "wrong-wiring--calibrated",
+        "NOT READY",
+        "BLOCKED",
+        "repair-evaluator",
+    ),
+    "duplicated-data": ("duplicated-data", "PARTIAL", "BLOCKED", "repair-dataset"),
+    "wrong-answers": (
+        "wrong-answers--calibrated",
+        "WORKABLE",
+        "OK",
+        "review-answer-key",
+    ),
+    "hand-written": ("hand-written", "WORKABLE", "OK", "add-examples"),
+    "best-case": ("best-case", "WORKABLE", "OK", "confirm-evaluator-connection"),
+    "leaky-split": ("leaky-split", "PARTIAL", "BLOCKED", "resplit-dataset"),
+    "holdout-only": ("holdout-only", "PARTIAL", "BLOCKED", "resplit-dataset"),
+    "split-by-database": (
+        "split-by-database",
+        "PARTIAL",
+        "OK",
+        "complete-calibration",
+    ),
+    "raw-export": ("raw-export", "NOT READY", "BLOCKED", "read-dataset"),
+    "torn-lines": ("torn-lines", "PARTIAL", "BLOCKED", "repair-dataset"),
+    "undeclared-source": (
+        "undeclared-source--calibrated",
+        "WORKABLE",
+        "OK",
+        "declare-data-provenance",
+    ),
+    "mostly-undeclared-source": (
+        "mostly-undeclared-source--calibrated",
+        "WORKABLE",
+        "OK",
+        "declare-data-provenance",
+    ),
+    "mostly-synthetic-source": (
+        "mostly-synthetic-source--calibrated",
+        "WORKABLE",
+        "OK",
+        "proceed",
+    ),
+    "synthetic-source": ("synthetic-source--calibrated", "WORKABLE", "OK", "proceed"),
+    "generated-answer-key": (
+        "generated-answer-key--calibrated",
+        "WORKABLE",
+        "OK",
+        "review-answer-key",
+    ),
+    "mostly-generated-answer-key": (
+        "mostly-generated-answer-key--calibrated",
+        "WORKABLE",
+        "OK",
+        "review-answer-key",
+    ),
+    "opaque-scorer": ("opaque-scorer", "PARTIAL", "BLOCKED", "repair-evaluator"),
+    "slow-scorer": ("slow-scorer", "PARTIAL", "BLOCKED", "bound-evaluator-cost"),
+    "length-blind": ("length-blind", "NOT READY", "BLOCKED", "repair-evaluator"),
+    "two-agents": ("two-agents", "PARTIAL", "OK", "complete-calibration"),
+    "disclaimed-agent": (
+        "disclaimed-agent--calibrated",
+        "WORKABLE",
+        "OK",
+        "proceed",
+    ),
+    "disclaimed-scorer": (
+        "disclaimed-scorer--calibrated",
+        "WORKABLE",
+        "OK",
+        "proceed",
+    ),
+    "split-by-question-form": (
+        "split-by-question-form--calibrated",
+        "PARTIAL",
+        "OK",
+        "review-split",
+    ),
+}
+
+
 class BuildError(RuntimeError):
     """Raised when a demo cannot be built as asked."""
 

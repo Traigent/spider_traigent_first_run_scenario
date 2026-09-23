@@ -350,6 +350,41 @@ and the two kinds show different things, as below.
   the reading `split-by-database` does not get: holding out whole databases leaves the forms on
   both sides. Here the finding is the guide's own: preflight reads the split from the rows.
 
+## Verdicts and remedies, declared by hand as a tripwire
+
+The caps say what the guide noticed; the verdict is what it then tells the customer to do, and
+that is the part anything consuming a card routes on. Both are declared by hand, so that the
+next re-pin that moves either fails by name instead of arriving as a changed number:
+
+- `PRESET_VERDICT` in `build.py` names, for every preset, the run that isolates its state -- the
+  calibrated variant where there is one, since the unchecked scorer's 45 hides every ceiling
+  above it -- and the band, status and action that run's card should read.
+- `REMEDIES` in `tests/test_score_bank.py` names, for every condition the guide at the pin can
+  raise, the action, the ceiling and whether the run waits, with a line on why; `OTHER_ARMS`
+  names the second shape two of them take and the runs whose cards carry it
+  (`evaluator-calibration-refused` with no ceiling on `sql-exec-stop` and `best-case`, where
+  preflight found the engine; `agent-no-varying-knobs` without the block on
+  `no-knobs--knobs-in-a-comment--credited`, where the read claims settings the opening check
+  cannot follow).
+
+Neither is an independent answer key, and where each carries judgement of its own is worth
+being exact about. `REMEDIES`' action and ceiling are held equal to the guide's own
+`ACTION_FOR_CONDITION` and `CAP_CEILING`, and the guide builds every cap's action from that same
+table, so the check of each card's action can only fail if the guide's table moves. What
+`REMEDIES` declares that the guide's tables do not is `blocks`, which every card is held to
+exactly, second shapes included. `PRESET_VERDICT` was derived from each preset's purpose and the
+guide's rules; the judgement it carries is the choice of run, and the band, status and action
+follow from the guide's rules once that is chosen. It is not blind: this page's Results table,
+which prints every band and action, had been read before it was written.
+
+At `d07b62cd` every card reads the verdict declared for it, and `VERDICT_DIVERGENCES` is empty;
+it is checked both ways. Two of those agreements are worth less than they look.
+`wrong-answers--calibrated` reads `review-answer-key` because no row review was passed, which
+holds every card that climbs past 74, and not because anything noticed that its answers answer
+other questions; and `split-by-database` reads `complete-calibration` whether or not its split
+is seen, because the unchecked scorer's ask comes first. The cap-level truth for both is in
+`NOT_ON_THEIR_OWN_CARD`.
+
 ## Repairs, and repairs in name only
 
 Each remedy on a card asks for one thing to change. Where the bank holds the run before a repair

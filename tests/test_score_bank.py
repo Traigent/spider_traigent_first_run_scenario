@@ -551,6 +551,295 @@ class EveryConditionTheGuideCanRaiseIsOnACard(unittest.TestCase):
             self.assertTrue(reason.strip(), condition)
 
 
+# The remedy each cap condition carries, declared by hand: condition -> (action, ceiling,
+# blocks, why). The ceiling is the one the guide ranks the condition at; `blocks` is whether
+# the run waits on it.
+#
+# A tripwire for the next re-pin, not an independent answer key, and the difference is worth
+# being exact about. The action and the ceiling here are held equal to the guide's own
+# ACTION_FOR_CONDITION and CAP_CEILING, as results.json records them -- and the guide builds
+# every cap's action from that same table (readiness.py `Cap.__post_init__`) -- so the
+# per-card action check cannot fail unless the guide's own table moves, which the first test
+# below already reports. What is declared here and nowhere in the guide's tables is `blocks`,
+# and the one line of why. The table's value is that a re-pin which moves a remedy, a
+# ceiling or a block fails by condition name instead of arriving as a changed number.
+REMEDIES: dict[str, tuple[str, int | None, bool, str]] = {
+    "dataset-absent": ("get-data", 20, True, "no rows to measure anything on"),
+    "evaluator-invalid": (
+        "repair-evaluator",
+        25,
+        True,
+        "probes that ran show the scorer grading wrong answers right or right ones wrong",
+    ),
+    "dataset-shape-unrecognised": (
+        "read-dataset",
+        25,
+        True,
+        "no row matched the shape the file was read with; a look, not a verdict",
+    ),
+    "agent-absent": (
+        "connect-agent",
+        25,
+        True,
+        "nothing about an agent reached the score, so there is nothing to vary",
+    ),
+    "dataset-no-expected-outputs": (
+        "label-data",
+        30,
+        True,
+        "questions with nothing to score an answer against",
+    ),
+    "dataset-integrity-fail": (
+        "repair-dataset",
+        35,
+        True,
+        "some rows read and some did not, or ids repeat: the file is broken as read",
+    ),
+    "evaluator-absent": ("connect-evaluator", 40, True, "no scorer is connected"),
+    "evaluator-unresolved": (
+        "repair-evaluator",
+        40,
+        True,
+        "a scorer is there and no method can be named for it without running it",
+    ),
+    "evaluator-timeout": (
+        "bound-evaluator-cost",
+        45,
+        True,
+        "the check of the scorer ran out of budget before the scorer answered",
+    ),
+    "evaluator-unvalidated": (
+        "complete-calibration",
+        45,
+        False,
+        "a method is declared and nothing has checked the scorer yet; the run owes it",
+    ),
+    "evaluator-calibration-refused": (
+        "confirm-evaluator-connection",
+        45,
+        False,
+        "the guide will not calibrate a scorer that reaches an engine; the declaration "
+        "alone bounds the claim",
+    ),
+    "agent-no-varying-knobs": (
+        "vary-knobs",
+        45,
+        True,
+        "the agent was read and nothing it varies was found: one configuration to compare",
+    ),
+    "dataset-tune-holdout-overlap": (
+        "resplit-dataset",
+        50,
+        True,
+        "the same inputs on both sides of the split, so the held-out check checks nothing",
+    ),
+    "dataset-tuning-split-empty": (
+        "resplit-dataset",
+        50,
+        True,
+        "nothing scoreable on the side the search tunes on",
+    ),
+    "dataset-split-by-task-family": (
+        "review-split",
+        50,
+        False,
+        "every recurring form of question sits on one side; inferred, so asked about",
+    ),
+    "dataset-fully-synthetic": (
+        "connect-real-data",
+        65,
+        False,
+        "every row declares itself written rather than collected",
+    ),
+    "dataset-undeclared-provenance": (
+        "declare-data-provenance",
+        65,
+        False,
+        "no row says where it came from in a word the guide knows; read as generated",
+    ),
+    "agent-generated": (
+        "connect-real-agent",
+        65,
+        False,
+        "the agent is one the run relies on in place of the customer's own",
+    ),
+    "dataset-mostly-synthetic": (
+        "connect-real-data",
+        70,
+        False,
+        "more than half the rows declare themselves written",
+    ),
+    "dataset-mostly-undeclared": (
+        "declare-data-provenance",
+        70,
+        False,
+        "more than half the rows say nothing the guide can place",
+    ),
+    "dataset-unsound-expected-outputs": (
+        "review-answer-key",
+        70,
+        False,
+        "a read of the rows found answers that do not answer their questions",
+    ),
+    "dataset-below-measurable-size": (
+        "add-examples",
+        74,
+        False,
+        "under ten comparable examples, so one row can decide the result",
+    ),
+    "dataset-generated-answer-key": (
+        "review-answer-key",
+        74,
+        False,
+        "every answer is declared model-written, so the ruler is a model's",
+    ),
+    "dataset-mostly-generated-answer-key": (
+        "review-answer-key",
+        74,
+        False,
+        "more than half the answers are declared model-written",
+    ),
+    "evaluator-generated": (
+        "connect-real-evaluator",
+        74,
+        False,
+        "the scorer is one the run relies on in place of the customer's own",
+    ),
+    "dataset-coarse-resolution": (
+        "add-examples",
+        89,
+        False,
+        "under thirty comparable examples: workable, and not a result to call excellent",
+    ),
+    "dataset-repeated-rows": (
+        "review-repeats",
+        89,
+        False,
+        "rows repeat an input already counted, so the file is smaller than it looks",
+    ),
+}
+
+# The conditions the guide raises in a second shape: the shape, the runs whose cards carry
+# it, and why. Held both ways: a card carries a condition's second shape exactly when it is
+# one of the runs named here, and its tabled shape everywhere else -- so a block that flips
+# on one card fails by name rather than passing as the other shape.
+OTHER_ARMS: dict[str, tuple[int | None, bool, frozenset[str], str]] = {
+    "evaluator-calibration-refused": (
+        None,
+        False,
+        frozenset({"sql-exec-stop", "best-case"}),
+        "where preflight's walk found the engine the refusal is the guide's own boundary, "
+        "and the cap discloses it without bounding the score",
+    ),
+    "agent-no-varying-knobs": (
+        45,
+        False,
+        frozenset({"no-knobs--knobs-in-a-comment--credited"}),
+        "where the read handed to the guide claims settings that the opening check cannot "
+        "follow to the request, the claim is bounded and the run is not stopped",
+    ),
+}
+
+# The presets whose card departs from the verdict build.PRESET_VERDICT declares for them,
+# each with a public issue that tracks it (or None) and the reason. Checked both ways, as
+# NOT_ON_THEIR_OWN_CARD is: a card listed here must still depart, and one not listed must
+# read its verdict exactly. At the pin every card reads the verdict written for it.
+VERDICT_DIVERGENCES: dict[str, tuple[str | None, str]] = {}
+
+
+class EveryPresetOpensWithItsDeclaredVerdict(unittest.TestCase):
+    """Band, status and action, against a verdict declared by hand in build.py.
+
+    A tripwire rather than a blind prediction: the entries were derived from each preset's
+    purpose and the guide's rules, after the measurements README's Results table -- which
+    prints every band and action -- had been read. What they add is a named failure when a
+    re-pin moves a preset's verdict.
+    """
+
+    def test_every_preset_declares_a_verdict_on_a_run_built_from_it(self) -> None:
+        builder = build_module()
+        self.assertEqual(set(builder.PRESETS), set(builder.PRESET_VERDICT))
+        measured = {run["tag"] for run in scored_runs()}
+        for preset, (tag, _, _, _) in sorted(builder.PRESET_VERDICT.items()):
+            with self.subTest(preset=preset):
+                flags = next(f for t, f, _ in load_harness().sweep() if t == tag)
+                self.assertEqual(preset, flags[flags.index("--preset") + 1])
+                self.assertIn(tag, measured, "the verdict names a run with no card")
+
+    def test_every_card_reads_the_verdict_declared_for_it(self) -> None:
+        for preset, (tag, *verdict) in sorted(build_module().PRESET_VERDICT.items()):
+            card = committed_card(tag)
+            read = [card["band"], card["status"], card["recommended_action"]]
+            with self.subTest(preset=preset, run=tag):
+                if preset in VERDICT_DIVERGENCES:
+                    self.assertNotEqual(
+                        verdict,
+                        read,
+                        f"{tag} now reads its declared verdict, so the divergence "
+                        f"recorded for it -- {VERDICT_DIVERGENCES[preset][1]!r} -- is stale",
+                    )
+                else:
+                    self.assertEqual(verdict, read)
+
+    def test_every_divergence_is_a_declared_preset_with_a_reason(self) -> None:
+        declared = build_module().PRESET_VERDICT
+        for preset, (issue, reason) in VERDICT_DIVERGENCES.items():
+            with self.subTest(preset=preset):
+                self.assertIn(preset, declared)
+                self.assertTrue(reason.strip())
+                if issue is not None:
+                    self.assertTrue(issue.startswith("https://github.com/"), issue)
+
+
+class EveryCapCarriesTheTabledRemedy(unittest.TestCase):
+    """Each cap on each committed card, against REMEDIES; REMEDIES, against the guide.
+
+    Its independent content is `blocks` and the second shapes in OTHER_ARMS; the action and
+    ceiling are the guide's own, and are checked so that a re-pin that moves them is named.
+    """
+
+    def test_the_table_is_the_guides_vocabulary(self) -> None:
+        conditions = committed_results()["conditions"]
+        assert isinstance(conditions, dict)
+        self.assertEqual(sorted(conditions), sorted(REMEDIES))
+        for condition, (action, ceiling, blocks, reason) in REMEDIES.items():
+            with self.subTest(condition=condition):
+                self.assertEqual(conditions[condition]["action"], action)
+                self.assertEqual(conditions[condition]["ceiling"], ceiling)
+                self.assertIsInstance(blocks, bool)
+                self.assertTrue(reason.strip())
+
+    def test_every_cap_on_every_card_carries_the_tabled_remedy(self) -> None:
+        checked = 0
+        for run in scored_runs():
+            for cap in run["caps"]:  # type: ignore[union-attr]
+                condition = cap["condition"]
+                action, ceiling, blocks, _ = REMEDIES[condition]
+                shape = (ceiling, blocks)
+                if condition in OTHER_ARMS and run["tag"] in OTHER_ARMS[condition][2]:
+                    shape = OTHER_ARMS[condition][:2]
+                with self.subTest(run=run["tag"], condition=condition):
+                    self.assertEqual(action, cap["action_kind"])
+                    self.assertEqual(shape, (cap["ceiling"], cap["blocks"]))
+                    checked += 1
+        self.assertGreater(checked, 0, "no cap was read, so none was checked")
+
+    def test_every_second_shape_is_on_the_cards_it_names(self) -> None:
+        carried = {
+            (run["tag"], cap["condition"]): (cap["ceiling"], cap["blocks"])
+            for run in scored_runs()
+            for cap in run["caps"]  # type: ignore[union-attr]
+        }
+        for condition, (ceiling, blocks, runs, reason) in OTHER_ARMS.items():
+            with self.subTest(condition=condition):
+                self.assertIn(condition, REMEDIES)
+                self.assertTrue(reason.strip())
+                self.assertTrue(runs, "a second shape no run is named for")
+                self.assertNotEqual((ceiling, blocks), REMEDIES[condition][1:3])
+                for tag in runs:
+                    self.assertEqual((ceiling, blocks), carried.get((tag, condition)))
+
+
 def committed_results() -> dict[str, object]:
     """The committed `results.json`."""
     return dict(
