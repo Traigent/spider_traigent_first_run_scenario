@@ -57,7 +57,8 @@ from test_links import git_files, strip_code  # noqa: E402
 
 import build  # noqa: E402
 
-CARDS = REPO_ROOT / "docs" / "measurements" / "cards"
+MEASUREMENTS = REPO_ROOT / "docs" / "measurements"
+CARDS = MEASUREMENTS / "cards"
 
 # ---------------------------------------------------------------------------------------
 # Numbers, and what counts as a count.
@@ -680,6 +681,29 @@ class EveryProseCountIsBound(unittest.TestCase):
         self.assertEqual(runs, self.quantities["cards"].value)
         self.assertEqual(
             runs, len(build.PRESETS) + self.quantities["comparisons"].value
+        )
+
+
+class TheMeasurementJobOutlastsTheSweep(unittest.TestCase):
+    """CI's time limit for the measurement job, against the running time the documents
+    state -- one figure, kept in the README, so the workflow's comment cannot go stale
+    beside it again."""
+
+    def test_the_job_timeout_leaves_room_over_the_stated_sweep_time(self) -> None:
+        readme = (MEASUREMENTS / "README.md").read_text(encoding="utf-8")
+        stated = re.search(
+            rf"The whole sweep takes ({NUMBER}) to ({NUMBER}) minutes", readme, re.I
+        )
+        assert stated, "docs/measurements/README.md no longer states the sweep's time"
+        slowest = read_number(stated.group(2))
+        workflow = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text("utf-8")
+        job = workflow.split("\n  measurements:\n", 1)[1]
+        timeout = re.search(r"^    timeout-minutes: (\d+)$", job, re.M)
+        assert timeout, "the measurement job states no timeout"
+        self.assertGreaterEqual(
+            int(timeout.group(1)),
+            2 * slowest,
+            "the job's limit leaves no room over the sweep's stated running time",
         )
 
 

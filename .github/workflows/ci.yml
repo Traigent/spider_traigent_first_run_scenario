@@ -112,7 +112,9 @@ jobs:
   # interpreter it was taken on and would otherwise differ for that reason alone.
   measurements:
     runs-on: ubuntu-24.04
-    # About four minutes of sweep and one install; 30 leaves room for a slow mirror.
+    # The sweep's running time is the figure docs/measurements/README.md states, measured;
+    # with one install on top, 30 minutes leaves room for a slow mirror. The number is
+    # not repeated here: `tests/test_prose_counts.py` holds this timeout above it instead.
     timeout-minutes: 30
 
     steps:
