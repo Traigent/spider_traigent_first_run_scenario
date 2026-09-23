@@ -227,8 +227,8 @@ The text comparator gets 4 cases and is given re-spellings of a recorded query: 
 spacing, quote style, keyword case, a trailing semicolon. The execution scorer gets 3 and is
 given queries written differently that return the same rows: an alias, an `IN` with one
 element, an implicit `ASC`. `slow` compares text more narrowly than the text comparator and
-gets 4 cases of its own, which pin what it really accepts. Handing either method the other's probes would measure the wrong thing and
-report a known limit as a defect. Every case comes from a real row of the slice, named by
+gets 4 cases of its own, which pin what it really accepts. Handing either method the other's
+probes would measure the wrong thing and report a known limit as a defect. Every case comes from a real row of the slice, named by
 `row_id` and byte-identical to it in both question and gold query, all from the tuning split,
 and every probe query was executed against the shipped databases before being written down.
 

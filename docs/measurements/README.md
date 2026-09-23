@@ -31,7 +31,7 @@ python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
 
 It builds each project, scores it, deletes it, and writes a card for each. It reaches no
-network and never uses `--venv ready`. On this machine the whole sweep takes about two minutes.
+network and never uses `--venv ready`. The whole sweep takes about four minutes on a laptop.
 
 **Checking the committed cards is one flag.** `--compare` re-measures, publishes nothing, and
 compares the result with `cards/` byte for byte -- every card of every run that scored, and
