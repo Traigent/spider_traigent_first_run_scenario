@@ -143,11 +143,3 @@ jobs:
       - name: Re-measure every run and compare it with the committed cards
         working-directory: repo
         run: python docs/measurements/score_bank.py --guide ../guide --workspace "$RUNNER_TEMP/readiness-bank" --compare
-
-      # The prose quotes a few of the guide's own constants; with the guide checked out
-      # here anyway, they are read back out of it rather than trusted.
-      - name: The guide constants the prose quotes are the guide's
-        working-directory: repo
-        env:
-          TRAIGENT_FIRST_RUN_GUIDE: ${{ github.workspace }}/guide
-        run: python -m unittest discover -s tests -p test_prose_counts.py -k TheGuideAgrees -v

@@ -101,7 +101,7 @@ a `containment` warning, discloses in your words what was not checked, and conti
 trial executes your evaluator against your engine after that disclosure, and you get one
 optional question whether the evaluator connects read-only.
 
-So the two presets ask different questions:
+So the presets ask different questions:
 
 - **`--preset ready`** (exact-match) asks whether a guided first run works end to end.
 - **`--preset sql-exec-stop`** (exec-match) asks whether the run correctly skips calibrating
@@ -222,11 +222,12 @@ probes shipped, read 86. Since `e4096e3a` `ready` reads 45 under the `evaluator-
 ceiling and `checked` 93, so the same probes are worth 48 points at the opening -- and the band
 above WORKABLE additionally waits for a row review. The 41-point figure is a 6ec2b9c1 reading.
 
-The two scorers get different probes, because equivalence means different things to them.
+The two methods get different probes, because equivalence means different things to them.
 The text comparator gets 4 cases and is given re-spellings of a recorded query: different
 spacing, quote style, keyword case, a trailing semicolon. The execution scorer gets 3 and is
 given queries written differently that return the same rows: an alias, an `IN` with one
-element, an implicit `ASC`. Handing either the other's probes would measure the wrong thing and
+element, an implicit `ASC`. `slow` compares text more narrowly than the text comparator and
+gets 4 cases of its own, which pin what it really accepts. Handing either method the other's probes would measure the wrong thing and
 report a known limit as a defect. Every case comes from a real row of the slice, named by
 `row_id` and byte-identical to it in both question and gold query, all from the tuning split,
 and every probe query was executed against the shipped databases before being written down.

@@ -139,10 +139,10 @@ Two things follow, and both are properties of this table rather than of the guid
 
 ## What the sweep covers
 
-Thirty-one presets, then the comparisons the documentation makes. One preset the
-sweep names only through a variant -- `slow-scorer`, because it carries a non-default
-calibration budget -- so this table has thirty-two preset runs -- one for each of `build.py`'s
-thirty-two presets -- and seventeen comparisons: thirteen variants and the four `grid-*` runs:
+Every one of `build.py`'s thirty-two presets is run once: thirty-one by name, and `slow-scorer`
+through a variant, because it carries a non-default calibration budget. Then come the
+seventeen comparisons the documentation makes -- thirteen variants and the four `grid-*` runs --
+for forty-nine runs in all:
 
 | run | what it is for |
 |---|---|
@@ -253,7 +253,7 @@ question the opening card does not ask; both are worth writing down.
   blocks; `evaluator-unvalidated` at 45 is what the number reads. The same holds for
   `holdout-only` (`dataset-tuning-split-empty` 50, blocks) -- both open at 45 with the block
   on the card and `resplit-dataset` as the action.
-- **The two scorers that are not scorers land where the guide's ladder puts them.** With no
+- **The two scorers that cannot be given a method land where the guide's ladder puts them.** With no
   `--evaluator-method` declared -- the only honest declaration for either --
   `opaque-scorer` reads `evaluator-unresolved` 40, blocks; `length-blind` with probes reads
   `evaluator-invalid` 25, blocks, from a calibration that ran and failed
@@ -262,7 +262,7 @@ question the opening card does not ask; both are worth writing down.
 
 ## The cards that are identical to another card
 
-Worth stating because each one is a finding rather than a coincidence: where two starting
+Worth stating because each one is a finding rather than a coincidence: where different starting
 states produce the same card, the guide's opening read did not distinguish them. Fifteen of the
 forty-nine cards fall into the six groups below. Each is checkable directly -- the first line
 of `04-readiness-card.txt` is the invocation that produced it, which names its own paths, so

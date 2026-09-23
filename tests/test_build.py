@@ -3140,6 +3140,22 @@ class EveryChoiceIsNamedWhereTheChoicesAreListed(unittest.TestCase):
                 self.assertEqual(sorted(accepted[flag]), sorted(named))
         self.assertGreaterEqual(checked, 3, "the table was not read")
 
+    def test_the_scorer_document_names_every_scorer(self) -> None:
+        """`docs/eval-methods.md` is where a reader learns what each `--eval` is.
+
+        It counted "two real scorers and four others" for a round after `slow` arrived,
+        and never mentioned it: a document that enumerates the choices has to name them.
+        """
+        document = (REPO_ROOT / "docs" / "eval-methods.md").read_text(encoding="utf-8")
+        for state in build.EVALUATOR_FILES:
+            if state == "missing":
+                continue
+            with self.subTest(eval=state):
+                self.assertTrue(
+                    f"`{state}`" in document,
+                    f"docs/eval-methods.md never names {state}",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

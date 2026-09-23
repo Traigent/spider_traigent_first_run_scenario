@@ -253,7 +253,7 @@ not by being present.
 ## Data that is wrong on purpose
 
 **Seventeen** of the thirty-two presets sit in this table. Sixteen ship a project whose data or
-scorer is broken, or shaped in a way the tools do not expect; the seventeenth, `split-by-database`,
+scorer is broken, or shaped in a way the tools do not expect; the remaining one, `split-by-database`,
 is not wrong at all -- its data is split the way a customer splits it, and it is kept here as the
 control for the family check. Real projects arrive that way, and the run's job is
 not to notice and stop -- it is to notice, repair, and carry on to a result that means
@@ -338,10 +338,10 @@ selected agent's own source, so a roster imported from a sibling module scores z
 two copies are otherwise the same file, and
 `tests/test_components.py::TheVendorVariantsDoNotDrift` fails if they stop being.
 
-## The two SQL evaluators
+## The two ways to score SQL
 
-`--eval` is the one choice worth understanding before you make it, because the two scorers
-disagree about what a right answer is.
+`--eval` is the one choice worth understanding before you make it, because the two scoring
+methods disagree about what a right answer is.
 
 **`exact-match`** compares the generated query with the recorded one as text, after
 normalising comments away and then spacing, quote style, keyword case and a trailing
@@ -381,9 +381,10 @@ So the presets ask different questions: `checked` asks whether a first run works
 a non-executing proxy; `sql-exec-stop` and `best-case` ask what the guide does at the one
 boundary in this bank -- a scorer it will not calibrate on the original -- and at `d07b62cd` the
 answer is a card that says so and a run that goes on.
-[docs/eval-methods.md](docs/eval-methods.md) has the detail, including how the two scorers
-are graded, and the two scorers beside them that are not scorers at all -- `opaque`, which
-calls a library that is not there, and `length-blind`, which measures length.
+[docs/eval-methods.md](docs/eval-methods.md) has the detail, including how the two methods
+are graded, `slow`, which is right and too slow to check, and the four scorers beside them
+that are not scorers at all -- `broken` and `swapped`, which never read the model's output,
+`opaque`, which calls a library that is not there, and `length-blind`, which measures length.
 
 ## Where each preset starts, and what the run has to do about it
 
@@ -520,7 +521,7 @@ STRONG 75-89, EXCELLENT 90-100.
 ### Three starting points the opening gate does not separate
 
 A bank of broken projects is worth having because of what it finds, and at `6ec2b9c1` it found
-three. Two of them the guide has since answered and one it has not. Each is a `diff` over two
+three. Two of them the guide has since answered and one it has not. Each is a `diff` between
 committed cards, re-taken at `d07b62cd`.
 
 **A dataset whose every answer answers a different question is still not noticed.**
@@ -571,7 +572,7 @@ not been re-measured; the row-repeat ceiling of 89 says it would at least no lon
 silently.
 
 Two more, from the nine presets ported on 2026-09-18, in the same register -- each a `diff`
-over two committed cards at `d07b62cd`.
+between committed cards at `d07b62cd`.
 
 **A split drawn along databases is invisible to the family check.** `split-by-database`
 holds out five whole databases -- `cre_Doc_Template_Mgt`, `flight_2`, `orchestra`,
@@ -830,7 +831,7 @@ datasheet records.
 |---|---|
 | [docs/dataset.md](docs/dataset.md) | what the data is, how the 300 were chosen, what it cannot support |
 | [docs/isolation.md](docs/isolation.md) | how a demo is kept separate, and what to do to keep a run honest |
-| [docs/eval-methods.md](docs/eval-methods.md) | the two SQL scorers, the two that are not, and the scoring problem behind them |
+| [docs/eval-methods.md](docs/eval-methods.md) | the two scoring methods, the slow scorer, the four scorers that are not scorers, and the scoring problem behind them |
 | [docs/measurements/](docs/measurements/README.md) | every readiness figure quoted here: the script, the agent read, and each run's captured invocation and output |
 
 ## Working on this repository
