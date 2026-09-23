@@ -1835,23 +1835,22 @@ def check_plan(plan: Plan) -> None:
                 "--agent two-agents gives the second agent queries drawn from the rows, "
                 "and --dataset missing ships none"
             )
-        # The second agent's input IS the row's gold query. A dataset state that
-        # withholds answers therefore cannot ship one: the answers to the withheld
-        # rows would sit in a file beside them, under the same ids, and the project
-        # would be blind to nothing at all. Keyed on `row_is_labelled` rather than
-        # on a list of state names, so a labelling state added later is refused
-        # without anyone remembering to come back here.
-        withheld = sum(
-            1
-            for row in (plan.undamaged_rows or plan.rows)
-            if not row_is_labelled(row, plan.dataset)
-        )
-        if withheld:
+        # The second agent's input IS a row's gold query, under that row's id. So it
+        # may carry only a query the dataset itself ships as that row's answer. One
+        # the dataset withholds (an unlabelled row, a torn line) or replaces (a
+        # rotated answer) would sit in a file beside it under the same id, and the
+        # project would be blind to nothing at all. Compared on the answers as they
+        # ship rather than keyed on a list of states -- the first version asked only
+        # whether a row was labelled, and `wrong-answers` shipped the true query for
+        # a third of its rotated rows.
+        disclosed = answers_a_second_agent_discloses(plan)
+        if disclosed:
             raise BuildError(
                 "--agent two-agents gives the second agent the rows' gold queries as "
-                f"its input, and --dataset {plan.dataset} withholds the answer on "
-                f"{withheld} of them: the project would ship the answers it is meant "
-                "to be missing, in a file beside them, under the same ids"
+                f"its input, and --dataset {plan.dataset} withholds or replaces the "
+                f"answer on {disclosed} of the {len(plan.second_agent_rows)} it would "
+                "carry: the project would ship the answers it is meant to be missing, "
+                "in a file beside them, under the same ids"
             )
         if len(plan.second_agent_rows) != SECOND_AGENT_ROWS:
             raise BuildError(
@@ -1873,6 +1872,26 @@ def check_plan(plan: Plan) -> None:
         agent_state=plan.agent,
         keys=plan.keys,
         second_agent_rows=len(plan.second_agent_rows),
+    )
+
+
+def answers_a_second_agent_discloses(plan: Plan) -> int:
+    """How many of the second agent's queries are not the answer its row ships.
+
+    Read off the rows as the dataset file will hold them: a row that is unlabelled or
+    on a torn line ships no answer, and a damaged row ships whatever the damage left.
+    """
+    torn = set(torn_line_numbers(len(plan.rows))) if plan.dataset == "torn" else set()
+    shipped: dict[str, set[str | None]] = {}
+    for line, row in enumerate(plan.rows, start=1):
+        labelled = row_is_labelled(row, plan.dataset) and line not in torn
+        shipped.setdefault(row["metadata"]["id"], set()).add(
+            row["output"] if labelled else None
+        )
+    return sum(
+        1
+        for query in plan.second_agent_rows
+        if shipped.get(query["metadata"]["id"]) != {query["input"]}
     )
 
 

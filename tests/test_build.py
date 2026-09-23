@@ -2843,15 +2843,22 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_a_second_agent_may_not_ship_an_answer_the_dataset_withholds(self) -> None:
-        """The second agent's input IS the row's gold query.
+        """The second agent's input IS the row's gold query, under the row's id.
 
         Drawn from the whole slice, `--dataset unlabeled` shipped forty rows with
-        no answers and the gold query for twenty of them in a file beside them,
-        under the same ids -- a project blind to nothing at all, which `verify`
-        called `ok`. The refusal is keyed on whether a row ships its answer, not
-        on a list of state names, so a labelling state added later is covered.
+        no answers and the gold query for twenty of them in a file beside them --
+        a project blind to nothing at all, which `verify` called `ok`. The first
+        refusal asked only whether a row was labelled, so `wrong-answers` still
+        shipped the true query for twenty rows whose answers it had rotated. The
+        refusal now compares each query with the answer its row actually ships,
+        which covers a withheld answer, a replaced one and a torn line alike.
         """
-        for state, withheld in (("unlabeled", "40"), ("holdout-labelled", "24")):
+        for state, disclosed in (
+            ("unlabeled", "20"),
+            ("holdout-labelled", "17"),
+            ("wrong-answers", "20"),
+            ("torn", "1"),
+        ):
             with self.subTest(dataset=state):
                 out = Path(self.workspace) / f"two_agents_withheld_{state}"
                 result = run_build(
@@ -2864,9 +2871,29 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                     str(out),
                 )
                 self.assertEqual(result.returncode, 2, result.stdout)
-                self.assertIn("withholds the answer on", result.stderr)
-                self.assertIn(withheld, result.stderr)
+                self.assertIn("withholds or replaces the answer on", result.stderr)
+                self.assertIn(f"on {disclosed} of the 20", result.stderr)
                 self.assertFalse(out.exists(), f"{out} was left behind")
+
+    def test_a_second_agent_is_refused_only_where_it_would_disclose(self) -> None:
+        """Every state whose rows ship their own answers still builds with it."""
+        for state in build.DATASET_STATES:
+            refused = ("unlabeled", "holdout-labelled", "wrong-answers", "torn")
+            if state == "missing" or state in refused:
+                continue
+            with self.subTest(dataset=state):
+                arguments = build.build_parser().parse_args(
+                    ["demo", "--agent", "two-agents", "--dataset", state, "--out"]
+                    + [str(Path(self.workspace) / f"never_written_{state}")]
+                )
+                try:
+                    build.plan_demo(arguments)
+                except build.BuildError as refused_for_another_reason:
+                    # `tiny` has too few rows to give the second agent twenty; that
+                    # is a different refusal, and this test is about disclosure.
+                    self.assertNotIn(
+                        "withholds or replaces", str(refused_for_another_reason)
+                    )
 
     def test_every_metadata_key_is_classified_as_structure_or_declaration(
         self,
