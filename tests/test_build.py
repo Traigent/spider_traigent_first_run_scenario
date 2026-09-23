@@ -2810,16 +2810,26 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
                 if row.get("output") == truth.get(row["metadata"]["id"])
             )
             self.assertEqual(detail["rows_keeping_their_answer"], kept)
+            # "Rotated within" a field: every answer shipped is the gold query of a
+            # row of the slice that shares that field's value with the row it now
+            # sits on. The first version of this compared a row with itself, so
+            # any value of `rotated_within` passed.
+            field = str(detail["rotated_within"])
+            within: dict[object, set[object]] = {}
+            for row in self.truth.values():
+                within.setdefault(row["metadata"].get(field), set()).add(row["output"])
+            shipped = rows_of(out)
+            self.assertTrue(
+                all(field in row["metadata"] for row in shipped),
+                f"no shipped row carries {field!r}, so nothing can be rotated within it",
+            )
+            strays = [
+                row["metadata"]["id"]
+                for row in shipped
+                if row["output"] not in within[row["metadata"][field]]
+            ]
             self.assertEqual(
-                1,
-                len(
-                    {
-                        row["metadata"]["db_id"]
-                        for row in rows_of(out)
-                        if row["metadata"]["id"] == rows_of(out)[0]["metadata"]["id"]
-                    }
-                ),
-                "the rotation is declared to stay within " + detail["rotated_within"],
+                [], strays, f"the rotation is declared to stay within {field}"
             )
 
     def test_verify_reads_the_project_as_utf_8_whatever_the_locale_says(self) -> None:
