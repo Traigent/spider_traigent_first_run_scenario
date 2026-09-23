@@ -57,6 +57,12 @@ no `--evaluator-method` is passed at all, which is what a run that could not hon
 declare one does; `readiness.py` answers an undeclared method with `evaluator-unresolved`
 unless calibration has spoken for the file.
 
+`--agent-origin` and `--evaluator-origin` are taken from `demo.json` the same way. The guide
+has a run declare them on every readiness call -- `brought` for the customer's own,
+`generated` for one the run created or relies on in their place, including a pre-existing
+file the customer disclaims -- and the record says which each component is: `brought`
+everywhere but the `disclaimed` states, whose README disclaims the file.
+
 `--input-field` and `--expected-field` are not passed, except by one variant. The rows
 are written under `input` and `output` everywhere but `raw-export`, which uses Spider's
 own `question` and `query`; the preset is scored as the tools read it unaided, and
@@ -161,6 +167,9 @@ PRESETS = (
     "mostly-generated-answer-key",
     "split-by-database",
     "two-agents",
+    "split-by-question-form",
+    "disclaimed-agent",
+    "disclaimed-scorer",
 )
 
 # The comparisons the documentation makes, each built from flags rather than a preset so
@@ -242,6 +251,25 @@ VARIANTS: tuple[tuple[str, tuple[str, ...], dict[str, Any]], ...] = (
         "slow-scorer",
         ("--preset", "slow-scorer"),
         {"calibration_timeout": 5},
+    ),
+    # The origin and task-family states, calibrated, for the same reason as the
+    # provenance pairs: their ceilings (65, 74, 50) all sit above the 45 the unchecked
+    # evaluator holds every uncalibrated card at, so only the calibrated run shows the
+    # rung each one is on.
+    (
+        "disclaimed-agent--calibrated",
+        ("--preset", "disclaimed-agent", "--calibration", "present"),
+        {},
+    ),
+    (
+        "disclaimed-scorer--calibrated",
+        ("--preset", "disclaimed-scorer", "--calibration", "present"),
+        {},
+    ),
+    (
+        "split-by-question-form--calibrated",
+        ("--preset", "split-by-question-form", "--calibration", "present"),
+        {},
     ),
 )
 
@@ -560,9 +588,73 @@ def decoded(
     return found
 
 
+def declared_origin(component: dict[str, Any], tag: str) -> str:
+    """Who wrote a component, as its record declares; a record that does not is a fault.
+
+    A shipped component with no valid origin in its record is a record this sweep cannot
+    declare from, and guessing `brought` for it is the default this replaced.
+    """
+    origin = component.get("origin")
+    if origin not in ("brought", "generated"):
+        raise HarnessFault(
+            f"the record build.py wrote for {tag!r} declares no valid origin for "
+            f"{component.get('path')} ({origin!r})"
+        )
+    return str(origin)
+
+
 def present(component: dict[str, Any] | None) -> dict[str, Any] | None:
     """A component that shipped a file, or None. A record with no path shipped nothing."""
     return component if component and component.get("path") else None
+
+
+def readiness_command(
+    *,
+    scripts: pathlib.Path,
+    room: pathlib.Path,
+    project: pathlib.Path,
+    agent: dict[str, Any] | None,
+    evaluator: dict[str, Any] | None,
+    calibrated: bool,
+    declared: str | None,
+    task_kind: str,
+    tag: str,
+) -> list[str]:
+    """The readiness call for one built project, from what its record declares.
+
+    `agent` is None when the sweep passes no agent read. Each origin comes from the
+    record through `declared_origin`, so what the card says of who wrote a component is
+    what the builder declared and never a default of this script's.
+    """
+    readiness = [
+        sys.executable,
+        str(scripts / "readiness.py"),
+        "--preflight",
+        str(room / "02-preflight.json"),
+    ]
+    if agent:
+        document = KNOBS / (
+            "no-knobs.json" if agent["state"] == "no-knobs" else "ready.json"
+        )
+        readiness += [
+            "--agent-knobs",
+            str(document),
+            "--agent-source-root",
+            str(project),
+            "--selected-agent",
+            str(project / agent["path"]),
+            "--selected-agent-callable",
+            "run",
+            "--agent-origin",
+            declared_origin(agent, tag),
+        ]
+    if calibrated:
+        readiness += ["--calibration", str(room / "03-calibration.json")]
+    if evaluator:
+        readiness += ["--evaluator-origin", declared_origin(evaluator, tag)]
+    if declared:
+        readiness += ["--evaluator-method", declared]
+    return readiness + ["--task-kind", task_kind, "--color", "never", "--ascii"]
 
 
 def score_one(
@@ -722,35 +814,17 @@ def score_one(
                 report.get("passed") if isinstance(report, dict) else None
             )
 
-    readiness = [
-        sys.executable,
-        str(scripts / "readiness.py"),
-        "--preflight",
-        str(room / "02-preflight.json"),
-    ]
-    if agent and agent_knobs:
-        document = KNOBS / (
-            "no-knobs.json" if agent["state"] == "no-knobs" else "ready.json"
-        )
-        readiness += [
-            "--agent-knobs",
-            str(document),
-            "--agent-source-root",
-            str(project),
-            "--selected-agent",
-            str(project / agent["path"]),
-            "--selected-agent-callable",
-            "run",
-            "--agent-origin",
-            "brought",
-        ]
-    if calibrated:
-        readiness += ["--calibration", str(room / "03-calibration.json")]
-    if evaluator:
-        readiness += ["--evaluator-origin", "brought"]
-    if declared:
-        readiness += ["--evaluator-method", declared]
-    readiness += ["--task-kind", task_kind, "--color", "never", "--ascii"]
+    readiness = readiness_command(
+        scripts=scripts,
+        room=room,
+        project=project,
+        agent=agent if agent_knobs else None,
+        evaluator=evaluator,
+        calibrated=calibrated,
+        declared=declared,
+        task_kind=task_kind,
+        tag=tag,
+    )
 
     capture(readiness, project, room / "04-readiness-card.txt")
     done = capture_json(

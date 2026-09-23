@@ -188,6 +188,15 @@ PRESET_TABLE = {
     "opaque-scorer": ("ready", "ready", "opaque", "none", "none"),
     "length-blind": ("ready", "ready", "length-blind", "present", "none"),
     "two-agents": ("two-agents", "ready", "exact-match", "none", "none"),
+    "disclaimed-agent": ("disclaimed", "ready", "exact-match", "none", "none"),
+    "disclaimed-scorer": ("ready", "ready", "disclaimed", "none", "none"),
+    "split-by-question-form": (
+        "ready",
+        "split-by-question-form",
+        "exact-match",
+        "none",
+        "none",
+    ),
 }
 
 # The file each `--eval` state ships, so that a preset naming one scorer and shipping another
@@ -200,6 +209,8 @@ EVALUATOR_FILENAMES = {
     "opaque": "opaque.py",
     "length-blind": "length_blind.py",
     "slow": "slow.py",
+    # The text comparator, byte for byte; the customer's README disclaims it.
+    "disclaimed": "exact_match.py",
 }
 
 # And the same for the agents. Comparing the shipped file with `build.agent_file(...)` was
@@ -211,6 +222,8 @@ AGENT_FILENAMES = {
     "no-knobs": "agent_no_knobs.py",
     # The tunable agent, byte for byte; what the state adds sits beside it.
     "two-agents": "agent_ready.py",
+    # The same, disclaimed in the README rather than changed.
+    "disclaimed": "agent_ready.py",
 }
 
 # What each evaluator honestly is. Recorded in every manifest by build.py and, until now,
@@ -228,6 +241,8 @@ EXPECTED_EVALUATOR_METHOD = {
     # A method IS honest here: the comparison really is a normalised text match. What is
     # wrong with this scorer is what it costs, not what it compares.
     "slow": "normalized-exact",
+    # The text comparator; the customer disclaiming it changes whose it is, not what it does.
+    "disclaimed": "normalized-exact",
 }
 # Whether each evaluator executes the model's output, as the manifest records it. `None`
 # is "unknown", and it is honest for exactly one scorer: the one whose grader is not here.
@@ -240,6 +255,28 @@ EXPECTED_EXECUTES = {
     "length-blind": False,
     # It sleeps; it does not run the model's query.
     "slow": False,
+    "disclaimed": False,
+}
+# Who wrote each component, as the guide has a run declare it: `generated` for one the
+# customer disclaims, however cleanly it reads, and `brought` for the customer's own.
+# Written out here so a state recorded as the other cannot pass by agreeing with itself.
+EXPECTED_AGENT_ORIGIN = {
+    "ready": "brought",
+    "no-knobs": "brought",
+    "two-agents": "brought",
+    "disclaimed": "generated",
+    "missing": None,
+}
+EXPECTED_EVALUATOR_ORIGIN = {
+    "exact-match": "brought",
+    "exec-match": "brought",
+    "broken": "brought",
+    "swapped": "brought",
+    "opaque": "brought",
+    "length-blind": "brought",
+    "slow": "brought",
+    "disclaimed": "generated",
+    "missing": None,
 }
 
 # The version of the agent's dependency a project environment is built with. Written out
@@ -1304,6 +1341,27 @@ class TheBankOfStartingStates(unittest.TestCase):
                 self.assertEqual(
                     recorded["executes_candidate_output"], EXPECTED_EXECUTES[evaluator]
                 )
+
+    def test_every_manifest_records_who_wrote_each_component(self) -> None:
+        """The origin the measurement declares to the guide, and the README behind it.
+
+        A `generated` component is honest only where the customer has disclaimed it in
+        the README the run reads, and a `brought` one only where they have not.
+        """
+        for preset, (agent, _, evaluator, _, _) in sorted(PRESET_TABLE.items()):
+            with self.subTest(preset=preset):
+                components = self.manifest(preset)["components"]
+                readme = (self.project(preset) / "README.md").read_text()
+                for component, expected, name in (
+                    ("agent", EXPECTED_AGENT_ORIGIN[agent], "agent.py"),
+                    ("evaluator", EXPECTED_EVALUATOR_ORIGIN[evaluator], "evaluator.py"),
+                ):
+                    self.assertEqual(expected, components[component]["origin"])
+                    self.assertEqual(
+                        expected == "generated",
+                        build.DISCLAIMERS[name] in readme,
+                        f"{preset}: the README and the recorded origin of {name} disagree",
+                    )
 
     def test_every_preset_passes(self) -> None:
         result = run_build("--format", "json", "verify", "--demo", str(self.root))
@@ -3175,6 +3233,65 @@ class RepositoryCheck(unittest.TestCase):
                 name, build.PRESET_CAPS, f"{name} says nothing it was built for"
             )
         self.assertEqual(set(build.PRESETS), set(build.PRESET_CAPS))
+
+
+class ASplitAlongTheQuestionsOwnForms(unittest.TestCase):
+    """`split-by-question-form` holds out every counting question, and only those.
+
+    Read here the way the customer who drew it would describe it, independently of the
+    builder's own rule: a question is a counting question when its first two words, in
+    any case, are "how many". The slice has one written in lower case, and a rule that
+    missed it would leave the form on both sides -- the one split the family check reads
+    as fine.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.workspace = tempfile.mkdtemp()
+        cls.out = Path(cls.workspace) / "d"
+        built = run_build(
+            "demo", "--preset", "split-by-question-form", "--out", str(cls.out)
+        )
+        assert built.returncode == 0, built.stderr
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        shutil.rmtree(cls.workspace, ignore_errors=True)
+
+    def test_every_counting_question_and_nothing_else_is_held_out(self) -> None:
+        rows = [
+            json.loads(line)
+            for line in (self.out / "project" / "dataset.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        counting = [
+            row for row in rows if row["input"].lower().split()[:2] == ["how", "many"]
+        ]
+        self.assertEqual(34, len(counting))
+        self.assertTrue(any(row["input"].startswith("how many") for row in counting))
+        for row in rows:
+            with self.subTest(row=row["metadata"]["id"]):
+                self.assertEqual(
+                    "holdout" if row in counting else "tuning", row["metadata"]["split"]
+                )
+
+    def test_the_rows_are_the_slices_own(self) -> None:
+        """Only the side a row sits on moves; no question or answer is touched."""
+        shipped = {
+            row["metadata"]["id"]: row
+            for row in (
+                json.loads(line)
+                for line in (self.out / "project" / "dataset.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            )
+        }
+        original = {row["metadata"]["id"]: row for row in build.read_dataset()}
+        self.assertEqual(set(original), set(shipped))
+        for identifier, row in original.items():
+            self.assertEqual(row["input"], shipped[identifier]["input"])
+            self.assertEqual(row["output"], shipped[identifier]["output"])
 
 
 class TheTablesLineUp(unittest.TestCase):

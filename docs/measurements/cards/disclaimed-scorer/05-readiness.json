@@ -1,0 +1,255 @@
+{
+  "agent_route_unverified": false,
+  "agent_source_read": true,
+  "agent_unfollowed_settings": [],
+  "band": "PARTIAL",
+  "band_limited_by_confidence": false,
+  "band_limited_by_unread_answers": false,
+  "caps": [
+    {
+      "action_kind": "complete-calibration",
+      "asks": true,
+      "blocks": false,
+      "ceiling": 45,
+      "condition": "evaluator-unvalidated",
+      "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+    },
+    {
+      "action_kind": "connect-real-evaluator",
+      "asks": false,
+      "blocks": false,
+      "ceiling": 74,
+      "condition": "evaluator-generated",
+      "reason": "This run wrote the evaluator, so the score reports agreement with an evaluation method nobody outside this run has checked against your task. Your rows and your answers are real; what grades them is a stand-in until your own scoring is connected or a person confirms this one marks the way you would."
+    }
+  ],
+  "confidence": 0.67,
+  "gaps": [
+    "evaluator-unvalidated: An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence.",
+    "evaluator-generated: This run wrote the evaluator, so the score reports agreement with an evaluation method nobody outside this run has checked against your task. Your rows and your answers are real; what grades them is a stand-in until your own scoring is connected or a person confirms this one marks the way you would.",
+    "evaluation/calibration could not be measured - no calibration result was provided to this score; it costs points until a complete calibration is measured",
+    "evaluation/task-fit: normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output",
+    "dataset/diversity could not be measured - not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean",
+    "evaluation/probe-spread could not be measured - not yet measured how far apart it scores a right and a wrong answer - this is measured at calibration, later in the run, and no points are deducted for it here",
+    "agent/output-contract could not be measured - not independently verified; excluded from this score. Assistant observation, which nothing here checks: from the checklist, the answer's shape is constrained; in its own words, 'agent.py:59 and agent.py:61-62 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text on both of its paths: agent.py:339 where the model added no fence, agent.py:346 where it did.' Read from agent.py, 59: \"direct\": \"Output the SQLite query only -- no explanation, no markdow...; 61: \"First outline the query plan (tables, joins, filters, aggregation) a... (+2 more cited line(s))",
+    "agent/prompt could not be measured - not independently verified; excluded from this score. Assistant observation, which nothing here checks: from the checklist, a prompt, no worked examples in it; in its own words, 'agent.py:310-318 build_prompt assembles the exact text sent -- agent.py:313 appends the question and agent.py:318 joins the parts -- and agent.py:387 passes it as the single user message; no worked examples ride with it.' Read from agent.py, 310: parts = [; 313: f\"\\\\nQuestion: {question}\\\\nSQL:\", (+2 more cited line(s))",
+    "agent/control-flow could not be measured - not independently verified; excluded from this score. Assistant observation (no contradicting loop in the selected function's own body, which does not establish that it ends): from the checklist, one call per input, so it ends; in its own words, 'agent.py:392-411 run() is straight-line: agent.py:405-411 is its single return, calling call_model once at agent.py:406, with no loop and no retry.' Read from agent.py, 392: def run(input_text, config):; 405: return strip_code_fence( (+1 more cited line(s))",
+    "agent/tools could not be measured - the document declares no tools, so tool wiring was not checked here. Assistant observation, which nothing here checks: agent.py declares no tools; agent.py:381 imports litellm and the agent's only outbound call is the completion at agent.py:383. Read from agent.py, 381: import litellm; 383: answer = litellm.completion(",
+    "dataset/power: 240 to tune on / 60 held back; 240 examples - substantial comparison set"
+  ],
+  "knobs": [],
+  "open_asks": [],
+  "overall": 45,
+  "pillars": [
+    {
+      "confidence": 0.77,
+      "name": "agent",
+      "score": 100,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "not independently verified; excluded from this score. Assistant observation (no contradicting loop in the selected function's own body, which does not establish that it ends): from the checklist, one call per input, so it ends; in its own words, 'agent.py:392-411 run() is straight-line: agent.py:405-411 is its single return, calling call_model once at agent.py:406, with no loop and no retry.' Read from agent.py, 392: def run(input_text, config):; 405: return strip_code_fence( (+1 more cited line(s))",
+          "maximum": 7.0,
+          "measured": false,
+          "name": "control-flow",
+          "value": 0.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "not independently verified; excluded from this score. Assistant observation, which nothing here checks: from the checklist, the answer's shape is constrained; in its own words, 'agent.py:59 and agent.py:61-62 both instruct SQL only, and agent.py:321-346 strip_code_fence pins the returned answer to bare query text on both of its paths: agent.py:339 where the model added no fence, agent.py:346 where it did.' Read from agent.py, 59: \"direct\": \"Output the SQLite query only -- no explanation, no markdow...; 61: \"First outline the query plan (tables, joins, filters, aggregation) a... (+2 more cited line(s))",
+          "maximum": 8.0,
+          "measured": false,
+          "name": "output-contract",
+          "value": 0.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "not independently verified; excluded from this score. Assistant observation, which nothing here checks: from the checklist, a prompt, no worked examples in it; in its own words, 'agent.py:310-318 build_prompt assembles the exact text sent -- agent.py:313 appends the question and agent.py:318 joins the parts -- and agent.py:387 passes it as the single user message; no worked examples ride with it.' Read from agent.py, 310: parts = [; 313: f\"\\\\nQuestion: {question}\\\\nSQL:\", (+2 more cited line(s))",
+          "maximum": 8.0,
+          "measured": false,
+          "name": "prompt",
+          "value": 0.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "static source verification established possible settings model, prompt_style, schema_context, temperature; this advisory read assumes the selected source does not rewrite its own functions or imports at runtime. It does not establish final request wiring. your space has 36 distinct configurations; this read carries no trial budget, so nothing here says how much of it a run would compare",
+          "maximum": 100.0,
+          "measured": true,
+          "name": "search-space",
+          "value": 100.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "the document declares no tools, so tool wiring was not checked here. Assistant observation, which nothing here checks: agent.py declares no tools; agent.py:381 imports litellm and the agent's only outbound call is the completion at agent.py:383. Read from agent.py, 381: import litellm; 383: answer = litellm.completion(",
+          "maximum": 7.0,
+          "measured": false,
+          "name": "tools",
+          "value": 0.0,
+          "warning": false,
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "confidence": 0.8,
+      "name": "dataset",
+      "score": 98,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "bands present: easy, hard, medium, very-hard",
+          "maximum": 15.0,
+          "measured": true,
+          "name": "difficulty",
+          "value": 15.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "not checked: whether one expected output dominates - the checks that did run found nothing, which is not the same as clean",
+          "maximum": 20.0,
+          "measured": false,
+          "name": "diversity",
+          "value": 0.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "300/300 rows carry an expected output",
+          "maximum": 30.0,
+          "measured": true,
+          "name": "labels",
+          "value": 30.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "240 to tune on / 60 held back; 240 examples - substantial comparison set",
+          "maximum": 25.0,
+          "measured": true,
+          "name": "power",
+          "value": 23.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "300 collected of 300 rows; declared sources: real",
+          "maximum": 10.0,
+          "measured": true,
+          "name": "provenance",
+          "value": 10.0,
+          "warning": false,
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "confidence": 0.45,
+      "name": "evaluation",
+      "score": 33,
+      "subscores": [
+        {
+          "applicable": true,
+          "evidence": "no calibration result was provided to this score; it costs points until a complete calibration is measured",
+          "maximum": 40.0,
+          "measured": false,
+          "name": "calibration",
+          "value": 0.0,
+          "warning": false,
+          "withheld": true
+        },
+        {
+          "applicable": true,
+          "evidence": "not yet measured how far apart it scores a right and a wrong answer - this is measured at calibration, later in the run, and no points are deducted for it here",
+          "maximum": 15.0,
+          "measured": false,
+          "name": "probe-spread",
+          "value": 0.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "deterministic scoring rule",
+          "maximum": 20.0,
+          "measured": true,
+          "name": "reproducibility",
+          "value": 20.0,
+          "warning": false,
+          "withheld": false
+        },
+        {
+          "applicable": true,
+          "evidence": "normalized-exact is the wrong kind of check for code-sql output: it compares the answer with the expected text once case and spacing are normalised, so a right code-sql answer worded differently is still scored as wrong; normalized-exact fits closed-label, short-answer or routing output",
+          "maximum": 25.0,
+          "measured": true,
+          "name": "task-fit",
+          "value": 8.0,
+          "warning": false,
+          "withheld": false
+        }
+      ]
+    }
+  ],
+  "provenance_assumption": null,
+  "recommended_action": "complete-calibration",
+  "repeated_inputs": null,
+  "schema_version": 6,
+  "status": "OK",
+  "unmeasured": [
+    {
+      "check": "control-flow",
+      "pillar": "agent",
+      "reason": "absent",
+      "weight": 7.0
+    },
+    {
+      "check": "output-contract",
+      "pillar": "agent",
+      "reason": "absent",
+      "weight": 8.0
+    },
+    {
+      "check": "prompt",
+      "pillar": "agent",
+      "reason": "absent",
+      "weight": 8.0
+    },
+    {
+      "check": "tools",
+      "pillar": "agent",
+      "reason": "absent",
+      "weight": 7.0
+    },
+    {
+      "check": "diversity",
+      "pillar": "dataset",
+      "reason": "absent",
+      "weight": 20.0
+    },
+    {
+      "check": "probe-spread",
+      "pillar": "evaluation",
+      "reason": "absent",
+      "weight": 15.0
+    }
+  ],
+  "weighted_average": 76,
+  "weights": {
+    "agent": 25.0,
+    "dataset": 40.0,
+    "evaluation": 35.0
+  }
+}

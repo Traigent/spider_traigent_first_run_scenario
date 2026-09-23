@@ -251,6 +251,10 @@ PRESET_ROUNDS: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     ("the provenance ladder's lower rung", ("synthetic-source",)),
+    (
+        "who wrote the components and how the split is drawn",
+        ("disclaimed-agent", "disclaimed-scorer", "split-by-question-form"),
+    ),
 )
 
 
@@ -336,6 +340,21 @@ def measure() -> dict[str, Quantity]:
         (
             "presets added after the port",
             sum(len(names) for _, names in PRESET_ROUNDS[2:]),
+            rounds,
+        ),
+        (
+            "presets added for provenance and cost",
+            sum(len(names) for _, names in PRESET_ROUNDS[2:4]),
+            rounds,
+        ),
+        (
+            "presets added for origin and split",
+            len(PRESET_ROUNDS[4][1]),
+            rounds,
+        ),
+        (
+            "presets before the origin and split round",
+            sum(len(names) for _, names in PRESET_ROUNDS[:4]),
             rounds,
         ),
         (
@@ -490,7 +509,8 @@ CLAIMS: dict[str, tuple[str, ...]] = {
         "{presets that ship no rows} that do not are `empty` and `no-data`",
         "in every one of the {presets in the first bank} states there were then",
         "So a {presets}-preset bank with environments",
-        "6.8 GB at {presets once the provenance and cost round landed} and 3.7 GB at "
+        "6.9 GiB at {presets before the origin and split round}, 6.7 GiB at "
+        "{presets once the provenance and cost round landed} and 3.7 GiB at "
         "{presets in the first bank})",
         "**{presets in the wrong-on-purpose table}** of the {presets} presets sit in "
         "this table. {presets in that table that are broken} ship a project",
@@ -503,7 +523,9 @@ CLAIMS: dict[str, tuple[str, ...]] = {
         "and the {cards whose action is label-data} cards whose action is `label-data`",
         "these {presets in the score tables} presets are the ones",
         "The {presets ported on 2026-09-18} ported on 2026-09-18 and the "
-        "{presets added after the port} added after them for provenance and cost",
+        "{presets added after the port} added after them -- "
+        "{presets added for provenance and cost} for provenance and cost, "
+        "{presets added for origin and split} for who wrote the components",
         "### {starting points the bank could not separate at 6ec2b9c1} starting points "
         "the opening gate does not separate",
         "from the {presets ported on 2026-09-18} presets ported on 2026-09-18",
@@ -727,25 +749,25 @@ class TheGateCatchesWhatTheFirstOneMissed(unittest.TestCase):
     def test_the_numerator_of_a_pair(self) -> None:
         self.assert_caught(
             "README.md",
-            "30 of the 32",
-            "24 of the 32",
-            "'24' for 'presets that ship rows', and there are 30",
+            "33 of the 35",
+            "24 of the 35",
+            "'24' for 'presets that ship rows', and there are 33",
         )
 
     def test_a_count_in_emphasis(self) -> None:
         self.assert_caught(
             "README.md",
-            "**Seventeen**",
+            "**Eighteen**",
             "**Twelve**",
-            "'Twelve' for 'presets in the wrong-on-purpose table', and there are 17",
+            "'Twelve' for 'presets in the wrong-on-purpose table', and there are 18",
         )
 
     def test_a_total_whose_noun_is_in_the_clause_before(self) -> None:
         self.assert_caught(
             "docs/measurements/README.md",
-            "thirty-one by name",
+            "thirty-four by name",
             "thirty by name",
-            "'thirty' for 'presets the sweep names', and there are 31",
+            "'thirty' for 'presets the sweep names', and there are 34",
         )
 
     def test_the_numerator_written_out(self) -> None:

@@ -78,7 +78,7 @@ GUIDE_REQUIRED = ("GUIDE.md", "skills")
 # setting only from values it can see there. Hence one agent per vendor rather than one
 # agent reading a roster from somewhere else.
 PROVIDERS = ("openrouter", "direct")
-AGENT_STATES = ("ready", "no-knobs", "two-agents", "missing")
+AGENT_STATES = ("ready", "no-knobs", "two-agents", "disclaimed", "missing")
 # `two-agents` ships the tunable agent at `agent.py` and, beside it, a second agent that
 # has nothing to do with it -- the shape of a project that has grown a side tool. The
 # second one lives in a directory of its own with its own rows and its own scorer, and
@@ -93,11 +93,43 @@ PROJECT_NOTE = "PROJECT.md"
 def agent_file(state: str, provider: str) -> Path | None:
     if state == "missing":
         return None
-    if state == "two-agents":
-        # `agent.py` is the tunable agent, byte for byte. What the state adds is beside
-        # it, not in it.
+    if state in ("two-agents", "disclaimed"):
+        # `agent.py` is the tunable agent, byte for byte. What `two-agents` adds is beside
+        # it, and what `disclaimed` adds is the customer's word about it in the README.
         state = "ready"
     return COMPONENTS / "agent" / provider / f"agent_{state.replace('-', '_')}.py"
+
+
+# Who wrote each component, as the guide asks a run to declare it on every readiness call:
+# `brought` for the customer's own, `generated` for one the run created or relies on in
+# its place -- and a customer's disclaimer of a file that is already there makes it
+# `generated`, however cleanly it reads or calibrates. A `disclaimed` component is the
+# tunable one, unchanged, disclaimed by the customer in the project's README; its origin
+# is what that disclaimer makes it. `None` is a component that is not there to have one.
+AGENT_ORIGINS: dict[str, str | None] = {
+    "ready": "brought",
+    "no-knobs": "brought",
+    "two-agents": "brought",
+    "disclaimed": "generated",
+    "missing": None,
+}
+# What the customer's README says of a component they do not stand behind, in place of
+# the description it would otherwise carry. The README is the one place every project
+# in this repository describes its own files, so it is where a customer's account of a
+# file belongs; the guide names no file a run must read. Chosen by the origins above -- `Plan.disclaimed` is every shipped `generated`
+# file -- so the words and the declared origin cannot part.
+DISCLAIMERS = {
+    "agent.py": (
+        "an example agent from a tutorial we followed to try the tooling out: "
+        "`run(question, config)` returns a query as text. It is not what our product "
+        "runs -- that agent lives in another repository and is not here."
+    ),
+    "evaluator.py": (
+        "an example scorer from a tutorial we followed to try the tooling out: "
+        "`score(output, expected, input_data, metadata)` returns 1.0 or 0.0. It is not "
+        "how we grade answers -- our own grading lives elsewhere and is not here."
+    ),
+}
 
 
 def second_agent_file(provider: str) -> Path:
@@ -191,6 +223,8 @@ EVALUATOR_FILES = {
     # A scorer that compares text the ordinary way and asks a service to do it, one row
     # per call. Nothing is wrong with the comparison; what is wrong is what it costs.
     "slow": COMPONENTS / "evaluator" / "slow.py",
+    # The text comparator, byte for byte, disclaimed by the customer: see `DISCLAIMERS`.
+    "disclaimed": COMPONENTS / "evaluator" / "exact_match.py",
     "missing": None,
 }
 DATASET_STATES = (
@@ -203,6 +237,7 @@ DATASET_STATES = (
     "leaky",
     "holdout-labelled",
     "split-by-database",
+    "split-by-question-form",
     "raw-export",
     "torn",
     "undeclared",
@@ -248,6 +283,7 @@ DAMAGED_STATES = (
     "leaky",
     "holdout-labelled",
     "split-by-database",
+    "split-by-question-form",
     "raw-export",
     "torn",
     "undeclared",
@@ -262,6 +298,7 @@ FULL_SLICE_STATES = (
     "ready",
     "leaky",
     "split-by-database",
+    "split-by-question-form",
     "raw-export",
     "undeclared",
     "mostly-undeclared",
@@ -290,6 +327,9 @@ LEAK_ID_SUFFIX = "-holdout"
 # a cut made of whole databases is allowed to land.
 DATABASE_HOLDOUT_SHARE = 0.2
 DATABASE_HOLDOUT_TOLERANCE = 0.1
+# The questions `split-by-question-form` holds out: every one that opens this way, the
+# split of a team that kept its counting questions back to check a winner on.
+HELD_OUT_OPENING = "How many"
 # How many lines `torn` cuts short, and where along the line each cut falls.
 TORN_LINES = 2
 TORN_AT = 0.6
@@ -352,6 +392,9 @@ CALIBRATION_SOURCES = {
     # refuses elsewhere. These cases pin what it really accepts, and each was run
     # against the shipped scorer before it was written down.
     "slow": COMPONENTS / "calibration" / "slow.json",
+    # The same scorer as `exact-match`, so the same probes: a disclaimer changes who
+    # stands behind the file, not what it accepts.
+    "disclaimed": _TEXT_PROBES,
     "exec-match": COMPONENTS / "calibration" / "exec_match.json",
     # The always-correct scorer is deliberately given the text comparator's probes: the
     # point is that it fails the same questions the honest one passes. One file rather than
@@ -372,24 +415,57 @@ CALIBRATION_SOURCES = {
 # so a demo must never pre-empt it.
 FORBIDDEN_VENV_NAME = ".venv-traigent"
 
-# Which evaluator method and task kind each evaluator honestly is. Recorded in the manifest
-# so a run can be described without re-deriving it, and reported by `list`.
+# Which evaluator method each evaluator honestly is, whether it executes the model's
+# output, and who wrote it (see `AGENT_ORIGINS`). Recorded in the manifest so a run can be
+# described without re-deriving it -- the measurement declares method and origin from the
+# record -- and reported by `list`.
 EVALUATOR_FACTS: dict[str, dict[str, Any]] = {
-    "exact-match": {"method": "normalized-exact", "executes_candidate_output": False},
-    "exec-match": {"method": "execution", "executes_candidate_output": True},
-    "broken": {"method": "normalized-exact", "executes_candidate_output": False},
-    "swapped": {"method": "normalized-exact", "executes_candidate_output": False},
+    "exact-match": {
+        "method": "normalized-exact",
+        "executes_candidate_output": False,
+        "origin": "brought",
+    },
+    "exec-match": {
+        "method": "execution",
+        "executes_candidate_output": True,
+        "origin": "brought",
+    },
+    "broken": {
+        "method": "normalized-exact",
+        "executes_candidate_output": False,
+        "origin": "brought",
+    },
+    "swapped": {
+        "method": "normalized-exact",
+        "executes_candidate_output": False,
+        "origin": "brought",
+    },
     # No method, because none can be declared honestly. The grader the file calls is not
     # here to read, so whether it executes anything is unknown too: `None` on both, which
     # is the same answer as "not declared" and never more than the file supports.
-    "opaque": {"method": None, "executes_candidate_output": None},
+    "opaque": {"method": None, "executes_candidate_output": None, "origin": "brought"},
     # No method either. A comparison of lengths is not one of the methods the guide
     # names, and declaring the nearest one would credit the file with a comparison it
     # does not make. It imports nothing and runs nothing, so that half is known.
-    "length-blind": {"method": None, "executes_candidate_output": False},
+    "length-blind": {
+        "method": None,
+        "executes_candidate_output": False,
+        "origin": "brought",
+    },
     # A method can be declared here: the comparison really is a normalised text match,
     # and the sleep is in how it reaches that comparison rather than in what it compares.
-    "slow": {"method": "normalized-exact", "executes_candidate_output": False},
+    "slow": {
+        "method": "normalized-exact",
+        "executes_candidate_output": False,
+        "origin": "brought",
+    },
+    # The text comparator, disclaimed: the method is still what the file does, and the
+    # origin is what the customer's disclaimer makes it (see `AGENT_ORIGINS`).
+    "disclaimed": {
+        "method": "normalized-exact",
+        "executes_candidate_output": False,
+        "origin": "generated",
+    },
 }
 
 PRESETS = {
@@ -495,6 +571,17 @@ PRESETS = {
         "calibration": "present",
     },
     "two-agents": {"agent": "two-agents", "dataset": "ready", "eval": "exact-match"},
+    "disclaimed-agent": {
+        "agent": "disclaimed",
+        "dataset": "ready",
+        "eval": "exact-match",
+    },
+    "disclaimed-scorer": {"agent": "ready", "dataset": "ready", "eval": "disclaimed"},
+    "split-by-question-form": {
+        "agent": "ready",
+        "dataset": "split-by-question-form",
+        "eval": "exact-match",
+    },
 }
 
 PRESET_NOTES = {
@@ -533,6 +620,9 @@ PRESET_NOTES = {
     "opaque-scorer": "a scorer that calls a grading library the project does not carry",
     "length-blind": "a scorer that compares the lengths of the two queries, and probes",
     "two-agents": "a second agent beside the first, and a note saying which one to work on",
+    "disclaimed-agent": "the agent is a tutorial example; the real one is somewhere else",
+    "disclaimed-scorer": "the scorer is a tutorial example; real grading is somewhere else",
+    "split-by-question-form": "every question of one opening form is held out",
 }
 
 # The readiness conditions each preset was built to put on the guide's opening card -- the
@@ -580,6 +670,9 @@ PRESET_CAPS: dict[str, tuple[str, ...]] = {
     "slow-scorer": ("evaluator-timeout",),
     "length-blind": ("evaluator-invalid",),
     "two-agents": (),
+    "disclaimed-agent": ("agent-generated",),
+    "disclaimed-scorer": ("evaluator-generated",),
+    "split-by-question-form": ("dataset-split-by-task-family",),
 }
 
 
@@ -804,17 +897,20 @@ def damage_rows(rows: list[dict[str, Any]], state: str) -> list[dict[str, Any]]:
     came with, and every answer that ships still runs against its own database and still
     returns rows.
 
-    `leaky` appends a few tuning rows a second time under the held-out label, `split-by-
-    database` moves the split line so that it falls between databases, and `undeclared`
-    rewrites what every row says about where it came from. The remaining damaged states --
-    `holdout-labelled`, `raw-export` and `torn` -- change nothing about which rows ship or
-    what they hold; what they change is how the rows are written, which is `project_row`'s
-    and `write_dataset`'s business, so they pass through here untouched.
+    `leaky` appends a few tuning rows a second time under the held-out label; the two
+    `split-by-` states move the split line, so that it falls between databases or between
+    forms of question; and the provenance and answer-key states rewrite what rows declare
+    about themselves. The remaining damaged states -- `holdout-labelled`, `raw-export` and
+    `torn` -- change nothing about which rows ship or what they hold; what they change is
+    how the rows are written, which is `project_row`'s and `write_dataset`'s business, so
+    they pass through here untouched.
     """
     if state == "leaky":
         return leak_rows(rows)
     if state == "split-by-database":
         return resplit_by_database(rows)
+    if state == "split-by-question-form":
+        return resplit_by_opening(rows)
     if state == "undeclared":
         return [
             {
@@ -960,6 +1056,50 @@ def resplit_by_database(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
                 **row["metadata"],
                 "split": (
                     "holdout" if row["metadata"]["db_id"] in held_out else "tuning"
+                ),
+            },
+        }
+        for row in rows
+    ]
+
+
+def opens_with(question: str, opening: str) -> bool:
+    """Whether a question's first words are `opening`, whatever their case.
+
+    Case-blind because a person sorting their questions by how they open reads "how many
+    cars ..." as the same form as "How many cars ..." -- and one question in the slice is
+    written the first way.
+    """
+    words = opening.casefold().split()
+    return question.casefold().split()[: len(words)] == words
+
+
+def opens_the_held_out_form(question: str) -> bool:
+    """Whether a question opens the way `split-by-question-form` holds out."""
+    return opens_with(question, HELD_OUT_OPENING)
+
+
+def resplit_by_opening(rows: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The slice, re-split so that every question of one opening form is held out.
+
+    A split a customer makes on purpose -- keep the counting questions back and check a
+    winner on them -- and one that puts a whole form of question on one side of the line.
+    The rows are the slice's own and none is rewritten; only which side each sits on
+    moves. Refused if the opening leaves either side empty.
+    """
+    held = [row for row in rows if opens_the_held_out_form(row["input"])]
+    if not held or len(held) == len(rows):
+        raise BuildError(
+            f"holding out every question that opens {HELD_OUT_OPENING!r} leaves one side "
+            "of the split empty"
+        )
+    return [
+        {
+            **row,
+            "metadata": {
+                **row["metadata"],
+                "split": (
+                    "holdout" if opens_the_held_out_form(row["input"]) else "tuning"
                 ),
             },
         }
@@ -1501,6 +1641,7 @@ def render_readme(
     agent_state: str,
     keys: dict[str, str] | None = None,
     second_agent_rows: int = 0,
+    disclaimed: Sequence[str] = (),
 ) -> str:
     """The project's own README, describing only what this project actually contains.
 
@@ -1520,7 +1661,11 @@ def render_readme(
                 "mention it. Add one to FILE_DESCRIPTIONS."
             )
         description = FILE_DESCRIPTIONS[name]
-        if name == "dataset.jsonl":
+        if name in disclaimed:
+            # The customer's own word on a file they do not stand behind, where they
+            # would write it: in place of the line that would describe it as theirs.
+            description = DISCLAIMERS[name]
+        elif name == "dataset.jsonl":
             labelled = sum(1 for row in rows if keys["output"] in row)
             # Counts what the file holds. `rows` is lines, and a set that repeats a question
             # has more lines than questions -- calling every line a question said "90
@@ -1723,6 +1868,17 @@ class Plan:
         return EVALUATOR_FILES[self.evaluator]
 
     @property
+    def disclaimed(self) -> list[str]:
+        """The shipped files the customer's README disclaims: every `generated` one."""
+        disclaimed = []
+        if self.agent_source is not None and AGENT_ORIGINS[self.agent] == "generated":
+            disclaimed.append("agent.py")
+        evaluator_origin = EVALUATOR_FACTS.get(self.evaluator, {}).get("origin")
+        if self.evaluator_source is not None and evaluator_origin == "generated":
+            disclaimed.append("evaluator.py")
+        return disclaimed
+
+    @property
     def ships_second_agent(self) -> bool:
         return self.agent == "two-agents"
 
@@ -1881,6 +2037,7 @@ def check_plan(plan: Plan) -> None:
         rows=[project_row(row, plan.dataset) for row in plan.rows],
         databases=plan.databases,
         agent_state=plan.agent,
+        disclaimed=plan.disclaimed,
         keys=plan.keys,
         second_agent_rows=len(plan.second_agent_rows),
     )
@@ -2084,6 +2241,7 @@ def write_demo(plan: Plan) -> dict[str, Any]:
         rows=projected,
         databases=databases,
         agent_state=plan.agent,
+        disclaimed=plan.disclaimed,
         keys=plan.keys,
         second_agent_rows=len(plan.second_agent_rows),
     )
@@ -2103,6 +2261,8 @@ def write_demo(plan: Plan) -> dict[str, Any]:
             "agent": {
                 "state": plan.agent,
                 "path": "agent.py" if plan.agent_source else None,
+                # Who wrote it, as the guide asks a run to declare: see AGENT_ORIGINS.
+                "origin": AGENT_ORIGINS[plan.agent],
                 "provider": plan.provider,
                 "models": list(plan.models),
                 # The other agent in the project, where the state ships one. Recorded
@@ -2134,6 +2294,7 @@ def write_demo(plan: Plan) -> dict[str, Any]:
                 "path": "evaluator.py" if plan.evaluator_source else None,
                 "method": None,
                 "executes_candidate_output": None,
+                "origin": None,
                 **(EVALUATOR_FACTS.get(plan.evaluator, {})),
                 "calibration": calibration_record,
             },
@@ -2175,6 +2336,7 @@ DAMAGE_DETAIL_FIELDS: dict[str, frozenset[str]] = {
     "leaky": frozenset({"leaked_ids", "copy_split", "copy_id_suffix"}),
     "holdout-labelled": frozenset({"labelled_split"}),
     "split-by-database": frozenset({"held_out_databases"}),
+    "split-by-question-form": frozenset({"held_out_opening", "held_out_rows"}),
     "raw-export": frozenset({"keys", "top_level"}),
     "torn": frozenset({"torn_lines", "cut_at"}),
     "undeclared": frozenset({"provenance", "slice_says"}),
@@ -2221,6 +2383,13 @@ def damage_detail(plan: Plan, torn: Sequence[int]) -> dict[str, Any] | None:
         return {"labelled_split": "holdout"}
     if plan.dataset == "split-by-database":
         return {"held_out_databases": held_out_databases(plan.rows)}
+    if plan.dataset == "split-by-question-form":
+        return {
+            "held_out_opening": HELD_OUT_OPENING,
+            "held_out_rows": sum(
+                1 for row in plan.rows if row["metadata"]["split"] == "holdout"
+            ),
+        }
     if plan.dataset == "raw-export":
         return {"keys": dict(RAW_EXPORT_KEYS), "top_level": ["db_id"]}
     if plan.dataset == "torn":
@@ -2699,6 +2868,44 @@ def verify_demo(root: Path) -> list[str]:
             )
     elif manifest["components"]["agent"].get("second_agent"):
         problems.append("the record has a second agent and the project has no rows")
+    contained(
+        "the component origins",
+        problems,
+        lambda sink: sink.extend(origin_problems(project, manifest["components"])),
+    )
+    return problems
+
+
+def origin_problems(project: Path, components: dict[str, Any]) -> list[str]:
+    """Who the record says wrote each component, against the state and the README.
+
+    The origin is what the measurement declares to the guide, so it has to be the one the
+    state stands for; and a `generated` one is only honest if the customer's disclaimer is
+    in the README the run reads, while a `brought` one must carry no disclaimer at all.
+    """
+    problems: list[str] = []
+    readme = project / "README.md"
+    text = readme.read_text(encoding="utf-8") if readme.is_file() else ""
+    agent, evaluator = components["agent"], components["evaluator"]
+    for name, record, declared in (
+        ("agent.py", agent, AGENT_ORIGINS.get(agent.get("state"))),
+        (
+            "evaluator.py",
+            evaluator,
+            EVALUATOR_FACTS.get(evaluator.get("state"), {}).get("origin"),
+        ),
+    ):
+        if record.get("origin") != declared:
+            problems.append(
+                f"{name} is recorded as {record.get('origin')!r} and its state "
+                f"{record.get('state')!r} is {declared!r}"
+            )
+        disclaimed = DISCLAIMERS[name] in text
+        if disclaimed != (record.get("origin") == "generated"):
+            problems.append(
+                f"{name} is recorded as {record.get('origin')!r} and the README "
+                f"{'disclaims' if disclaimed else 'does not disclaim'} it"
+            )
     return problems
 
 
@@ -2729,6 +2936,16 @@ def record_shape_problems(manifest: object) -> list[str]:
         agent["second_agent"], dict
     ):
         problems.append("the build record's `second_agent` is not an object")
+    evaluator = components.get("evaluator")
+    if not isinstance(evaluator, dict):
+        problems.append("the build record's `components.evaluator` is not an object")
+    # Who wrote each component, which the origin check compares with the state and the
+    # README: a word or nothing, never another shape.
+    for name, component in (("agent", agent), ("evaluator", evaluator)):
+        if isinstance(component, dict) and not (
+            component.get("origin") is None or isinstance(component["origin"], str)
+        ):
+            problems.append(f"the build record's {name} `origin` is not a word")
     dataset = components.get("dataset")
     if dataset is None:
         return problems
@@ -2945,6 +3162,39 @@ def dataset_record_problems(
             problems.append("a row in the labelled split ships without its answer")
     if "held_out_databases" in detail:
         claim("held_out_databases", held_out_databases(rows))
+    if "held_out_opening" in detail:
+        # Held out exactly: every row that opens this way, and no other -- and there have
+        # to be some, or an opening no question has would pass with nothing held out.
+        unchecked.discard("held_out_opening")
+        opening = detail["held_out_opening"]
+        if not isinstance(opening, str) or not any(
+            opens_with(str(row[keys["input"]]), opening) for row in rows
+        ):
+            problems.append(
+                f"damage_detail.held_out_opening is {opening!r}, and no question "
+                "opens that way"
+            )
+        misplaced = [
+            row["metadata"]["id"]
+            for row in rows
+            if (row["metadata"].get("split") == "holdout")
+            != opens_with(str(row[keys["input"]]), str(detail["held_out_opening"]))
+        ]
+        if misplaced:
+            problems.append(
+                f"damage_detail.held_out_opening says {detail['held_out_opening']!r}, "
+                f"and {len(misplaced)} rows sit on the other side ({misplaced[0]}, ...)"
+            )
+        if "held_out_rows" in detail:
+            if not is_count(detail["held_out_rows"]):
+                problems.append(
+                    f"damage_detail.held_out_rows is {detail['held_out_rows']!r}, "
+                    "not a count"
+                )
+            claim(
+                "held_out_rows",
+                sum(1 for row in rows if row["metadata"].get("split") == "holdout"),
+            )
     if "keys" in detail:
         claim("keys", dict(keys))
         missing = [
@@ -3031,6 +3281,12 @@ def dataset_record_problems(
         problems.append("damage_detail.repeated_ids names no repeated row")
     if detail.get("held_out_databases") == []:
         problems.append("damage_detail.held_out_databases names no held-out database")
+    held = detail.get("held_out_rows")
+    if is_count(held) and not 0 < held < len(rows):
+        problems.append(
+            f"damage_detail.held_out_rows is {held} of {len(rows)}; the split holds out "
+            "some rows and not all"
+        )
     if "labelled_split" in detail and not isinstance(detail["labelled_split"], str):
         problems.append(
             f"damage_detail.labelled_split is {detail['labelled_split']!r}, not the "
