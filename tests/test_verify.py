@@ -782,13 +782,15 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         Every claim then agrees with the rows -- there is nothing to disagree about -- so
         the only thing that can catch it is that the state has to show some damage.
         """
-        cases = {
-            "duplicated": ({"repeated_ids": []}, "names no repeated row"),
-            "split-by-database": (
+        cases = [
+            ("duplicated", {"repeated_ids": []}, "names no repeated row"),
+            (
+                "split-by-database",
                 {"held_out_databases": []},
                 "names no held-out database",
             ),
-            "mostly-synthetic": (
+            (
+                "mostly-synthetic",
                 {
                     "provenance": build.SYNTHETIC_PROVENANCE,
                     "slice_says": "real",
@@ -797,7 +799,8 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
                 },
                 "declares 0 of 300 rows; the state declares more than half",
             ),
-            "generated-answers": (
+            (
+                "generated-answers",
                 {
                     "output_provenance": build.GENERATED_ANSWER_PROVENANCE,
                     "slice_says": build.SLICE_DECLARES_NO_ANSWER_PROVENANCE,
@@ -806,11 +809,13 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
                 },
                 "declares 0 of 300 rows; the state declares every row",
             ),
-            "undeclared": (
+            (
+                "undeclared",
                 {"provenance": "real", "slice_says": "real"},
                 "damage_detail.provenance is 'real', what the slice already says",
             ),
-            "fully-synthetic": (
+            (
+                "fully-synthetic",
                 {
                     "provenance": "real",
                     "slice_says": "real",
@@ -819,7 +824,8 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
                 },
                 "damage_detail.provenance is 'real', what the slice already says",
             ),
-            "mostly-generated-answers": (
+            (
+                "generated-answers",
                 {
                     "output_provenance": None,
                     "slice_says": build.SLICE_DECLARES_NO_ANSWER_PROVENANCE,
@@ -828,15 +834,16 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
                 },
                 "damage_detail.output_provenance is None, what the slice already says",
             ),
-            "holdout-labelled": (
+            (
+                "holdout-labelled",
                 {"labelled_split": ["holdout", "tuning"]},
                 "not the name of one split",
             ),
-        }
+        ]
         clean = Path(tempfile.mkdtemp(dir=self.workspace)) / "demo"
         build_or_raise("demo", "--dataset", "ready", "--out", str(clean))
-        for state, (detail, reason) in cases.items():
-            with self.subTest(state=state):
+        for index, (state, detail, reason) in enumerate(cases):
+            with self.subTest(case=index, state=state):
                 holder = Path(tempfile.mkdtemp(dir=self.workspace))
                 out = holder / "demo"
                 shutil.copytree(clean, out)
@@ -861,6 +868,35 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         out = self.copy("duplicated")
         (out / "demo.json").write_text("[" * 200_000 + "]" * 200_000)
         self.assert_reported(out, "the build record cannot be read")
+
+    def test_a_declared_count_that_is_not_a_count_is_caught(self) -> None:
+        """`True == 1` and `1.0 == 1`, so a non-count agreed with one declaring row.
+
+        The rows are edited so that exactly one declares, which is the state where such
+        a count used to agree with the rows through `claim` and skip the rule that a
+        fully-synthetic dataset declares every row. An integer `1` is the control: it
+        is a count, and the extent rule is what refuses it.
+        """
+        for value, reason in (
+            (True, "damage_detail.declared_rows is True, not a count"),
+            (1.0, "damage_detail.declared_rows is 1.0, not a count"),
+            (1, "declares 1 of 300 rows; the state declares every row"),
+        ):
+            with self.subTest(value=value):
+                out = self.copy("fully-synthetic")
+                lines = self.lines(out)
+                for index, line in enumerate(lines[1:], start=1):
+                    row = json.loads(line)
+                    row["metadata"]["provenance"] = "real"
+                    lines[index] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+                self.rewrite(out, lines)
+
+                def miscount(manifest: dict) -> None:  # type: ignore[type-arg]
+                    detail = manifest["components"]["dataset"]["damage_detail"]
+                    detail["declared_rows"] = value
+
+                self.edit_record(out, miscount)
+                self.assert_reported(out, reason)
 
     def test_a_count_too_large_for_a_float_is_reported_not_raised(self) -> None:
         out = self.copy("mostly-synthetic")

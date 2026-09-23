@@ -27,7 +27,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Sequence, TypeGuard
 
 REPO_ROOT = Path(__file__).resolve().parent
 COMPONENTS = REPO_ROOT / "components"
@@ -2773,6 +2773,15 @@ def contained(
         problems.append(f"{name} cannot be checked: {error!r}")
 
 
+def is_count(value: Any) -> TypeGuard[int]:
+    """A record's count: a non-negative integer, and not a boolean.
+
+    `True == 1` and `1.0 == 1` in Python, so a comparison with `==` alone would let a
+    boolean or a float stand in for a count and agree with the rows.
+    """
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
 def dataset_record_problems(
     record: dict[str, Any],
     lines: Sequence[str],
@@ -2793,9 +2802,9 @@ def dataset_record_problems(
     problems = [] if problems is None else problems
     keys = record.get("fields") or DATASET_KEYS
     state = record.get("state")
-    if record.get("rows") != len(lines):
+    if not is_count(record.get("rows")) or record.get("rows") != len(lines):
         problems.append(
-            f"the record says {record.get('rows')} rows and the file has {len(lines)}"
+            f"the record says {record.get('rows')!r} rows and the file has {len(lines)}"
         )
     labelled = sum(1 for row in rows if keys["output"] in row)
     recorded_labelled = record.get("labelled_rows")
@@ -2814,7 +2823,7 @@ def dataset_record_problems(
             f"the record says {record.get('labelled_rows')} rows carry their answer "
             f"and {labelled} readable rows do"
         )
-    if record.get("labelled") != (
+    if not isinstance(record.get("labelled"), bool) or record.get("labelled") != (
         bool(lines) and record.get("labelled_rows") == len(lines)
     ):
         problems.append(
@@ -2885,6 +2894,11 @@ def dataset_record_problems(
                 "row keeps its own"
             )
         if "rows_keeping_their_answer" in detail:
+            if not is_count(detail["rows_keeping_their_answer"]):
+                problems.append(
+                    "damage_detail.rows_keeping_their_answer is "
+                    f"{detail['rows_keeping_their_answer']!r}, not a count"
+                )
             claim("rows_keeping_their_answer", kept)
     if "copy_id_suffix" in detail:
         suffix = detail["copy_id_suffix"]
@@ -3026,13 +3040,14 @@ def dataset_record_problems(
             f"damage_detail.labelled_split is {detail['labelled_split']!r}, not the "
             "name of one split"
         )
+    # A count that is not one (a boolean, a float, a negative) would compare equal to
+    # the rows' own count through `claim` and skip the rule below; it is reported,
+    # as `labelled_rows` is, instead of left to pass.
+    for name in ("declared_rows", "of_rows"):
+        if name in detail and not is_count(detail[name]):
+            problems.append(f"damage_detail.{name} is {detail[name]!r}, not a count")
     declared, of_rows = detail.get("declared_rows"), detail.get("of_rows")
-    if (
-        isinstance(declared, int)
-        and isinstance(of_rows, int)
-        and not isinstance(declared, bool)
-        and not isinstance(of_rows, bool)
-    ):
+    if is_count(declared) and is_count(of_rows):
         # In integers: a count too large for a float is still a count to compare.
         if str(state).startswith("mostly-"):
             if not of_rows < 2 * declared < 2 * of_rows:
@@ -3132,9 +3147,10 @@ def second_agent_problems(
         .splitlines()
         if line.strip()
     ]
-    if record.get("rows") != len(queries):
+    if not is_count(record.get("rows")) or record.get("rows") != len(queries):
         problems.append(
-            f"the second agent is recorded with {record.get('rows')} rows and has {len(queries)}"
+            f"the second agent is recorded with {record.get('rows')!r} rows and has "
+            f"{len(queries)}"
         )
     if record.get("labelled") is not False or any(
         "output" in query for query in queries
