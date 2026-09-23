@@ -371,7 +371,7 @@ class HarnessTestCase(unittest.TestCase):
         self.workspace = self.room / "workspace"
 
     def run_sweep(
-        self, score_one: object, publish: bool = False
+        self, score_one: object, publish: bool = False, *extra: str
     ) -> tuple[int, str, str]:
         """`main()` with the per-run measurement replaced, and its output captured."""
         self.harness.score_one = score_one
@@ -386,6 +386,7 @@ class HarnessTestCase(unittest.TestCase):
         ]
         if publish:
             argv.append("--publish")
+        argv.extend(extra)
         out, err = io.StringIO(), io.StringIO()
         original, sys.argv = sys.argv, argv
         try:
@@ -394,6 +395,30 @@ class HarnessTestCase(unittest.TestCase):
         finally:
             sys.argv = original
         return status, out.getvalue(), err.getvalue()
+
+    def refusing(self, refuse: str) -> object:
+        """A measurement that refuses one tag and scores every other."""
+
+        def score_one(
+            tag: str,
+            flags: tuple[str, ...],
+            scripts: Path,
+            workspace: Path,
+            staging: Path,
+            **options: object,
+        ) -> dict[str, object]:
+            room = staging / tag
+            room.mkdir(parents=True, exist_ok=True)
+            (room / "01-build.txt").write_text("built\n", encoding="utf-8")
+            if tag == refuse:
+                raise self.harness.GuideRefused(
+                    "calibrate_evaluator.py", 2, "Refusing to calibrate: ..."
+                )
+            (room / "04-readiness-card.txt").write_text("a card\n", encoding="utf-8")
+            (room / "argv.json").write_text("{}\n", encoding="utf-8")
+            return self.scored(tag)
+
+        return score_one
 
     def scored(self, tag: str) -> dict[str, object]:
         """The shape `score_one` returns for a run that scored."""
@@ -474,30 +499,6 @@ class AFaultOfOursPublishesNothing(HarnessTestCase):
 
 class AGuideRefusalIsOneRow(HarnessTestCase):
     """The other half: the guide declining is a finding, and costs one row."""
-
-    def refusing(self, refuse: str) -> object:
-        """A measurement that refuses one tag and scores every other."""
-
-        def score_one(
-            tag: str,
-            flags: tuple[str, ...],
-            scripts: Path,
-            workspace: Path,
-            staging: Path,
-            **options: object,
-        ) -> dict[str, object]:
-            room = staging / tag
-            room.mkdir(parents=True, exist_ok=True)
-            (room / "01-build.txt").write_text("built\n", encoding="utf-8")
-            if tag == refuse:
-                raise self.harness.GuideRefused(
-                    "calibrate_evaluator.py", 2, "Refusing to calibrate: ..."
-                )
-            (room / "04-readiness-card.txt").write_text("a card\n", encoding="utf-8")
-            (room / "argv.json").write_text("{}\n", encoding="utf-8")
-            return self.scored(tag)
-
-        return score_one
 
     def test_without_publish_the_committed_cards_are_untouched(self) -> None:
         before = fingerprint(self.cards)
@@ -593,6 +594,148 @@ class TheContractCheckStopsBeforeAnythingIsBuilt(HarnessTestCase):
             return self.scored(tag)
 
         return score_one
+
+
+class TheComparisonIsWithTheWholeRecord(HarnessTestCase):
+    """`--compare`: agreement with every card and with the refusals, or exit 4.
+
+    The committed record here is made the way the real one is -- a `--publish` of a sweep
+    in which one run is refused -- and then measured again.
+    """
+
+    REFUSED = "best-case--off-method-calibration"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.harness.PINNED_REVISION = self.revision
+        self.harness.recorded_environment = lambda: {"guide": self.revision}
+        self.harness.environment_mismatch = lambda recorded: []
+        status, _, _ = self.run_sweep(self.refusing(self.REFUSED), publish=True)
+        self.assertEqual(status, 1, "the record is made with one refused run")
+
+    def test_a_measurement_that_reproduces_the_record_agrees(self) -> None:
+        before = fingerprint(self.cards)
+        status, said, _ = self.run_sweep(
+            self.refusing(self.REFUSED), False, "--compare"
+        )
+        self.assertEqual(status, 0, said)
+        runs = json.loads((self.cards / "results.json").read_text(encoding="utf-8"))[
+            "runs"
+        ]
+        self.assertIn(f"compared {len(runs) - 1} cards byte for byte", said)
+        self.assertIn(f"refusals compared as recorded: {self.REFUSED}", said)
+        self.assertEqual(fingerprint(self.cards), before, "a comparison published")
+
+    def test_a_changed_card_is_a_difference_and_is_named(self) -> None:
+        (self.cards / "ready" / "04-readiness-card.txt").write_text(
+            "a card someone edited\n", encoding="utf-8"
+        )
+        status, said, _ = self.run_sweep(
+            self.refusing(self.REFUSED), False, "--compare"
+        )
+        self.assertEqual(status, 4)
+        self.assertIn(
+            "ready/04-readiness-card.txt: line 1 was 'a card someone edited', "
+            "now 'a card'",
+            said,
+        )
+
+    def test_a_refusal_the_record_does_not_hold_is_a_difference(self) -> None:
+        status, said, _ = self.run_sweep(self.refusing("ready"), False, "--compare")
+        self.assertEqual(status, 4)
+        self.assertIn("results.json: line", said)
+        self.assertIn(
+            "ready/04-readiness-card.txt: committed, and not produced now", said
+        )
+
+    def test_a_card_no_run_produces_is_a_difference(self) -> None:
+        (self.cards / "a-run-nobody-measures").mkdir()
+        status, said, _ = self.run_sweep(
+            self.refusing(self.REFUSED), False, "--compare"
+        )
+        self.assertEqual(status, 4)
+        self.assertIn("a-run-nobody-measures/: a committed card no run", said)
+
+    def test_comparing_nothing_is_not_agreement(self) -> None:
+        empty = '{"guide_revision": "x", "runs": []}\n'
+        staging = self.room / "empty-staging"
+        staging.mkdir()
+        (staging / "results.json").write_text(empty, encoding="utf-8")
+        for entry in list(self.cards.iterdir()):
+            if entry.is_dir():
+                shutil.rmtree(entry)
+        (self.cards / "results.json").write_text(empty, encoding="utf-8")
+        differences, compared, _ = self.harness.compare_with_record(staging)
+        self.assertEqual(compared, 0)
+        self.assertIn(
+            "compared 0 cards where the record has 0 that scored; a comparison of "
+            "nothing agrees with everything",
+            differences,
+        )
+
+
+class TheComparisonNeedsTheRecordedEnvironment(HarnessTestCase):
+    """Preflight writes the interpreter and the SDK into every card."""
+
+    def record(self, python: str, traigent: str | None) -> None:
+        self.harness.PINNED_REVISION = self.revision
+        runs = [
+            {"tag": "ready"},
+            {"tag": "empty"},
+            {"tag": "x", "refused": {"step": "calibrate_evaluator.py"}},
+        ]
+        (self.cards / "results.json").write_text(
+            json.dumps({"guide_revision": self.revision, "runs": runs}),
+            encoding="utf-8",
+        )
+        for tag, version in (("ready", python), ("empty", "3.12.3")):
+            (self.cards / tag / "02-preflight.json").write_text(
+                json.dumps(
+                    [
+                        {"check": "python-version", "detail": version},
+                        {
+                            "check": "sdk-version",
+                            "metrics": {"installed": traigent} if traigent else None,
+                        },
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+    def test_the_environment_is_read_from_the_cards(self) -> None:
+        self.record("3.12.3", "0.26.0")
+        recorded = self.harness.recorded_environment()
+        self.assertEqual(recorded["python"], "3.12.3")
+        self.assertEqual(recorded["traigent"], "0.26.0")
+        self.assertEqual(recorded["guide"], self.revision)
+        self.assertEqual(
+            "litellm==" + recorded["litellm"], build_module().AGENT_REQUIREMENT
+        )
+
+    def test_cards_that_disagree_about_it_are_ours_to_fix(self) -> None:
+        self.record("3.11.9", "0.26.0")
+        with self.assertRaises(self.harness.HarnessFault) as caught:
+            self.harness.recorded_environment()
+        self.assertIn("do not agree on one python", str(caught.exception))
+
+    def test_another_interpreter_is_refused_before_anything_is_built(self) -> None:
+        self.record("3.12.3", "0.26.0")
+        self.harness.recorded_environment = lambda: {
+            "guide": self.revision,
+            "python": "0.0.0",
+            "traigent": "0.26.0",
+            "litellm": "1.93.0",
+        }
+        attempted: list[str] = []
+
+        def unreachable(tag: str, *rest: object, **options: object) -> object:
+            attempted.append(tag)  # pragma: no cover - the point is that it never runs
+            return self.scored(tag)
+
+        with self.assertRaises(SystemExit) as caught:
+            self.run_sweep(unreachable, False, "--compare")
+        self.assertEqual(caught.exception.code, 2)
+        self.assertEqual(attempted, [])
 
 
 if __name__ == "__main__":

@@ -96,3 +96,58 @@ jobs:
 
       - name: Tests
         run: python -m unittest discover -s tests -v
+
+  # The committed measurement under docs/measurements/cards/ is evidence, and until this job
+  # nothing re-took it: a card could be hand-edited, or left behind by a builder change that
+  # moved what a preset ships, with every other check green. This re-runs the whole sweep
+  # against the guide at the revision the cards were taken at, publishes nothing, and fails
+  # unless every card that scored comes back byte-identical and every refusal the record holds
+  # is refused again in the same words (`score_bank.py --compare`, which also refuses to
+  # compare nothing).
+  #
+  # Nothing about that environment is written here. The guide revision is the pin in
+  # score_bank.py, and the Python and SDK versions are the ones preflight printed into the
+  # committed cards: `--recorded-environment` reads them, and `--compare` checks this job
+  # really is that environment before it builds anything, because a card records the
+  # interpreter it was taken on and would otherwise differ for that reason alone.
+  measurements:
+    runs-on: ubuntu-24.04
+    # About four minutes of sweep and one install; 30 leaves room for a slow mirror.
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+
+      - name: Read the environment the committed cards were measured in
+        id: recorded
+        working-directory: repo
+        run: python3 docs/measurements/score_bank.py --recorded-environment | tee -a "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ steps.recorded.outputs.python }}
+
+      - name: Install the SDK and litellm at the versions the cards were measured with
+        run: python -m pip install "litellm==${{ steps.recorded.outputs.litellm }}" "traigent==${{ steps.recorded.outputs.traigent }}"
+
+      - name: Check out the guide at the pinned revision
+        uses: actions/checkout@v4
+        with:
+          repository: Traigent/traigent-first-run
+          ref: ${{ steps.recorded.outputs.guide }}
+          path: guide
+          persist-credentials: false
+
+      - name: Re-measure every run and compare it with the committed cards
+        working-directory: repo
+        run: python docs/measurements/score_bank.py --guide ../guide --workspace "$RUNNER_TEMP/readiness-bank" --compare
+
+      # The prose quotes a few of the guide's own constants; with the guide checked out
+      # here anyway, they are read back out of it rather than trusted.
+      - name: The guide constants the prose quotes are the guide's
+        working-directory: repo
+        env:
+          TRAIGENT_FIRST_RUN_GUIDE: ${{ github.workspace }}/guide
+        run: python -m unittest discover -s tests -p test_prose_counts.py -k TheGuideAgrees -v

@@ -30,9 +30,26 @@ git -C ~/code/traigent-first-run checkout d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c1
 python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
 
-It builds each project, scores it, deletes it, and writes a card for each. It needs nothing
-installed, reaches no network, and never uses `--venv ready`. On this machine the whole sweep
-takes about two minutes.
+It builds each project, scores it, deletes it, and writes a card for each. It reaches no
+network and never uses `--venv ready`. On this machine the whole sweep takes about two minutes.
+
+**Checking the committed cards is one flag.** `--compare` re-measures, publishes nothing, and
+compares the result with `cards/` byte for byte -- every card of every run that scored, and
+`results.json` whole, so the run the record says was refused has to be refused again in the
+same words. It exits 0 only on full agreement, 4 on any difference, naming the file and the
+first line that moved, and it refuses to compare nothing:
+
+```bash
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run --compare
+```
+
+A byte-for-byte comparison needs the environment the cards were taken in, because preflight
+writes the Python version and the installed SDK into every card: `--recorded-environment`
+prints the guide revision, Python, `traigent` and `litellm` versions to use (the first three
+read from the committed record, `litellm` from `build.py`'s pin, since no card prints it), and
+`--compare` refuses to start in any other. The `measurements` job in
+[CI](../../.github/workflows/ci.yml) does exactly this on every pull request, with the guide
+checked out at the pin.
 
 **It leaves `cards/` alone.** The cards are committed evidence, and the usual reason to run this
 script is to check them, so the run writes into its workspace and prints where. Replacing them
@@ -63,8 +80,9 @@ coordinate in the check, named in `score_bank.py` beside a comment saying so. At
 the documents and the pin agree, which is why the command above needs no `--revision`.
 
 **Exit status:** 0 when every run scored, 1 when the guide refused one or more, 2 when the
-documents and the guide disagree, 3 when something of ours broke -- our builder, our probe. The
-last never records a row and never publishes: `build.py` failing says nothing about the guide,
+documents and the guide disagree, 3 when something of ours broke -- our builder, our probe --
+and, with `--compare`, 4 when the measurement differs from the committed record. A fault of
+ours never records a row and never publishes: `build.py` failing says nothing about the guide,
 and a sweep that cannot measure has no business rewriting the evidence of what the guide
 answered when it could.
 
