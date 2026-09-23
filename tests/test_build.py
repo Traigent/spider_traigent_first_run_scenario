@@ -9,6 +9,7 @@ that repository makes a decision.
 
 from __future__ import annotations
 
+import argparse
 import collections
 import dataclasses
 import hashlib
@@ -284,6 +285,36 @@ def load_scorer(name: str) -> Any:
     if hasattr(scorer, "SECONDS_PER_CALL"):
         scorer.SECONDS_PER_CALL = 0.0
     return scorer
+
+
+def declaring_states() -> list[str]:
+    """The dataset states whose rows say something different about themselves.
+
+    Read off what `build.damage_rows` actually does to the declaration fields, not listed:
+    two tests here each kept their own list of these states, and neither learned about
+    `fully-synthetic` when it arrived.
+    """
+    rows = build.read_dataset()
+
+    def declared(row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in row["metadata"].items()
+            if key in build.DECLARATION_ROW_FIELDS
+        }
+
+    return [
+        state
+        for state in build.DATASET_STATES
+        if state != "missing"
+        and any(
+            declared(original) != declared(shipped)
+            for original, shipped in zip(
+                build.select_rows(rows, state),
+                build.damage_rows(build.select_rows(rows, state), state),
+            )
+        )
+    ]
 
 
 def ascii_locale_env() -> dict[str, str]:
@@ -2916,14 +2947,7 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
         """
 
         seen: set[str] = set()
-        for state in (
-            "ready",
-            "undeclared",
-            "mostly-undeclared",
-            "mostly-synthetic",
-            "generated-answers",
-            "mostly-generated-answers",
-        ):
+        for state in ("ready", *declaring_states()):
             with self.subTest(dataset=state):
                 out = Path(self.workspace) / f"classified_{state}"
                 if not out.exists():
@@ -2959,13 +2983,9 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
         nothing, with `verify` reporting `ok`.
         """
 
-        for state in (
-            "undeclared",
-            "mostly-undeclared",
-            "mostly-synthetic",
-            "generated-answers",
-            "mostly-generated-answers",
-        ):
+        states = declaring_states()
+        self.assertTrue(states, "no state writes a declaration, so nothing was checked")
+        for state in states:
             with self.subTest(dataset=state):
                 out = Path(self.workspace) / f"two_agents_declarations_{state}"
                 built = run_build(
@@ -3149,6 +3169,66 @@ class RepositoryCheck(unittest.TestCase):
             self.assertIn(preset["dataset"], build.DATASET_STATES, name)
             self.assertIn(preset["eval"], build.EVALUATOR_FILES, name)
             self.assertIn(name, build.PRESET_NOTES, f"{name} has no description")
+
+
+class EveryChoiceIsNamedWhereTheChoicesAreListed(unittest.TestCase):
+    """A state the lists leave out is one a reader never learns exists.
+
+    `--eval`'s help was written by hand and named every scorer but `slow`; the README's
+    flag table named every dataset state but `fully-synthetic`. Each list is held to the
+    choices the parser actually accepts, which is the only list that cannot be wrong.
+    """
+
+    def commands(self) -> dict[str, argparse.ArgumentParser]:
+        parser = build.build_parser()
+        found: dict[str, argparse.ArgumentParser] = {"": parser}
+        for action in parser._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                found.update(action.choices)
+        return found
+
+    def test_a_help_that_enumerates_names_exactly_the_choices(self) -> None:
+        checked = 0
+        for command, parser in self.commands().items():
+            for action in parser._actions:
+                if not action.choices or not action.help or " | " not in action.help:
+                    continue
+                if isinstance(action, argparse._SubParsersAction):
+                    continue
+                listed = [
+                    re.split(r"[\s:(]", piece.strip(), maxsplit=1)[0]
+                    for piece in action.help.split(";")[0].split(" | ")
+                ]
+                checked += 1
+                with self.subTest(command=command, option=action.option_strings):
+                    self.assertEqual(list(action.choices), listed)
+        self.assertGreaterEqual(checked, 3, "--agent, --dataset and --eval enumerate")
+
+    def test_the_readme_flag_table_names_exactly_the_choices(self) -> None:
+        readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+        table = readme.split("## Choosing what the project starts with", 1)[1]
+        demo = self.commands()["demo"]
+        accepted = {
+            option: list(action.choices)
+            for action in demo._actions
+            if action.choices
+            for option in action.option_strings
+        }
+        checked = 0
+        for row in re.finditer(r"^\| `(--[a-z-]+)` \| (.+) \|$", table, re.MULTILINE):
+            flag, values = row.groups()
+            named = [
+                found.group(1)
+                for found in (
+                    re.match(r"`([^`]+)`", item.strip()) for item in values.split(" · ")
+                )
+                if found
+            ]
+            checked += 1
+            with self.subTest(flag=flag):
+                self.assertIn(flag, accepted, "the table documents a flag demo lacks")
+                self.assertEqual(sorted(accepted[flag]), sorted(named))
+        self.assertGreaterEqual(checked, 3, "the table was not read")
 
 
 if __name__ == "__main__":

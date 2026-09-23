@@ -322,11 +322,12 @@ GENERATED_ANSWER_KEY = "output_provenance"
 # what it is about; `DECLARATION_ROW_FIELDS` are the customer speaking about their own
 # rows, which is what the guide's provenance and answer-key checks read.
 #
-# The split is named rather than derived, and `check_row_fields` refuses a row carrying a
-# key in neither set. Deriving it -- "a declaration is anything that is not structural" --
-# was tried and is wrong in the expensive direction: it swept `schema`, the row's whole
-# CREATE TABLE block, into a file that has no use for it. Naming both sides means a new
-# field cannot be quietly assumed into either one.
+# The split is named rather than derived, and the suite fails when a shipped row carries a
+# key in neither set (`test_every_metadata_key_is_classified_as_structure_or_declaration`).
+# Deriving it -- "a declaration is anything that is not structural" -- was tried and is
+# wrong in the expensive direction: it swept `schema`, the row's whole CREATE TABLE block,
+# into a file that has no use for it. Naming both sides means a new field cannot be quietly
+# assumed into either one.
 STRUCTURAL_ROW_FIELDS = frozenset({"id", "db_id", "difficulty", "split", "schema"})
 DECLARATION_ROW_FIELDS = frozenset({"provenance", GENERATED_ANSWER_KEY})
 
@@ -1691,8 +1692,10 @@ class Plan:
         # version of this named `provenance`, which was the only declaration there
         # was; `generated-answers` then declared on `output_provenance` and the
         # contradiction came straight back, in a second file the reader can hold
-        # beside the first. Anything that is not structure is a declaration, so a
-        # state that invents a third field is carried without editing this.
+        # beside the first. The class is `DECLARATION_ROW_FIELDS`, by name: a state
+        # that declares on a third field is carried here once that field is added
+        # there, and a field added to neither set fails the suite rather than being
+        # guessed into one side -- see the comment on the two sets.
         declared = {
             row["metadata"]["id"]: {
                 key: value
@@ -2829,6 +2832,22 @@ RENDERERS: dict[str, Callable[[dict[str, Any]], str]] = {
 # --------------------------------------------------------------------------- cli
 
 
+def enumerated(choices: Sequence[str], glosses: dict[str, str]) -> str:
+    """Help text naming every choice, from the same sequence the parser accepts.
+
+    Written out by hand, the `--eval` help listed every scorer but the newest one; a list
+    built from the choices cannot fall behind them. A gloss for a name that is not a choice
+    is the same drift in the other direction, and is refused rather than printed.
+    """
+    unknown = sorted(set(glosses) - set(choices))
+    if unknown:
+        raise BuildError(f"help describes {', '.join(unknown)}, which are not choices")
+    return " | ".join(
+        f"{choice} ({glosses[choice]})" if choice in glosses else choice
+        for choice in choices
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="build.py",
@@ -2880,21 +2899,37 @@ def build_parser() -> argparse.ArgumentParser:
     demo.add_argument(
         "--agent",
         choices=AGENT_STATES,
-        help="ready (tunable) | no-knobs (nothing to search) | two-agents (a second "
-        "agent beside it) | missing",
+        help=enumerated(
+            AGENT_STATES,
+            {
+                "ready": "tunable",
+                "no-knobs": "nothing to search",
+                "two-agents": "a second agent beside it",
+            },
+        ),
     )
     demo.add_argument(
         "--dataset",
         choices=DATASET_STATES,
-        help="ready (300) | mini (30) | unlabeled (no expected answers) | missing | one "
-        "of the damaged states `list` describes",
+        help=enumerated(
+            DATASET_STATES,
+            {
+                "ready": "the whole slice",
+                "mini": f"{MINI_ROWS} rows",
+                "tiny": f"{TINY_ROWS} rows",
+                "unlabeled": "no expected answers",
+            },
+        )
+        + "; `list` describes the damaged ones",
     )
     demo.add_argument(
         "--eval",
         dest="eval",
         choices=sorted(EVALUATOR_FILES),
-        help="exact-match (does not execute) | exec-match (runs the SQL) | broken | "
-        "swapped | opaque | length-blind | missing",
+        help=enumerated(
+            sorted(EVALUATOR_FILES),
+            {"exact-match": "does not execute", "exec-match": "runs the SQL"},
+        ),
     )
     demo.add_argument(
         "--provider",
