@@ -164,6 +164,7 @@ IDENTICAL_CARDS = (
     ),
     ("length-blind--uncalibrated", "opaque-scorer"),
     ("no-agent", "ready--without-agent-knobs"),
+    ("no-knobs", "no-knobs--knobs-in-a-comment"),
 )
 
 
@@ -177,11 +178,18 @@ class TheCommittedCardsAreWhatTheDocumentsSay(unittest.TestCase):
     """
 
     def card_bodies(self) -> dict[str, str]:
+        """Each rendered card from its second line down, the way the documents compare them.
+
+        The first line is the invocation, which names the read of the agent a run was
+        scored with. Kept in, it hid two cards the guide rendered identically -- `no-knobs`
+        and `no-knobs--knobs-in-a-comment`, scored with different reads of different
+        agents -- because the two invocations differ by a file name.
+        """
         cards = REPO_ROOT / "docs" / "measurements" / "cards"
         return {
-            directory.name: (directory / "04-readiness-card.txt").read_text(
-                encoding="utf-8"
-            )
+            directory.name: (directory / "04-readiness-card.txt")
+            .read_text(encoding="utf-8")
+            .split("\n", 1)[1]
             for directory in sorted(cards.iterdir())
             if directory.is_dir() and (directory / "04-readiness-card.txt").is_file()
         }
@@ -311,6 +319,254 @@ class EveryPresetOpensOnTheStateItWasBuiltFor(unittest.TestCase):
                 )
                 if shown_on is not None:
                     self.assertLessEqual(set(caps[preset]), card_conditions(shown_on))
+
+
+def committed_card(tag: str) -> dict[str, object]:
+    """The readiness JSON a committed card holds."""
+    return dict(
+        json.loads(
+            (
+                REPO_ROOT
+                / "docs"
+                / "measurements"
+                / "cards"
+                / tag
+                / "05-readiness.json"
+            ).read_text(encoding="utf-8")
+        )
+    )
+
+
+def card_caps(tag: str) -> dict[str, dict[str, object]]:
+    """The caps a committed card carries, by condition."""
+    caps = committed_card(tag)["caps"]
+    assert isinstance(caps, list)
+    return {cap["condition"]: cap for cap in caps}
+
+
+# How `run_inputs` names the read of the agent a run is scored with when it is the one
+# `AGENT_READS` keeps for the agent's state: each of those documents is written as the
+# faithful read of its agent, so it follows from the agent and is not a second input. A run
+# that names a read of its own has changed something the agent did not.
+FAITHFUL_READ = "the faithful read of the agent"
+
+
+def run_inputs(tag: str) -> dict[str, object]:
+    """What one run is built and scored from: the components, the read, the options.
+
+    Read from the sweep's own list and the builder's presets, so two runs can be compared
+    on what actually differs between them rather than on what their names suggest. The
+    read of the agent the guide is handed is one of them: the card is scored from it, so
+    two runs that differ only in the read differ in what the card is scored from.
+    """
+    builder, harness = build_module(), load_harness()
+    flags, options = next((f, o) for t, f, o in harness.sweep() if t == tag)
+    chosen = dict(builder.PRESETS[flags[flags.index("--preset") + 1]])
+    for name in ("agent", "dataset", "eval", "calibration"):
+        if f"--{name}" in flags:
+            chosen[name] = flags[flags.index(f"--{name}") + 1]
+    chosen.setdefault("calibration", "none")
+    options = dict(options)
+    chosen["read"] = options.pop("agent_read", FAITHFUL_READ)
+    return {**chosen, "options": tuple(sorted(options.items()))}
+
+
+# The repairs the committed cards show, each as (the run before it, the run after it, the
+# condition it removes, the action the card before it names for it). Each pair differs in
+# the one thing the action is about -- the dataset, the agent, the scorer, or what a run
+# declares about the file -- so the pair is the repair and nothing else.
+REPAIRS: tuple[tuple[str, str, str, str], ...] = (
+    ("no-data", "ready", "dataset-absent", "get-data"),
+    ("no-labels", "ready", "dataset-no-expected-outputs", "label-data"),
+    ("no-eval", "ready", "evaluator-absent", "connect-evaluator"),
+    ("no-knobs", "ready", "agent-no-varying-knobs", "vary-knobs"),
+    ("wrong-wiring--calibrated", "checked", "evaluator-invalid", "repair-evaluator"),
+    ("fake-ruler", "checked", "evaluator-invalid", "repair-evaluator"),
+    ("leaky-split", "ready", "dataset-tune-holdout-overlap", "resplit-dataset"),
+    ("hand-written", "checked", "dataset-below-measurable-size", "add-examples"),
+    (
+        "raw-export",
+        "raw-export--fields-declared",
+        "dataset-shape-unrecognised",
+        "read-dataset",
+    ),
+)
+
+# Repairs that are not repairs, each keyed by its run and the run it is measured against.
+# Most start where a repair in REPAIRS starts and change the one thing that repair is about,
+# so that it looks done -- and leave it undone. One starts from another fake: the project
+# is left exactly as that fake left it, and only the read of the agent the guide is handed
+# changes. The guide HOLDS a fake when its card still carries the condition of the repair
+# it imitates, with the ceiling and the block the card it is measured against carried.
+FAKE_REPAIRS: dict[str, str] = {
+    "no-data--empty-file": "no-data",
+    "no-labels--blank-answers": "no-labels",
+    "no-knobs--knobs-in-a-comment": "no-knobs",
+    "no-knobs--knobs-in-a-comment--credited": "no-knobs--knobs-in-a-comment",
+    "hand-written--padded": "hand-written",
+}
+
+# The fakes the guide does not hold, each with what its card shows. Checked in both
+# directions: a fake listed here must still get through -- the day the guide holds it, the
+# entry and the prose repeating it are stale -- and a fake not listed must be held.
+UNGUARDED: dict[str, str] = {
+    "no-knobs--knobs-in-a-comment--credited": (
+        "a read that credits settings the agent names only in a comment, citing "
+        "executable lines beside them, is not believed -- the agent pillar reads 0 and "
+        "agent-no-varying-knobs stays at 45 -- but the guide treats a claim it cannot "
+        "verify at the opening as advisory rather than as a finding that the agent has no "
+        "setting ('this advisory opening ceiling remains while the cited source evidence "
+        "is unverified'): the card stops blocking and its action is complete-calibration "
+        "instead of vary-knobs, and it names a request-difference probe as the separate "
+        "pre-call guard, which this bank does not run. The same agent read faithfully "
+        "(no-knobs--knobs-in-a-comment) still blocks"
+    ),
+}
+
+
+def repaired_by(fake: str) -> tuple[str, str, str, str]:
+    """The entry of REPAIRS a fake imitates, following a fake that starts from a fake."""
+    before = FAKE_REPAIRS[fake]
+    while before in FAKE_REPAIRS:
+        before = FAKE_REPAIRS[before]
+    return next(entry for entry in REPAIRS if entry[0] == before)
+
+
+class ARepairRemovesItsConditionAndAFakeOneDoesNot(unittest.TestCase):
+    """What the cards say a repair does, and what they say a repair in name only does."""
+
+    def test_every_repair_is_one_change_that_removes_its_condition(self) -> None:
+        for before, after, condition, action in REPAIRS:
+            with self.subTest(repair=f"{before} -> {after}"):
+                changed = {
+                    name
+                    for name, value in run_inputs(before).items()
+                    if run_inputs(after)[name] != value
+                }
+                self.assertEqual(1, len(changed), f"the pair differs in {changed}")
+                had, has = card_caps(before), card_caps(after)
+                self.assertIn(condition, had)
+                self.assertEqual(action, had[condition]["action_kind"])
+                self.assertEqual(action, committed_card(before)["recommended_action"])
+                self.assertNotIn(condition, has)
+                blocking = {name for name, cap in has.items() if cap["blocks"]}
+                self.assertLessEqual(
+                    blocking,
+                    {name for name, cap in had.items() if cap["blocks"]},
+                    "the repair left a blocking cap the project did not have",
+                )
+
+    def test_every_fake_changes_one_thing_and_it_is_what_its_repair_changes(
+        self,
+    ) -> None:
+        for fake, before in FAKE_REPAIRS.items():
+            with self.subTest(fake=fake):
+                touched = {
+                    name
+                    for name, value in run_inputs(before).items()
+                    if run_inputs(fake)[name] != value
+                }
+                self.assertEqual(1, len(touched), f"the fake changes {touched}")
+                changed = next(iter(touched))
+                repairs = [entry for entry in REPAIRS if entry[0] == before]
+                if not repairs:
+                    # A fake built on another fake changes what the guide is told about
+                    # the project, not the project: the read, and nothing else.
+                    self.assertIn(before, FAKE_REPAIRS, f"{before} starts no repair")
+                    self.assertEqual("read", changed)
+                for _, after, _, _ in repairs:
+                    self.assertNotEqual(
+                        run_inputs(before)[changed],
+                        run_inputs(after)[changed],
+                        "the fake touches something its repair does not",
+                    )
+
+    def test_the_guide_holds_every_fake_but_the_ones_written_down(self) -> None:
+        self.assertLessEqual(set(UNGUARDED), set(FAKE_REPAIRS))
+        for fake, before in FAKE_REPAIRS.items():
+            condition = repaired_by(fake)[2]
+            had, has = card_caps(before)[condition], card_caps(fake).get(condition)
+            held = has is not None and (has["ceiling"], has["blocks"]) == (
+                had["ceiling"],
+                had["blocks"],
+            )
+            with self.subTest(fake=fake):
+                if fake in UNGUARDED:
+                    self.assertTrue(UNGUARDED[fake].strip())
+                    self.assertFalse(
+                        held,
+                        f"the guide now holds {fake}, so the reason it was recorded as "
+                        f"getting through -- {UNGUARDED[fake]!r} -- is stale",
+                    )
+                else:
+                    self.assertTrue(
+                        held,
+                        f"{fake} got past the guide: {condition} is "
+                        f"{'gone' if has is None else 'no longer the same cap'}; record "
+                        "it in UNGUARDED with what the card shows",
+                    )
+
+
+# Every condition the pinned guide can raise and no committed card carries, with the reason.
+# Checked both ways against `conditions` in results.json, which the sweep reads from the
+# guide itself: a condition that reaches a card must come off this list, and a new one the
+# guide adds is a failure until a run reaches it or it is written down here.
+UNREACHED: dict[str, str] = {
+    "dataset-unsound-expected-outputs": (
+        "raised from the no verdicts of a row review, and the sweep passes none: writing "
+        "one would be the sweep answering the question wrong-answers asks (score_bank.py)"
+    ),
+}
+
+
+class EveryConditionTheGuideCanRaiseIsOnACard(unittest.TestCase):
+    """The cap vocabulary at the pin, against the cards -- read from the guide, not listed."""
+
+    def test_the_record_holds_the_guides_vocabulary(self) -> None:
+        conditions = committed_results()["conditions"]
+        self.assertIsInstance(conditions, dict, "results.json records no vocabulary")
+        assert isinstance(conditions, dict)
+        self.assertGreater(len(conditions), 0)
+        for condition, entry in conditions.items():
+            with self.subTest(condition=condition):
+                self.assertTrue(entry["action"], "a condition with no remedy")
+
+    def test_every_condition_is_on_a_card_or_written_down(self) -> None:
+        conditions = committed_results()["conditions"]
+        assert isinstance(conditions, dict)
+        carried = {
+            cap["condition"]
+            for run in scored_runs()
+            for cap in run["caps"]  # type: ignore[union-attr]
+        }
+        self.assertEqual(
+            set(), carried - set(conditions), "a card the guide cannot write"
+        )
+        self.assertEqual(
+            sorted(set(conditions) - carried),
+            sorted(UNREACHED),
+            "the conditions no card reaches are not the ones written down",
+        )
+        for condition, reason in UNREACHED.items():
+            self.assertTrue(reason.strip(), condition)
+
+
+def committed_results() -> dict[str, object]:
+    """The committed `results.json`."""
+    return dict(
+        json.loads(
+            (REPO_ROOT / "docs" / "measurements" / "cards" / "results.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    )
+
+
+def scored_runs() -> list[dict[str, object]]:
+    """The rows of `results.json` that scored; a refused run's card is an older reading."""
+    runs = committed_results()["runs"]
+    assert isinstance(runs, list)
+    return [run for run in runs if not run.get("refused")]
 
 
 SCORE_ROW = re.compile(

@@ -1,5 +1,115 @@
 {
   "guide_revision": "d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199",
+  "conditions": {
+    "agent-absent": {
+      "action": "connect-agent",
+      "ceiling": 25
+    },
+    "agent-generated": {
+      "action": "connect-real-agent",
+      "ceiling": 65
+    },
+    "agent-no-varying-knobs": {
+      "action": "vary-knobs",
+      "ceiling": 45
+    },
+    "dataset-absent": {
+      "action": "get-data",
+      "ceiling": 20
+    },
+    "dataset-below-measurable-size": {
+      "action": "add-examples",
+      "ceiling": 74
+    },
+    "dataset-coarse-resolution": {
+      "action": "add-examples",
+      "ceiling": 89
+    },
+    "dataset-fully-synthetic": {
+      "action": "connect-real-data",
+      "ceiling": 65
+    },
+    "dataset-generated-answer-key": {
+      "action": "review-answer-key",
+      "ceiling": 74
+    },
+    "dataset-integrity-fail": {
+      "action": "repair-dataset",
+      "ceiling": 35
+    },
+    "dataset-mostly-generated-answer-key": {
+      "action": "review-answer-key",
+      "ceiling": 74
+    },
+    "dataset-mostly-synthetic": {
+      "action": "connect-real-data",
+      "ceiling": 70
+    },
+    "dataset-mostly-undeclared": {
+      "action": "declare-data-provenance",
+      "ceiling": 70
+    },
+    "dataset-no-expected-outputs": {
+      "action": "label-data",
+      "ceiling": 30
+    },
+    "dataset-repeated-rows": {
+      "action": "review-repeats",
+      "ceiling": 89
+    },
+    "dataset-shape-unrecognised": {
+      "action": "read-dataset",
+      "ceiling": 25
+    },
+    "dataset-split-by-task-family": {
+      "action": "review-split",
+      "ceiling": 50
+    },
+    "dataset-tune-holdout-overlap": {
+      "action": "resplit-dataset",
+      "ceiling": 50
+    },
+    "dataset-tuning-split-empty": {
+      "action": "resplit-dataset",
+      "ceiling": 50
+    },
+    "dataset-undeclared-provenance": {
+      "action": "declare-data-provenance",
+      "ceiling": 65
+    },
+    "dataset-unsound-expected-outputs": {
+      "action": "review-answer-key",
+      "ceiling": 70
+    },
+    "evaluator-absent": {
+      "action": "connect-evaluator",
+      "ceiling": 40
+    },
+    "evaluator-calibration-refused": {
+      "action": "confirm-evaluator-connection",
+      "ceiling": 45
+    },
+    "evaluator-generated": {
+      "action": "connect-real-evaluator",
+      "ceiling": 74
+    },
+    "evaluator-invalid": {
+      "action": "repair-evaluator",
+      "ceiling": 25
+    },
+    "evaluator-timeout": {
+      "action": "bound-evaluator-cost",
+      "ceiling": 45
+    },
+    "evaluator-unresolved": {
+      "action": "repair-evaluator",
+      "ceiling": 40
+    },
+    "evaluator-unvalidated": {
+      "action": "complete-calibration",
+      "ceiling": 45
+    }
+  },
   "runs": [
     {
       "tag": "empty",
@@ -1486,6 +1596,171 @@
           "blocks": false,
           "action_kind": "review-split",
           "reason": "Every recurring kind of input in your dataset sits on one side of the tuning/held-out line, so the held-out score may answer a question about transfer rather than about your task. Tuned on 'count the', 'find all', 'find the', 'for each'; measured on 'how many'. This is a cheap check that reads the opening words and not their meaning, so it can be wrong - two wordings of one task look like two kinds here. Tell us they are one task and the run carries on, or redraw the split so each kind appears on both sides."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": true,
+      "calibration_passed": true
+    },
+    {
+      "tag": "no-data--empty-file",
+      "overall": 20,
+      "band": "NOT READY",
+      "recommended_action": "get-data",
+      "status": "BLOCKED",
+      "confidence": 0.61,
+      "pillars": {
+        "agent": 100,
+        "dataset": 0,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "dataset-absent",
+          "ceiling": 20,
+          "blocks": true,
+          "action_kind": "get-data",
+          "reason": "A dataset was provided to this score and it holds no rows at all, so there is nothing to measure and nothing to repair: dataset has no usable rows"
+        },
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "no-labels--blank-answers",
+      "overall": 30,
+      "band": "PARTIAL",
+      "recommended_action": "label-data",
+      "status": "BLOCKED",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 100,
+        "dataset": 36,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "dataset-no-expected-outputs",
+          "ceiling": 30,
+          "blocks": true,
+          "action_kind": "label-data",
+          "reason": "Rows have inputs but no expected outputs, so there is nothing to score a configuration against."
+        },
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "no-knobs--knobs-in-a-comment",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "vary-knobs",
+      "status": "BLOCKED",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 0,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": true,
+          "action_kind": "vary-knobs",
+          "reason": "The agent was read and no setting it can vary was found, so every configuration a search compared would be identical."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "no-knobs--knobs-in-a-comment--credited",
+      "overall": 45,
+      "band": "PARTIAL",
+      "recommended_action": "complete-calibration",
+      "status": "OK",
+      "confidence": 0.67,
+      "pillars": {
+        "agent": 0,
+        "dataset": 98,
+        "evaluation": 33
+      },
+      "caps": [
+        {
+          "condition": "evaluator-unvalidated",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "complete-calibration",
+          "reason": "An evaluator method (normalized-exact) was declared, but no complete current-run calibration measured the connected evaluator, so this card cannot claim that it distinguishes answers. Complete calibration to establish that evidence."
+        },
+        {
+          "condition": "agent-no-varying-knobs",
+          "ceiling": 45,
+          "blocks": false,
+          "action_kind": "vary-knobs",
+          "reason": "The source read found candidate settings, but it did not establish that changing them changes the finalized request. This advisory opening ceiling remains while the cited source evidence is unverified. Check the cited selected-agent path, executable source lines, and values; they may be correct while this narrow static read still cannot verify the route to the call. This ceiling records that limit, not a finding that the agent has no setting. A successful current-run enhanced config-space artifact can later replace the opening evidence. Run the request-difference probe as a separate pre-call safety guard; it does not raise this card. A single preserved configuration is not a grid search."
+        }
+      ],
+      "declared_evaluator_method": "normalized-exact",
+      "declared_task_kind": "code-sql",
+      "calibration_ran": false,
+      "calibration_passed": null
+    },
+    {
+      "tag": "hand-written--padded",
+      "overall": 74,
+      "band": "WORKABLE",
+      "recommended_action": "review-repeats",
+      "status": "OK",
+      "confidence": 0.94,
+      "pillars": {
+        "agent": 100,
+        "dataset": 73,
+        "evaluation": 83
+      },
+      "caps": [
+        {
+          "condition": "dataset-below-measurable-size",
+          "ceiling": 74,
+          "blocks": false,
+          "action_kind": "add-examples",
+          "reason": "only 8 comparable example(s) - one example moves the score by about 12 points, so a configuration can look better by winning a single row. Treat any difference as a hint, not a result."
+        },
+        {
+          "condition": "dataset-repeated-rows",
+          "ceiling": 89,
+          "blocks": false,
+          "action_kind": "review-repeats",
+          "reason": "16 of the 24 rows this run can score on the tuning side repeat an input already counted, so this comparison resolves 8 different examples rather than 24. Nothing here is broken and the run can carry on, but every copy is a trial paid for that teaches what the first one already did. Continue on the examples that differ, or replace the repeats in your own file and this run reads it again."
         }
       ],
       "declared_evaluator_method": "normalized-exact",

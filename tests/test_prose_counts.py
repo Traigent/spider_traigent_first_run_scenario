@@ -467,11 +467,6 @@ def measure() -> dict[str, Quantity]:
             "results.json declared_evaluator_method",
         ),
         (
-            "cards whose action is label-data",
-            len([run for run in scored if run["recommended_action"] == "label-data"]),
-            "results.json recommended_action",
-        ),
-        (
             "scoring methods",
             len(methods),
             f"the methods of the evaluators that score ({', '.join(sorted(methods))})",
@@ -520,7 +515,6 @@ CLAIMS: dict[str, tuple[str, ...]] = {
         "them that are not scorers at all",
         "read the table as {presets in the score tables} starting points",
         "(the {execution-evaluator cards} execution-evaluator cards changed",
-        "and the {cards whose action is label-data} cards whose action is `label-data`",
         "these {presets in the score tables} presets are the ones",
         "The {presets ported on 2026-09-18} ported on 2026-09-18 and the "
         "{presets added after the port} added after them -- "
@@ -773,9 +767,9 @@ class TheGateCatchesWhatTheFirstOneMissed(unittest.TestCase):
     def test_the_numerator_written_out(self) -> None:
         self.assert_caught(
             "docs/measurements/README.md",
-            "Fifteen of the",
+            "Seventeen of the",
             "Nine of the",
-            "'Nine' for 'cards identical to another', and there are 15",
+            "'Nine' for 'cards identical to another', and there are 17",
         )
 
     def test_a_state_count_in_docs(self) -> None:

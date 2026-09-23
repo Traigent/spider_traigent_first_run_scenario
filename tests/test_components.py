@@ -35,7 +35,7 @@ DEFAULT_PROVIDER_DIR = AGENT_DIR / build.DEFAULT_PROVIDER
 
 def every_agent():
     for provider in build.PROVIDERS:
-        for state in ("ready", "no_knobs"):
+        for state in ("ready", "no_knobs", "commented_knobs"):
             yield provider, state, AGENT_DIR / provider / f"agent_{state}.py"
 
 
@@ -65,6 +65,10 @@ DOCUMENTED_ROSTERS = {
         "anthropic/claude-3-5-haiku-latest",
     ),
     ("direct", "no_knobs"): ("gpt-4o-mini",),
+    # Still one model. The settings this state names are in a comment, and the roster the
+    # request is built from is the one thing the comment does not change.
+    ("openrouter", "commented_knobs"): ("openrouter/qwen/qwen3-coder",),
+    ("direct", "commented_knobs"): ("gpt-4o-mini",),
 }
 
 # Which credential names each vendor's env template has to declare, written out here for the
@@ -502,7 +506,7 @@ class TheVendorVariantsDoNotDrift(unittest.TestCase):
         return source[source.index(self.BODY_STARTS_AT) :]
 
     def test_each_agent_is_one_agent_across_vendors(self) -> None:
-        for state in ("agent_ready", "agent_no_knobs"):
+        for state in ("agent_ready", "agent_no_knobs", "agent_commented_knobs"):
             with self.subTest(agent=state):
                 bodies = {
                     provider: self.body(AGENT_DIR / provider / f"{state}.py")
@@ -1052,13 +1056,13 @@ class Agents(unittest.TestCase):
             self.assertNotIn(word, control, f"the control arm mentions {word!r}")
         self.assertIn(control, shown, "the two arms differ by more than the schema")
 
-    def prepared_fixed(self, name: str):
+    def prepared_fixed(self, name: str, source: str = "agent_no_knobs.py"):
         """The agent with no settings, with a known database and the request recorded.
 
         Both agents now reach their vendor through the same `call_model`, so both can be
         recorded the same way -- no faking a provider package.
         """
-        module = load(DEFAULT_PROVIDER_DIR / "agent_no_knobs.py", name)
+        module = load(DEFAULT_PROVIDER_DIR / source, name)
         schema = "CREATE TABLE singer (\nid INTEGER,\nname TEXT,\ncountry TEXT\n);"
         question = "How many singers are there?"
         module._catalog = {question: {"db_id": "concert_singer", "schema": schema}}
@@ -1121,6 +1125,29 @@ class Agents(unittest.TestCase):
         self.assertEqual(model, only_model)
         self.assertIn(question, prompt)
         self.assertIsInstance(temperature, float)
+
+    def test_the_settings_a_comment_names_change_nothing_sent(self) -> None:
+        """`commented-knobs` names three models and a temperature range, in a comment.
+
+        Driven with exactly those values, it sends one request -- the one its roster of one
+        names, at the one temperature it runs at -- which is what makes it a repair that is
+        not one: the settings are claimed where the source is read and absent where the
+        request is built.
+        """
+        module, question, sent = self.prepared_fixed(
+            "agent_probe_commented", "agent_commented_knobs.py"
+        )
+        source = (DEFAULT_PROVIDER_DIR / "agent_commented_knobs.py").read_text("utf-8")
+        claimed = DOCUMENTED_ROSTERS[(build.DEFAULT_PROVIDER, "ready")]
+        for model in claimed:
+            self.assertIn(model, source, "the comment names the tunable roster")
+        self.assertEqual(1, len(module.MODELS))
+        for model in claimed:
+            for temperature in (0.0, 0.7):
+                module.run(question, {"model": model, "temperature": temperature})
+        self.assertEqual(len(sent), 2 * len(claimed))
+        self.assertEqual(1, len(set(sent)), "a setting the comment names changed it")
+        self.assertEqual(module.MODELS[0], sent[0][0])
 
     def test_an_unsupported_setting_value_raises(self) -> None:
         """Answering under a setting the agent does not have would be a quiet wrong result."""
@@ -1317,7 +1344,15 @@ class TheAgentCallsThroughTheDoorTraigentWatches(unittest.TestCase):
         templates = sorted(AGENT_DIR.glob("*/agent_*.py")) + sorted(
             (REPO_ROOT / "components" / "explainer").glob("*/agent.py")
         )
-        self.assertEqual(len(templates), 3 * len(build.PROVIDERS))
+        # One file per agent state that ships one, per vendor, and the explainer beside
+        # them -- counted from the states rather than written down, so a new agent state
+        # is checked rather than miscounted.
+        per_vendor = {
+            path.name
+            for state in build.AGENT_STATES
+            if (path := build.agent_file(state, build.DEFAULT_PROVIDER)) is not None
+        }
+        self.assertEqual(len(templates), (len(per_vendor) + 1) * len(build.PROVIDERS))
         for path in templates:
             with self.subTest(template=path.relative_to(REPO_ROOT)):
                 text = path.read_text(encoding="utf-8")

@@ -95,9 +95,16 @@ is what an assistant that had opened the file would pass.
 
 `--agent-knobs` is the coding assistant's own read of the agent's source, and the guide is
 explicit that the opening score requires it wherever an agent was found. No assistant is
-running here, so the two documents under `agent-knobs/` stand in for one. They were written
-by hand against the two agent components and they cite real lines on the real call path --
-which is why the figures are faithful, and also why another honest read could move them.
+running here, so the documents under `agent-knobs/` stand in for one, chosen by the agent's
+state (`AGENT_READS`). Each was written by hand against its agent component and cites real
+lines on the real call path -- which is why the figures are faithful, and also why another
+honest read could move them. One more, `commented-knobs-credited.json`, is unfaithful on
+purpose and is scored only by `no-knobs--knobs-in-a-comment--credited`, which names it with
+`agent_read`: it credits
+settings its agent names only in a comment, citing the nearest executable lines, because a
+citation of the comment itself is refused outright. The guide cannot verify such a claim
+at the opening and treats it as advisory rather than blocking, so that run shows what a
+careless read does to the card, beside the same agent read faithfully.
 
 `--calibration` runs only where the demo ships probe answers AND the guide's opening gate
 allows it: `references/component-creation.md` opens calibration "if the verdict is sufficient
@@ -162,6 +169,14 @@ HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parent.parent
 CARDS = HERE / "cards"
 KNOBS = HERE / "agent-knobs"
+
+# The faithful read of the agent's source each agent state is scored with; every other state
+# ships the tunable agent and is read with `ready.json`. A run may name a different read with
+# the `agent_read` option -- one does, to score an unfaithful read against the faithful one.
+AGENT_READS = {
+    "no-knobs": "no-knobs.json",
+    "commented-knobs": "commented-knobs.json",
+}
 
 # The presets in the order the score table lists them: by opening score.
 PRESETS = (
@@ -298,6 +313,39 @@ VARIANTS: tuple[tuple[str, tuple[str, ...], dict[str, Any]], ...] = (
     (
         "split-by-question-form--calibrated",
         ("--preset", "split-by-question-form", "--calibration", "present"),
+        {},
+    ),
+    # Repairs that are not repairs. Each starts from a preset whose remedy the guide
+    # names, changes the one thing that remedy is about so that it looks done, and leaves
+    # it undone: the data file created and left empty, an answer field added to every row
+    # with nothing in it, settings to tune over written into a comment of an agent that
+    # reads none, and ten rows copied up to thirty. Whether the guide still holds each
+    # one is recorded beside the committed cards in tests/test_score_bank.py.
+    (
+        "no-data--empty-file",
+        ("--preset", "no-data", "--dataset", "empty-file"),
+        {},
+    ),
+    (
+        "no-labels--blank-answers",
+        ("--preset", "no-labels", "--dataset", "blank-answers"),
+        {},
+    ),
+    (
+        "no-knobs--knobs-in-a-comment",
+        ("--preset", "no-knobs", "--agent", "commented-knobs"),
+        {},
+    ),
+    # The same project, handed a read that credits the settings the comment names. The
+    # project is unchanged; what changes is what the guide is told about it.
+    (
+        "no-knobs--knobs-in-a-comment--credited",
+        ("--preset", "no-knobs", "--agent", "commented-knobs"),
+        {"agent_read": "commented-knobs-credited.json"},
+    ),
+    (
+        "hand-written--padded",
+        ("--preset", "hand-written", "--dataset", "padded"),
         {},
     ),
 )
@@ -900,10 +948,12 @@ def readiness_command(
     declared: str | None,
     task_kind: str,
     tag: str,
+    agent_read: str | None = None,
 ) -> list[str]:
     """The readiness call for one built project, from what its record declares.
 
-    `agent` is None when the sweep passes no agent read. Each origin comes from the
+    `agent` is None when the sweep passes no agent read; `agent_read` names a read other
+    than the faithful one `AGENT_READS` keeps for the agent's state. Each origin comes from the
     record through `declared_origin`, so what the card says of who wrote a component is
     what the builder declared and never a default of this script's.
     """
@@ -914,9 +964,7 @@ def readiness_command(
         str(room / "02-preflight.json"),
     ]
     if agent:
-        document = KNOBS / (
-            "no-knobs.json" if agent["state"] == "no-knobs" else "ready.json"
-        )
+        document = KNOBS / (agent_read or AGENT_READS.get(agent["state"], "ready.json"))
         readiness += [
             "--agent-knobs",
             str(document),
@@ -946,6 +994,7 @@ def score_one(
     staging: Path,
     *,
     agent_knobs: bool = True,
+    agent_read: str | None = None,
     force_execution_calibration: bool = False,
     method: str | None = None,
     task_kind: str = "code-sql",
@@ -1106,6 +1155,7 @@ def score_one(
         declared=declared,
         task_kind=task_kind,
         tag=tag,
+        agent_read=agent_read,
     )
 
     capture(readiness, project, room / "04-readiness-card.txt")

@@ -1,7 +1,7 @@
 # The measurements behind the score table
 
 Every readiness figure quoted in this repository was produced here, and everything needed to
-reproduce it is in this directory: the script, the two hand-written agent reads it needs, and
+reproduce it is in this directory: the script, the hand-written agent reads it needs, and
 the captured invocation and full output of every run.
 
 **Measured against the first-run guide at revision
@@ -133,6 +133,8 @@ job.
 | `score_bank.py` | the whole measurement. Its docstring states every choice it makes and why. It is in CI's `black`/`ruff`/`mypy --strict` targets and its behaviour is held by [`tests/test_score_bank.py`](../../tests/test_score_bank.py): it has twice destroyed the evidence in `cards/` while reporting that it could not measure anything, and a repair nothing tests is a repair the next edit can quietly undo |
 | `agent-knobs/ready.json` | the read of the tunable agent's source that the opening score requires |
 | `agent-knobs/no-knobs.json` | the same read of the fixed agent: a completed read that found no knobs |
+| `agent-knobs/commented-knobs.json` | the same read of the `commented-knobs` agent, whose settings are named only in a comment: a completed read that found no knobs |
+| `agent-knobs/commented-knobs-credited.json` | a read that is wrong on purpose: it credits the settings that comment names, citing the nearest executable lines, and is scored only by `no-knobs--knobs-in-a-comment--credited` |
 | `cards/<run>/01-build.txt` | the `build.py demo` invocation and its output |
 | `cards/<run>/02-preflight.json` | `preflight.py --json` output, which is `readiness.py --preflight`'s input |
 | `cards/<run>/03-calibration.json` | `calibrate_evaluator.py --json` output, where calibration ran |
@@ -162,6 +164,9 @@ No coding assistant runs in this repository, so `agent-knobs/ready.json` and
 hand against `components/agent/*/agent_ready.py` and `agent_no_knobs.py`, and every
 `source_lines` entry cites a real line on the real call path -- which is why the figures are
 faithful, and also why another honest read could move them a few points.
+`agent-knobs/commented-knobs-credited.json` is the exception, wrong on purpose, and only
+`no-knobs--knobs-in-a-comment--credited` is scored with it; the section on repairs in name
+only below says what it is for.
 
 Two things follow, and both are properties of this table rather than of the guide:
 
@@ -182,8 +187,8 @@ Two things follow, and both are properties of this table rather than of the guid
 
 Every one of `build.py`'s thirty-five presets is run once: thirty-four by name, and `slow-scorer`
 through a variant, because it carries a non-default calibration budget. Then come the
-twenty comparisons the documentation makes -- sixteen variants and the four `grid-*` runs --
-for fifty-five runs in all:
+twenty-five comparisons the documentation makes -- twenty-one variants and the four `grid-*` runs --
+for sixty runs in all:
 
 | run | what it is for |
 |---|---|
@@ -205,6 +210,11 @@ for fifty-five runs in all:
 | `disclaimed-agent--calibrated` | the ceiling a disclaimed agent sets, once the evaluator ceiling is out of the way |
 | `disclaimed-scorer--calibrated` | the same for a disclaimed scorer, which calibrates cleanly and is still not the customer's |
 | `split-by-question-form--calibrated` | the ceiling a split along the questions' forms sets, likewise uncovered |
+| `no-data--empty-file` | `no-data` with the data file created and left empty: `get-data` done in name only |
+| `no-labels--blank-answers` | `no-labels` with an answer field added to every row and nothing in it |
+| `no-knobs--knobs-in-a-comment` | `no-knobs` with settings to tune over written into a comment, read faithfully (`agent-knobs/commented-knobs.json`) |
+| `no-knobs--knobs-in-a-comment--credited` | the same project, handed a read (`agent-knobs/commented-knobs-credited.json`) that credits the settings the comment names |
+| `hand-written--padded` | `hand-written` with its ten rows copied up to thirty, each copy under an id of its own |
 | `grid-*` | the four declared-method x declared-task-kind combinations, all on the same unchanged text comparator |
 
 ## Results
@@ -274,6 +284,11 @@ ceiling reads `none` discloses something without bounding the number
 | `disclaimed-agent--calibrated` | 65 | WORKABLE | `proceed` | 100 | 98 | 83 | `agent-generated` 65 |
 | `disclaimed-scorer--calibrated` | 74 | WORKABLE | `proceed` | 100 | 98 | 83 | `evaluator-generated` 74 |
 | `split-by-question-form--calibrated` | 50 | PARTIAL | `review-split` | 100 | 98 | 83 | `dataset-split-by-task-family` 50 |
+| `no-data--empty-file` | 20 | NOT READY | `get-data` | 100 | 0 | 33 | `dataset-absent` 20\* · `evaluator-unvalidated` 45 |
+| `no-labels--blank-answers` | 30 | PARTIAL | `label-data` | 100 | 36 | 33 | `dataset-no-expected-outputs` 30\* · `evaluator-unvalidated` 45 |
+| `no-knobs--knobs-in-a-comment` | 45 | PARTIAL | `vary-knobs` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45\* |
+| `no-knobs--knobs-in-a-comment--credited` | 45 | PARTIAL | `complete-calibration` | 0 | 98 | 33 | `evaluator-unvalidated` 45 · `agent-no-varying-knobs` 45 |
+| `hand-written--padded` | 74 | WORKABLE | `review-repeats` | 100 | 73 | 83 | `dataset-below-measurable-size` 74 · `dataset-repeated-rows` 89 |
 | `grid-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `grid-normalized-exact--structured` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
 | `grid-normalized-exact--code-sql` | 93 | WORKABLE | `review-answer-key` | 100 | 98 | 83 | none |
@@ -335,11 +350,64 @@ and the two kinds show different things, as below.
   the reading `split-by-database` does not get: holding out whole databases leaves the forms on
   both sides. Here the finding is the guide's own: preflight reads the split from the rows.
 
+## Repairs, and repairs in name only
+
+Each remedy on a card asks for one thing to change. Where the bank holds the run before a repair
+and the run after it, `REPAIRS` in `tests/test_score_bank.py` writes the pair down and holds it
+to three things: the pair differs in that one thing and nothing else, the condition the remedy
+is for is on the card before and gone from the card after, and no blocking cap appears that the
+project did not already have. The pairs are `no-data` to `ready` (`get-data`), `no-labels` to
+`ready` (`label-data`), `no-eval` to `ready` (`connect-evaluator`), `no-knobs` to `ready`
+(`vary-knobs`), `wrong-wiring--calibrated` and `fake-ruler` to `checked` (`repair-evaluator`),
+`leaky-split` to `ready` (`resplit-dataset`), `hand-written` to `checked` (`add-examples`) and
+`raw-export` to `raw-export--fields-declared` (`read-dataset`).
+
+A repair in name only changes that same thing so that it looks done, and leaves it undone.
+The guide holds every one of these that changes the project, and lets through the one that
+changes only what it is told about the project:
+
+- **An empty data file** (`no-data--empty-file`) is still no data: `dataset-absent` 20,
+  blocking, `get-data` -- the reason now says a dataset was provided "and it holds no rows at
+  all".
+- **An answer field left empty on every row** (`no-labels--blank-answers`) is still no answer
+  key: `dataset-no-expected-outputs` 30, blocking, `label-data`.
+- **Ten rows copied up to thirty** (`hand-written--padded`) are still eight comparable examples
+  on the tuning side: `dataset-below-measurable-size` holds at 74, and `dataset-repeated-rows`
+  (89) asks about the copies, so the action moves from `add-examples` to `review-repeats`. Each
+  copy carries an id of its own; with its original's id it would be the `duplicated` defect,
+  which the guide reports as a broken file instead.
+- **Settings named in a comment** (`no-knobs--knobs-in-a-comment`) are still nothing to
+  search, when the agent is read faithfully (`agent-knobs/commented-knobs.json`, which finds
+  no settings): `agent-no-varying-knobs` 45, blocking, `vary-knobs` -- the card `no-knobs`
+  itself gets.
+- **The same agent, read carelessly** (`no-knobs--knobs-in-a-comment--credited`) gets through,
+  in part. The project is unchanged; the read handed to the guide
+  (`agent-knobs/commented-knobs-credited.json`) credits the settings the comment names, citing
+  the executable lines beside it. The guide does not believe it -- the settings are not
+  scored, the agent pillar reads 0 either way and `agent-no-varying-knobs` stays at 45 -- but
+  it cannot verify the claim at the opening either, and treats an unverified claim as
+  advisory rather than as a finding that the agent has no setting: "the source read found
+  candidate settings, but it did not establish that changing them changes the finalized
+  request ... This advisory opening ceiling remains while the cited source evidence is
+  unverified." So the card that blocked on `vary-knobs` reads OK with
+  `complete-calibration`, and it names a request-difference probe as the separate pre-call
+  guard, which this bank does not run. A read citing the comment itself is
+  refused outright ("cites comment/docstring/non-executable source"), which is why this one
+  cites executable lines, and why `tests/test_measurements.py` holds it to the same citation
+  rule as the faithful reads. So what gets through is a careless read, not the comment, and
+  what it gets through is the block at the opening, not the ceiling; the guard the guide
+  names for it is the request-difference probe before the first paid call.
+
+The careless read is written down in `UNGUARDED`, with what its card shows, and checked both
+ways:
+the day the guide holds it, the entry and this paragraph are stale. A fake the guide does not
+hold and that is not written down fails the suite.
+
 ## The cards that are identical to another card
 
 Worth stating because each one is a finding rather than a coincidence: where different starting
-states produce the same card, the guide's opening read did not distinguish them. Fifteen of the
-fifty-five cards fall into the six groups below. Each is checkable directly -- the first line
+states produce the same card, the guide's opening read did not distinguish them. Seventeen of the
+sixty cards fall into the seven groups below. Each is checkable directly -- the first line
 of `04-readiness-card.txt` is the invocation that produced it, which names its own paths, so
 compare from the second line down:
 
@@ -349,9 +417,12 @@ diff <(tail -n +2 ready/04-readiness-card.txt) <(tail -n +2 wrong-wiring/04-read
 ```
 
 This list is not maintained by hand. `tests/test_score_bank.py` recomputes the groups from the
-committed cards and compares them with `IDENTICAL_CARDS`, so a round that creates a new
-identical pair and does not say so here goes red -- which is how the `opaque-scorer` pair below
-came to be written down at all.
+committed cards, from the second line down as above, and compares them with `IDENTICAL_CARDS`,
+so a round that creates a new identical pair and does not say so here goes red -- which is how
+the `opaque-scorer` pair below came to be written down at all. It used to compare whole files,
+first line included, so cards that differed only in their invocation never grouped; the
+`no-knobs` pair below is the one that hid, and re-deriving every group the new way found no
+other.
 
 - `ready`, `wrong-wiring`, `fake-ruler--uncalibrated`, `raw-export--fields-declared` and
   `two-agents` -- **all five byte-identical**. A scorer that never reads the model's output is
@@ -368,6 +439,9 @@ came to be written down at all.
 - `checked` and `grid-normalized-exact--code-sql` -- **byte-identical**.
 - `no-agent` and `ready--without-agent-knobs` -- **byte-identical**. Both cap at
   `connect-agent`: no agent, and an agent whose source nobody read, read alike here.
+- `no-knobs` and `no-knobs--knobs-in-a-comment` -- **byte-identical** from the second line.
+  An agent that names settings to tune over only in a comment, read faithfully, is read exactly
+  like the agent that names none: the comment changes nothing the opening gate sees.
 - `wrong-answers` and `ready` -- **not** identical, and the four differences are all about
   size rather than about the damage: dataset pillar 91 against 98, `60/60 rows` against
   `300/300`, `60 collected of 60` against `300 collected of 300`, and the comparison-size

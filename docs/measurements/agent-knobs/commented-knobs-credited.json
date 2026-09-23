@@ -1,0 +1,47 @@
+{
+  "source": "agent.py",
+  "knobs": {
+    "model": {
+      "values": [
+        "openrouter/qwen/qwen3-coder",
+        "openrouter/openai/gpt-oss-120b",
+        "openrouter/meta-llama/llama-3.3-70b-instruct"
+      ],
+      "source_lines": [22, 23],
+      "evidence": "agent.py:24-26 lists the three models this agent is tuned over; agent.py:22 MODELS and agent.py:23 MODEL hold the model the request is sent with."
+    },
+    "temperature": {
+      "values": [0.0, 0.7],
+      "low": 0.0,
+      "high": 0.7,
+      "source_lines": [111, 125],
+      "evidence": "agent.py:27 gives the range it is tuned over; agent.py:111 passes the temperature to the completion, and agent.py:125 is where run() supplies it."
+    }
+  },
+  "build": {
+    "prompt": {
+      "present": true,
+      "few_shot": 0,
+      "source_lines": [34, 113, 124],
+      "evidence": "agent.py:124 assembles the prompt from the schema and the fixed instruction at agent.py:34, and agent.py:109-114 sends it as the single user message at agent.py:113; no worked examples ride with it."
+    },
+    "output-contract": {
+      "present": true,
+      "source_lines": [34, 65, 72],
+      "evidence": "agent.py:34 INSTRUCTION asks for the SQLite query only, and agent.py:47-72 strip_code_fence pins the returned answer to bare query text on both of its paths: agent.py:65 where the model added no fence, agent.py:72 where it did."
+    },
+    "control-flow": {
+      "loop": false,
+      "bounded": true,
+      "source_lines": [118, 125],
+      "evidence": "agent.py:118-125 run() is straight-line: agent.py:125 is its single return, one call_model call per input, no loop and no retry."
+    },
+    "tools": {
+      "used": false,
+      "declared": [],
+      "unreachable": [],
+      "source_lines": [107, 109],
+      "evidence": "agent.py declares no tools; agent.py:107 imports litellm and the agent's only outbound call is the completion at agent.py:109."
+    }
+  }
+}

@@ -478,6 +478,11 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
             out = Path(cls.workspace) / f"o{index}"
             build_or_raise("demo", "--preset", preset, "--out", str(out))
             cls.built[preset] = out
+        # Undamaged -- there are no rows to damage -- and still a record to check: the
+        # file is there, and the record has to say it holds nothing.
+        out = Path(cls.workspace) / "e0"
+        build_or_raise("demo", "--dataset", "empty-file", "--out", str(out))
+        cls.built["empty-file"] = out
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -568,6 +573,70 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         lines[0] = json.dumps(row, ensure_ascii=False, sort_keys=True)
         self.rewrite(out, lines)
         self.assert_reported(out, "damage_detail.rows_keeping_their_answer says 0")
+
+    def test_an_empty_answer_is_not_an_answer(self) -> None:
+        """`blank-answers` carries the field on every row, and no answer in it."""
+        out = self.copy("blank-answers")
+        record = json.loads((out / "demo.json").read_text(encoding="utf-8"))
+        dataset = record["components"]["dataset"]
+        self.assertEqual((0, False), (dataset["labelled_rows"], dataset["labelled"]))
+        readme = (out / build.PROJECT_SUBDIR / "README.md").read_text(encoding="utf-8")
+        self.assertIn("| `dataset.jsonl` | 40 rows, each a question. |", readme)
+
+        def claim_the_answers(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["labelled_rows"] = 40
+            manifest["components"]["dataset"]["labelled"] = True
+
+        self.edit_record(out, claim_the_answers)
+        self.assert_reported(out, "rows carry their answer")
+
+    def test_an_answer_filled_in_is_caught(self) -> None:
+        out = self.copy("blank-answers")
+        lines = self.lines(out)
+        row = json.loads(lines[0])
+        row["output"] = "SELECT 1"
+        lines[0] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+        self.rewrite(out, lines)
+        self.assert_reported(out, "damage_detail.blank_answers says 40")
+        self.assert_reported(out, "the state blanks every answer")
+
+    def test_a_copy_that_is_not_its_original_is_caught(self) -> None:
+        out = self.copy("padded")
+        lines = self.lines(out)
+        position = next(
+            index
+            for index, line in enumerate(lines)
+            if build.PAD_ID_MARKER in json.loads(line)["metadata"]["id"]
+        )
+        row = json.loads(lines[position])
+        row["output"] = "SELECT 1"
+        lines[position] = json.dumps(row, ensure_ascii=False, sort_keys=True)
+        self.rewrite(out, lines)
+        self.assert_reported(out, "is not a copy of its original")
+
+    def test_a_wrong_count_of_copies_is_caught(self) -> None:
+        out = self.copy("padded")
+
+        def recount(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["copies_of_each"] = 3
+
+        self.edit_record(out, recount)
+        self.assert_reported(out, "damage_detail.copies_of_each says 3")
+
+    def test_a_copy_removed_is_caught(self) -> None:
+        out = self.copy("padded")
+        self.rewrite(out, self.lines(out)[:-1])
+        self.assert_reported(out, "damage_detail.copies_of_each says 2")
+
+    def test_an_empty_file_that_gains_a_row_is_caught(self) -> None:
+        out = self.copy("empty-file")
+        self.assertEqual([], self.lines(out))
+        row = build.project_row(build.read_dataset()[0], "ready")
+        self.rewrite(out, [json.dumps(row, ensure_ascii=False, sort_keys=True)])
+        # A row with no catalog beside it: the question it asks cannot be looked up, which
+        # is what verify reports first -- the empty file ships no catalog, and a file that
+        # holds rows has to.
+        self.assert_reported(out, "the rows or the catalog cannot be read")
 
     def test_a_claim_verify_cannot_check_is_itself_reported(self) -> None:
         out = self.copy("split-by-database")
