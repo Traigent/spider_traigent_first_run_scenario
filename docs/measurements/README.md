@@ -31,7 +31,7 @@ python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run
 ```
 
 It builds each project, scores it, deletes it, and writes a card for each. It reaches no
-network and never uses `--venv ready`. The whole sweep takes about four minutes on a laptop.
+network and never uses `--venv ready`. The whole sweep takes four to six minutes on a laptop.
 
 **Checking the committed cards is one flag.** `--compare` re-measures, publishes nothing, and
 compares the result with `cards/` byte for byte -- every card of every run that scored, and
@@ -160,7 +160,7 @@ for forty-nine runs in all:
 | `synthetic-source--calibrated` | the rung below it: every row declared written, which costs 65 where declaring most of them costs 70 |
 | `generated-answer-key--calibrated` | the answer-key ladder's top rung |
 | `mostly-generated-answer-key--calibrated` | the rung below it, which exists so the cap cannot turn on one row |
-| `slow-scorer` | `--preset slow-scorer` with `--timeout 5` on the calibration step. The guide budgets a deterministic calibration at 900 seconds, so reaching the timeout question the default way costs a quarter of an hour of every reproduction; the budget is stated instead, and the card records the one it was reached under |
+| `slow-scorer` | `--preset slow-scorer` with `--timeout 5` on the calibration step. With no `--timeout` the guide budgets this calibration at 900 seconds and the scorer's sixteen authored probes take a minute each, so a guided run reaches the timeout only after the full fifteen minutes -- measured once at the pin: exit 1 at 900 seconds, `timed_out: true`, and the same card: 45, `bound-evaluator-cost`. The shorter budget spares every reproduction that wait, and the card records the one it was reached under |
 | `grid-*` | the four declared-method x declared-task-kind combinations, all on the same unchanged text comparator |
 
 ## Results

@@ -12,16 +12,17 @@ What is not ordinary is where the comparison happens. The desk's review service
 holds the canonical rules, so this scorer asks it rather than keeping a second
 copy that would drift, and the service answers one query at a time.
 
-`SECONDS_PER_CALL` is what that round trip costs us in practice. It is the
-number to change if the service gets faster; it is not a retry or a backoff, and
-nothing here batches, because the service has no batch endpoint yet.
+`SECONDS_PER_CALL` is what that round trip costs us in practice: about a
+minute. It is the number to change if the service gets faster; it is not a
+retry or a backoff, and nothing here batches, because the service has no batch
+endpoint yet.
 """
 
 import re
 import time
 
 # What one review round trip costs. Measured against the service, not guessed.
-SECONDS_PER_CALL = 3.0
+SECONDS_PER_CALL = 60.0
 
 _FOLD_CASE = str.maketrans("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")
 _WHITESPACE = re.compile(r"\s+")

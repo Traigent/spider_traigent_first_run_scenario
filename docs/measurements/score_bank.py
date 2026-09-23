@@ -683,16 +683,17 @@ def score_one(
                     "--json",
                 ]
                 + (
-                    # The guide budgets a deterministic calibration at 75 seconds a
-                    # probe and caps it at 900, so a scorer that really is too slow
-                    # reaches the timeout question only after fifteen minutes of
-                    # waiting. `slow-scorer` is built to reach it, and making every
-                    # reproduction of this sweep wait a quarter of an hour to watch a
-                    # clock run out would be a poor trade for a cap that is about
-                    # cost. The budget is stated instead of endured: the scorer needs
-                    # 3 seconds a call and this allows 5 for the whole run, so the
-                    # timeout is reached for the same reason and in the same way,
-                    # and the card records the budget it was reached under.
+                    # With no `--timeout` the guide budgets this calibration at 900
+                    # seconds, and `slow-scorer` reaches the timeout there: its sixteen
+                    # authored probes take a minute each. That was measured once, at
+                    # the pin, and it took the whole fifteen minutes; making every
+                    # reproduction of this sweep wait that long to watch a clock run
+                    # out would be a poor trade for a cap that is about cost. So the
+                    # budget is stated instead of endured: 5 seconds, which the first
+                    # call already outlasts. The timeout is reached in the same phase
+                    # and read the same way -- the default-budget run scored the same
+                    # 45 `evaluator-timeout` -- and the card records the budget it was
+                    # reached under.
                     ["--timeout", str(calibration_timeout)]
                     if calibration_timeout is not None
                     else []

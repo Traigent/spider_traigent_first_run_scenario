@@ -97,6 +97,28 @@ EXPECTED_SPLIT_BY_BAND = {
 # of the shipped scorer has to outlast it.
 SLOW_SCORER_CALIBRATION_BUDGET_SECONDS = 5
 
+# How the guide budgets a calibration nobody passed `--timeout` to -- the one a real
+# guided run gets -- read from `skills/traigent-first-run/scripts/calibrate_evaluator.py`
+# at the revision below. `slow-scorer` claims to reach the timeout in that run, so the
+# claim is checked against these and not against the sweep's own shorter budget, which
+# agrees with the scorer whatever the scorer does. `TheSweepPinsTheGuide` holds the
+# revision to the sweep's pin, so moving the pin sends someone back here to read them
+# again.
+GUIDE_CALIBRATION_BUDGET = {
+    "read_at": "d07b62cd4abb6ecb6d2edcdcb2d535f02bb2c199",
+    # Line 71: the authored probes per case. Only these can time the calibration out:
+    # lines 3104-3118 run the authored worker against the deadline and write the
+    # timeout record when it passes, while a supplemental probe that runs out of time
+    # afterwards is marked unavailable instead.
+    "PROBES_PER_CASE": 4,
+    # Line 72: supplemental calls the default budget reserves for, per case.
+    "DETERMINISTIC_SUPPLEMENTAL_PROBES_PER_CASE": 8,
+    # Line 73: seconds budgeted per possible deterministic call.
+    "DETERMINISTIC_SECONDS_PER_PROBE": 75,
+    # Line 103: the ceiling the whole default budget is clamped to.
+    "CALIBRATION_TIMEOUT_CEILING_SECONDS": 900,
+}
+
 # Which starting state each preset is, written out here and imported from nowhere.
 # `test_every_preset_passes` used to check build.py's presets against build.py's presets,
 # which passes whatever they are changed to: `fake-ruler` shipping a working scorer, or
@@ -232,11 +254,12 @@ def run_build(
     )
 
 
-def load_scorer(name: str) -> Any:
+def load_scorer(name: str, keep_timing: bool = False) -> Any:
     """One of the shipped evaluators, by file name, with any round trip made free.
 
     `slow.py` sleeps per call to model a review service; its comparison is what is under
-    test, so the sleep is set to zero here rather than waited out.
+    test, so the sleep is set to zero here rather than waited out -- unless the timing is
+    what is under test.
     """
     located = importlib.util.spec_from_file_location(
         f"_scorer_{name}", REPO_ROOT / "components" / "evaluator" / f"{name}.py"
@@ -245,7 +268,7 @@ def load_scorer(name: str) -> Any:
     scorer = importlib.util.module_from_spec(located)
     sys.modules[located.name] = scorer
     located.loader.exec_module(scorer)
-    if hasattr(scorer, "SECONDS_PER_CALL"):
+    if hasattr(scorer, "SECONDS_PER_CALL") and not keep_timing:
         scorer.SECONDS_PER_CALL = 0.0
     return scorer
 
@@ -2439,36 +2462,57 @@ class TheNineNewStatesShipWhatTheyClaim(unittest.TestCase):
         )
 
     def test_the_slow_scorer_is_slow_enough_to_reach_the_timeout(self) -> None:
-        """The state is "too slow for the budget", so the two have to relate.
+        """The state is "too slow for the budget", in the run a customer gets.
 
-        `SECONDS_PER_CALL` set to zero leaves a preset called `slow-scorer` that
-        is not slow, and a committed card recording `timed_out: true` that can
-        no longer be reproduced -- with nothing red.
+        The first version checked the scorer against the sweep's own `--timeout 5`
+        and passed at three seconds a call -- while a real guided run, which passes
+        no `--timeout`, finished calibrating it in a minute and a half and never
+        raised `evaluator-timeout` at all. What has to outlast the guide's default
+        budget is the phase that budget times: the authored probes, run one after
+        another in one worker.
         """
 
-        located = importlib.util.spec_from_file_location(
-            "_slow_timing", REPO_ROOT / "components" / "evaluator" / "slow.py"
-        )
-        assert located is not None and located.loader is not None
-        scorer = importlib.util.module_from_spec(located)
-        sys.modules[located.name] = scorer
-        located.loader.exec_module(scorer)
+        scorer = load_scorer("slow", keep_timing=True)
         cases = json.loads(
             (REPO_ROOT / "components" / "calibration" / "slow.json").read_text(
                 encoding="utf-8"
             )
         )
-        # The guide makes at least one call per shipped probe, and more: a
-        # deterministic case gets supplemental probes on top of the four in the
-        # file. Counting only the four is the conservative direction -- if even
-        # that exceeds the budget, the real run does too.
-        calls = sum(len(case["probes"]) for case in cases)
-        self.assertGreater(
-            calls * scorer.SECONDS_PER_CALL,
-            SLOW_SCORER_CALIBRATION_BUDGET_SECONDS,
-            "checking this scorer has to outlast the budget the sweep allows, or "
-            "the timeout the committed card records is not reached",
+        budget = GUIDE_CALIBRATION_BUDGET
+        default_budget = min(
+            budget["CALIBRATION_TIMEOUT_CEILING_SECONDS"],
+            len(cases)
+            * (
+                budget["PROBES_PER_CASE"]
+                + budget["DETERMINISTIC_SUPPLEMENTAL_PROBES_PER_CASE"]
+            )
+            * budget["DETERMINISTIC_SECONDS_PER_PROBE"],
         )
+        authored_calls = sum(len(case["probes"]) for case in cases)
+        self.assertEqual(budget["PROBES_PER_CASE"] * len(cases), authored_calls)
+        self.assertGreater(
+            authored_calls * scorer.SECONDS_PER_CALL,
+            default_budget,
+            f"the authored probes take {authored_calls} x {scorer.SECONDS_PER_CALL}s "
+            f"and the guide's default budget is {default_budget}s, so a guided run "
+            "finishes calibrating this scorer and never reaches the timeout",
+        )
+        # And the sweep's shorter budget, which is what the committed card was
+        # taken under, is reached as well -- by the first call.
+        self.assertGreater(
+            scorer.SECONDS_PER_CALL, SLOW_SCORER_CALIBRATION_BUDGET_SECONDS
+        )
+
+    def test_the_guide_budget_was_read_at_the_pin_the_sweep_measures(self) -> None:
+        """A moved pin is a moved budget, so it sends someone back to re-read it."""
+        located = importlib.util.spec_from_file_location(
+            "_sweep_pin", REPO_ROOT / "docs" / "measurements" / "score_bank.py"
+        )
+        assert located is not None and located.loader is not None
+        sweep = importlib.util.module_from_spec(located)
+        sys.modules[located.name] = sweep
+        located.loader.exec_module(sweep)
+        self.assertEqual(sweep.PINNED_REVISION, GUIDE_CALIBRATION_BUDGET["read_at"])
 
     def test_the_slow_scorer_keeps_the_case_inside_a_quoted_value(self) -> None:
         """The rule `exact_match.py` states, applied to the scorer beside it.

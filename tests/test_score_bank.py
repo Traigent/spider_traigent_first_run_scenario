@@ -301,9 +301,10 @@ class EveryPresetOpensOnTheStateItWasBuiltFor(unittest.TestCase):
 class TheSweepStatesTheBudgetItMeasuresUnder(unittest.TestCase):
     """`slow-scorer` is measured under a stated `--timeout`, and that is a claim.
 
-    The guide budgets a deterministic calibration at 900 seconds, so reaching
-    the timeout question the default way costs a quarter of an hour of every
-    reproduction. The sweep passes a small budget instead. Deleting that branch
+    With no `--timeout` the guide budgets this calibration at 900 seconds, and
+    the scorer reaches that only when all fifteen minutes have run -- which every
+    reproduction of the sweep would then wait out. The sweep passes a small budget
+    instead. Deleting that branch
     leaves the variant reading the default, the card's recorded
     `timeout_seconds` no longer describing the run that produced it, and
     nothing red.
