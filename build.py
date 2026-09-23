@@ -2808,11 +2808,7 @@ def dataset_record_problems(
         )
     labelled = sum(1 for row in rows if keys["output"] in row)
     recorded_labelled = record.get("labelled_rows")
-    if (
-        not isinstance(recorded_labelled, int)
-        or isinstance(recorded_labelled, bool)
-        or recorded_labelled < 0
-    ):
+    if not is_count(recorded_labelled):
         problems.append(
             f"the record's count of rows that carry their answer is "
             f"{recorded_labelled!r}, not a count"

@@ -898,6 +898,48 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
                 self.edit_record(out, miscount)
                 self.assert_reported(out, reason)
 
+    def test_every_recorded_count_and_flag_has_to_be_of_its_type(self) -> None:
+        """A value equal to the truth but of the wrong type is still a wrong record.
+
+        `300.0 == 300` and `1 == True`, so these used to agree with the rows; each is
+        reported now, whatever it happens to equal.
+        """
+        edits = (
+            ("wrong-answers", ("rows",), 60.0, "the record says 60.0 rows"),
+            (
+                "wrong-answers",
+                ("labelled",),
+                1,
+                "the record's `labelled` disagrees with its own `labelled_rows`",
+            ),
+            (
+                "wrong-answers",
+                ("damage_detail", "rows_keeping_their_answer"),
+                False,
+                "damage_detail.rows_keeping_their_answer is False, not a count",
+            ),
+        )
+        for state, path, value, reason in edits:
+            with self.subTest(field=path[-1]):
+                out = self.copy(state)
+
+                def retype(manifest: dict) -> None:  # type: ignore[type-arg]
+                    holder = manifest["components"]["dataset"]
+                    for name in path[:-1]:
+                        holder = holder[name]
+                    holder[path[-1]] = value
+
+                self.edit_record(out, retype)
+                self.assert_reported(out, reason)
+        out = self.copy("two-agents")
+
+        def retype_second(manifest: dict) -> None:  # type: ignore[type-arg]
+            second = manifest["components"]["agent"]["second_agent"]
+            second["rows"] = float(second["rows"])
+
+        self.edit_record(out, retype_second)
+        self.assert_reported(out, "the second agent is recorded with 20.0 rows")
+
     def test_a_count_too_large_for_a_float_is_reported_not_raised(self) -> None:
         out = self.copy("mostly-synthetic")
 
