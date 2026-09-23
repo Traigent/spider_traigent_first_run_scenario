@@ -969,14 +969,16 @@ def held_out_databases(rows: Sequence[dict[str, Any]]) -> list[str]:
 def torn_line_numbers(count: int) -> list[int]:
     """Which lines `torn` cuts short, one-based, for a file of `count` lines.
 
-    A third and two thirds of the way in: never the first line, which is the one a
-    reader opens the file on, and never the last, which is where a stopped export is
-    expected to be ragged. A file too short to hold two cuts away from both ends is
-    refused rather than cut somewhere else.
+    `TORN_LINES` cuts spaced evenly through the file -- for two, a third and two thirds
+    of the way in: never the first line, which is the one a reader opens the file on,
+    and never the last, which is where a stopped export is expected to be ragged. A file
+    too short to hold that many distinct cuts away from both ends is refused rather than
+    cut somewhere else.
     """
-    if count < 6:
+    cuts = [count * step // (TORN_LINES + 1) for step in range(1, TORN_LINES + 1)]
+    if len(set(cuts)) != TORN_LINES or cuts[0] < 2 or cuts[-1] >= count:
         raise BuildError(f"{count} rows is too few to tear {TORN_LINES} lines out of")
-    return [count // 3, 2 * count // 3]
+    return cuts
 
 
 def check_every_answer_moved(
@@ -3101,16 +3103,38 @@ def render_demo(result: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def render_list(result: dict[str, Any]) -> str:
-    lines = [
-        "PRESET             AGENT      DATASET            EVAL           CALIB    "
-        "WHAT IT IS"
+def columns(rows: Sequence[Sequence[str]], indent: str = "") -> list[str]:
+    """Rows of cells aligned in columns as wide as their widest cell.
+
+    Widths written in by hand were right for the names of the day they were written and
+    wrong for every longer name added after, which then pushed the rest of its row out
+    of line. The last column is left ragged; nothing follows it.
+    """
+    widths = [max(len(row[index]) for row in rows) for index in range(len(rows[0]))]
+    return [
+        indent
+        + " ".join(cell.ljust(width) for cell, width in zip(row[:-1], widths))
+        + " "
+        + row[-1]
+        for row in rows
     ]
-    for preset in result["presets"]:
-        lines.append(
-            f"{preset['name']:<18} {preset['agent']:<10} {preset['dataset']:<18} "
-            f"{preset['eval']:<14} {preset['calibration']:<8} {preset['note']}"
-        )
+
+
+def render_list(result: dict[str, Any]) -> str:
+    lines = columns(
+        [["PRESET", "AGENT", "DATASET", "EVAL", "CALIB", "WHAT IT IS"]]
+        + [
+            [
+                preset["name"],
+                preset["agent"],
+                preset["dataset"],
+                preset["eval"],
+                preset["calibration"],
+                preset["note"],
+            ]
+            for preset in result["presets"]
+        ]
+    )
     lines.append("")
     for name, values in result["states"].items():
         lines.append(f"--{name}: {', '.join(values)}")
@@ -3118,19 +3142,26 @@ def render_list(result: dict[str, Any]) -> str:
 
 
 def render_suite(result: dict[str, Any]) -> str:
+    table = [["DIRECTORY", "PRESET", "AGENT", "DATASET", "EVAL", ""]]
+    for entry in result["built"]:
+        parts = entry["components"]
+        table.append(
+            [
+                entry["directory"],
+                entry["preset"],
+                parts["agent"],
+                parts["dataset"],
+                parts["eval"],
+                f"{entry['rows']:>4} rows",
+            ]
+        )
+    for entry in result["failed"]:
+        table.append(["--", entry["preset"], "", "", "", f"FAILED: {entry['error']}"])
     lines = [
         f"Built {len(result['built'])} projects under {result['root']}",
         "",
-        "  DIRECTORY          PRESET             AGENT      DATASET            EVAL",
+        *(line.rstrip() for line in columns(table, indent="  ")),
     ]
-    for entry in result["built"]:
-        parts = entry["components"]
-        lines.append(
-            f"  {entry['directory']:<18} {entry['preset']:<18} {parts['agent']:<10} "
-            f"{parts['dataset']:<18} {parts['eval']:<13} {entry['rows']:>4} rows"
-        )
-    for entry in result["failed"]:
-        lines.append(f"  {'--':<18} {entry['preset']:<18} FAILED: {entry['error']}")
     if not result["built"]:
         # Every preset failed, so there is no project to point an agent at. The
         # handoff below tells a reader to hand one over, and printing it under a

@@ -3162,6 +3162,78 @@ class RepositoryCheck(unittest.TestCase):
         self.assertEqual(set(build.PRESETS), set(build.PRESET_CAPS))
 
 
+class TheTablesLineUp(unittest.TestCase):
+    """`list` and `suite` print tables, and a name longer than its column broke them."""
+
+    def test_every_list_row_starts_its_description_under_the_heading(self) -> None:
+        listing = run_build("list")
+        self.assertEqual(listing.returncode, 0, listing.stderr)
+        lines = listing.stdout.splitlines()
+        column = lines[0].index("WHAT IT IS")
+        for name, note in build.PRESET_NOTES.items():
+            with self.subTest(preset=name):
+                row = next(line for line in lines if line.startswith(name + " "))
+                self.assertEqual(column, row.index(note), row)
+
+    def test_every_suite_row_lines_up_under_its_heading(self) -> None:
+        built = [
+            {
+                "directory": "project-1",
+                "preset": max(build.PRESETS, key=len),
+                "components": {"agent": "ready", "dataset": "ready", "eval": "slow"},
+                "rows": 300,
+            },
+            {
+                "directory": "project-2",
+                "preset": "ready",
+                "components": {
+                    "agent": "two-agents",
+                    "dataset": max(build.DATASET_STATES, key=len),
+                    "eval": "exact-match",
+                },
+                "rows": 10,
+            },
+        ]
+        text = build.render_suite(
+            {
+                "built": built,
+                "failed": [],
+                "root": "/bank",
+                "record": "bank.json",
+                "handoff": "",
+            }
+        )
+        lines = text.splitlines()
+        header = next(line for line in lines if "DIRECTORY" in line)
+        for heading, field in (("PRESET", "preset"), ("AGENT", None), ("EVAL", None)):
+            for entry in built:
+                row = next(line for line in lines if entry["directory"] in line)
+                value = (
+                    entry["preset"] if field else entry["components"][heading.lower()]
+                )
+                with self.subTest(heading=heading, row=entry["directory"]):
+                    self.assertEqual(header.index(heading), row.index(value), row)
+
+
+class TheTornLinesAreTheConstantsLines(unittest.TestCase):
+    """`TORN_LINES` says how many lines `torn` cuts, and the cuts have to follow it."""
+
+    def test_the_cuts_follow_the_count_they_are_named_for(self) -> None:
+        original = build.TORN_LINES
+        self.addCleanup(setattr, build, "TORN_LINES", original)
+        for count in (1, 2, 3):
+            with self.subTest(torn_lines=count):
+                build.TORN_LINES = count
+                cuts = build.torn_line_numbers(30)
+                self.assertEqual(count, len(set(cuts)), cuts)
+                self.assertTrue(all(1 < cut < 30 for cut in cuts), cuts)
+
+    def test_a_file_too_short_for_the_cuts_is_refused(self) -> None:
+        with self.assertRaises(build.BuildError):
+            build.torn_line_numbers(5)
+        self.assertEqual([2, 4], build.torn_line_numbers(6))
+
+
 class EveryChoiceIsNamedWhereTheChoicesAreListed(unittest.TestCase):
     """A state the lists leave out is one a reader never learns exists.
 
