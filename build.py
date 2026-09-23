@@ -520,7 +520,10 @@ PRESET_NOTES = {
     "split-by-database": "the held-out rows are whole databases the tuning side never sees",
     "raw-export": "the rows under Spider's own key names, as the benchmark exports them",
     "torn-lines": "two lines of the data cut short, the way a stopped export leaves them",
-    "slow-scorer": "the scorer is right and asks a service per row, so checking it runs long",
+    "slow-scorer": (
+        "the scorer is right and asks a service per row; a guided run waits the full "
+        "fifteen-minute calibration budget before it can read the card"
+    ),
     "undeclared-source": "every row says where it came from in a word the guide does not know",
     "mostly-undeclared-source": "most rows do, and the rest still say they were collected",
     "mostly-synthetic-source": "most rows declare themselves written rather than collected",
@@ -2632,12 +2635,14 @@ def verify_demo(root: Path) -> list[str]:
                     )
             # Each check reports what it cannot read rather than stopping the others:
             # a traceback here would discard every problem already found.
-            problems += contained(
+            contained(
                 "the dataset record",
+                problems,
                 partial(dataset_record_problems, recorded_dataset, lines, rows, torn),
             )
-            problems += contained(
+            contained(
                 "the second agent",
+                problems,
                 partial(
                     second_agent_problems,
                     project,
@@ -2651,12 +2656,18 @@ def verify_demo(root: Path) -> list[str]:
     return problems
 
 
-def contained(name: str, check: Callable[[], list[str]]) -> list[str]:
-    """A check's problems, or one naming what it could not read -- never a traceback."""
+def contained(
+    name: str, problems: list[str], check: Callable[[list[str]], object]
+) -> None:
+    """Run a check that writes into `problems`, and never end in a traceback.
+
+    What the check found before it failed stays in `problems`, and the failure is added
+    as one more problem naming what could not be read.
+    """
     try:
-        return check()
+        check(problems)
     except (ValueError, KeyError, TypeError, OSError) as error:
-        return [f"{name} cannot be checked: {error!r}"]
+        problems.append(f"{name} cannot be checked: {error!r}")
 
 
 def dataset_record_problems(
@@ -2664,6 +2675,7 @@ def dataset_record_problems(
     lines: Sequence[str],
     rows: Sequence[dict[str, Any]],
     torn: set[int],
+    problems: list[str] | None = None,
 ) -> list[str]:
     """What `demo.json` says about the dataset, checked against the rows on disk.
 
@@ -2671,8 +2683,11 @@ def dataset_record_problems(
     read back out of the file: how many rows and how many carry their answer, and every
     field of `damage_detail`. A field this function has no check for is itself a problem,
     so a damage description cannot grow a claim nothing reads.
+
+    Problems go into `problems` as they are found, so a caller that has to contain a
+    failure part-way through still has every problem found before it.
     """
-    problems: list[str] = []
+    problems = [] if problems is None else problems
     keys = record.get("fields") or DATASET_KEYS
     state = record.get("state")
     if record.get("rows") != len(lines):
@@ -2681,13 +2696,17 @@ def dataset_record_problems(
         )
     labelled = sum(1 for row in rows if keys["output"] in row)
     recorded_labelled = record.get("labelled_rows")
-    if not isinstance(recorded_labelled, int) or isinstance(recorded_labelled, bool):
-        problems.append("the record states no count of rows that carry their answer")
-        recorded_labelled = -1
-    # A torn line's answer cannot be read, so it can be neither counted nor ruled out.
-    if recorded_labelled >= 0 and not (
-        labelled <= recorded_labelled <= labelled + len(torn)
+    if (
+        not isinstance(recorded_labelled, int)
+        or isinstance(recorded_labelled, bool)
+        or recorded_labelled < 0
     ):
+        problems.append(
+            f"the record's count of rows that carry their answer is "
+            f"{recorded_labelled!r}, not a count"
+        )
+    # A torn line's answer cannot be read, so it can be neither counted nor ruled out.
+    elif not labelled <= recorded_labelled <= labelled + len(torn):
         problems.append(
             f"the record says {record.get('labelled_rows')} rows carry their answer "
             f"and {labelled} readable rows do"
@@ -2835,6 +2854,11 @@ def dataset_record_problems(
             # What the rows that do not declare still say: the slice's own value, or,
             # for the answer key, nothing at all.
             said = detail["slice_says"]
+            if not isinstance(said, str):
+                problems.append(
+                    f"damage_detail.slice_says is {said!r}; what the slice says has "
+                    "to be stated in words"
+                )
             expected = None if said == SLICE_DECLARES_NO_ANSWER_PROVENANCE else said
             slice_values = {row["metadata"].get(key) for row in read_dataset()}
             if slice_values != {expected}:
@@ -2890,6 +2914,7 @@ def second_agent_problems(
     agent: dict[str, Any],
     rows: Sequence[dict[str, Any]],
     keys: dict[str, str],
+    problems: list[str] | None = None,
 ) -> list[str]:
     """The second agent the record describes, against the files and the first dataset.
 
@@ -2897,22 +2922,25 @@ def second_agent_problems(
     answer, and each of its queries -- which is a gold query under the id of a row of the
     first dataset -- has to be the answer that row already ships. A query the dataset
     withholds or replaces would hand the agent the thing the project is missing.
+
+    Problems go into `problems` as they are found, as `dataset_record_problems` does.
     """
+    problems = [] if problems is None else problems
     record = agent.get("second_agent")
     if agent.get("state") != "two-agents":
-        return (
-            []
-            if record is None
-            else ["the record has a second agent the state does not ship"]
-        )
+        if record is not None:
+            problems.append("the record has a second agent the state does not ship")
+        return problems
     if not record:
-        return ["--agent two-agents is recorded with no second agent"]
-    problems = [
+        problems.append("--agent two-agents is recorded with no second agent")
+        return problems
+    absent = [
         f"{record[name]} is in the second agent's record and not on disk"
         for name in ("path", "evaluator", "dataset", "note")
         if not (project / record[name]).is_file()
     ]
-    if problems:
+    if absent:
+        problems += absent
         return problems
     queries = [
         json.loads(line)

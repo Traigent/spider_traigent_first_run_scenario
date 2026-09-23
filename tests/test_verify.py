@@ -609,7 +609,27 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
             del manifest["components"]["dataset"]["labelled_rows"]
 
         self.edit_record(out, forget)
-        self.assert_reported(out, "states no count of rows that carry their answer")
+        self.assert_reported(out, "carry their answer is None, not a count")
+
+    def test_a_negative_count_of_labelled_rows_is_caught(self) -> None:
+        for count in (-1, -300):
+            with self.subTest(count=count):
+                out = self.copy("holdout-labelled")
+
+                def negate(manifest: dict) -> None:  # type: ignore[type-arg]
+                    manifest["components"]["dataset"]["labelled_rows"] = count
+
+                self.edit_record(out, negate)
+                self.assert_reported(out, f"carry their answer is {count}, not a count")
+
+    def test_what_the_slice_says_has_to_be_stated_in_words(self) -> None:
+        out = self.copy("generated-answers")
+
+        def blank(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["damage_detail"]["slice_says"] = None
+
+        self.edit_record(out, blank)
+        self.assert_reported(out, "damage_detail.slice_says is None")
 
     def test_a_top_level_field_no_row_carries_is_caught(self) -> None:
         out = self.copy("raw-export")
@@ -632,7 +652,14 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         lines[0] = json.dumps(row, ensure_ascii=False, sort_keys=True)
         self.rewrite(out, lines)
         (out / build.PROJECT_SUBDIR / "notes.txt").write_text("added\n")
+
+        def miscount(manifest: dict) -> None:  # type: ignore[type-arg]
+            manifest["components"]["dataset"]["rows"] = 1
+
+        self.edit_record(out, miscount)
         problems = build.verify_demo(out)
+        # Found by the same check before it failed, and kept.
+        self.assertTrue(any("the record says 1 rows" in p for p in problems), problems)
         self.assertTrue(
             any("the dataset record cannot be checked" in p for p in problems),
             problems,

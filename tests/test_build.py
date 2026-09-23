@@ -119,6 +119,9 @@ GUIDE_CALIBRATION_BUDGET = {
     "CALIBRATION_TIMEOUT_CEILING_SECONDS": 900,
     # Line 2268: the fewest cases `--cases` accepts. An assistant adapting the
     # shipped matrix can trim it this far, so the state has to hold there too.
+    # The calibrator's single-case flags accept one case, which this scorer
+    # finishes in 480s; the guide's instructions never use them, only
+    # `--cases`, so the state is held for every case set those can pass.
     "MINIMUM_CASES": 2,
 }
 
