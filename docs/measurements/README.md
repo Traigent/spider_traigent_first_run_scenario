@@ -64,6 +64,20 @@ the directory of any run that did not: a refused run reaches two or three files 
 refusal, and moving those over its committed card would delete the rendered card and the `argv`
 record with it.
 
+**A subset is `--only`.** `--only RUN ...` makes the named runs and nothing else. With
+`--compare` it compares their cards and their rows of `results.json`; with `--publish` it
+replaces their cards and puts their rows into the committed `results.json` in the order a whole
+sweep writes them, leaving every other row as it was. Like `--compare`, a partial `--publish`
+refuses to start in any environment but the one the committed cards record, since a card taken
+under another interpreter would leave the record disagreeing with itself. That is how a new run
+is added without rebuilding the bank, and the whole-bank `--compare` in CI is what then checks
+the rest:
+
+```bash
+python3 docs/measurements/score_bank.py --guide ~/code/traigent-first-run \
+    --only ready --compare
+```
+
 **One run cannot be measured at `d07b62cd`.** `best-case--off-method-calibration` asks the
 calibration tool to run the execution scorer against the project's databases, and the tool now
 refuses to import a scorer whose walk reaches a SQL engine (exit 2). The sweep records the
@@ -125,7 +139,7 @@ job.
 | `cards/<run>/04-readiness-card.txt` | **the rendered card** -- the thing the documentation quotes |
 | `cards/<run>/05-readiness.json` | the same score machine-readable: pillars, sub-scores, caps |
 | `cards/<run>/argv.json` | the build, preflight and readiness invocations, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$DEMO`, `$KNOBS`, `$EVIDENCE`. A calibrated run records `calibration_ran` here and its argv in `03-calibration-stderr.txt`, which is where `slow-scorer`'s `--timeout 5` -- the flag its cap depends on -- is written down |
-| `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
+| `cards/results.json` | `conditions`, every cap condition the guide at the pin can raise with the remedy and ranked ceiling it gives each, read from `readiness.py`'s own `CAP_CEILING` and `ACTION_FOR_CONDITION` by the probe that reads its document contracts; then one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
 
 Two things about the rows at `d07b62cd`. A cap's `ceiling` may be `null` in `results.json`
 and on the card: such a cap discloses a finding without bounding the score

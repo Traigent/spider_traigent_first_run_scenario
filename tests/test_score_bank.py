@@ -77,7 +77,18 @@ BUILD_CHECK_FIELDS = {
         }
     ),
 }
+CAP_CEILING = {"dataset-absent": 20, "evaluator-unvalidated": 45}
+ACTION_FOR_CONDITION = {
+    "dataset-absent": "get-data",
+    "evaluator-unvalidated": "complete-calibration",
+}
 """
+
+# What the harness records of the stub above, which is the shape the real record carries.
+STUB_CONDITIONS = {
+    "dataset-absent": {"action": "get-data", "ceiling": 20},
+    "evaluator-unvalidated": {"action": "complete-calibration", "ceiling": 45},
+}
 
 
 def load_harness() -> types.ModuleType:
@@ -976,6 +987,9 @@ class HarnessTestCase(unittest.TestCase):
             argv.append("--publish")
         argv.extend(extra)
         out, err = io.StringIO(), io.StringIO()
+        # Kept, so a test that expects `main()` to exit through argparse can still read
+        # what it said on the way out.
+        self.said, self.complained = out, err
         original, sys.argv = sys.argv, argv
         try:
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -1183,6 +1197,11 @@ class TheContractCheckStopsBeforeAnythingIsBuilt(HarnessTestCase):
         )
         self.assertEqual(status, 0)
         self.assertIn("went unchecked", complained, "a gate that no-ops says so")
+        self.assertIn("results.json records none", complained)
+        table = json.loads(
+            (self.workspace / "cards-staging" / "results.json").read_text("utf-8")
+        )
+        self.assertIsNone(table["conditions"])
 
     def refusing_nothing(self) -> object:
         def score_one(
@@ -1275,6 +1294,190 @@ class TheComparisonIsWithTheWholeRecord(HarnessTestCase):
             "nothing agrees with everything",
             differences,
         )
+
+
+class APartialSweepTouchesOnlyWhatItNames(HarnessTestCase):
+    """`--only`: the runs named, their cards, their rows -- and nothing else moves.
+
+    A partial `--publish` has to leave the table a whole one would write wherever the runs
+    it did not repeat still reproduce, or the CI comparison of the whole bank fails on a
+    table that was never re-measured. So the record here is made by a whole `--publish`,
+    as the real one is, and then touched by partial ones.
+    """
+
+    REFUSED = "best-case--off-method-calibration"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.harness.PINNED_REVISION = self.revision
+        self.harness.recorded_environment = lambda: {"guide": self.revision}
+        self.harness.environment_mismatch = lambda recorded: []
+        status, _, _ = self.run_sweep(self.refusing(self.REFUSED), publish=True)
+        self.assertEqual(status, 1, "the record is made with one refused run")
+
+    def results(self) -> dict[str, object]:
+        return dict(json.loads((self.cards / "results.json").read_text("utf-8")))
+
+    def scoring(self, overall: int) -> object:
+        """A measurement that scores every run it is asked for, at `overall`."""
+        attempted: list[str] = []
+
+        def score_one(
+            tag: str,
+            flags: tuple[str, ...],
+            scripts: Path,
+            workspace: Path,
+            staging: Path,
+            **options: object,
+        ) -> dict[str, object]:
+            attempted.append(tag)
+            room = staging / tag
+            room.mkdir(parents=True, exist_ok=True)
+            # The same files `refusing` writes for a run that scored, which is how the
+            # record in `setUp` was made.
+            (room / "01-build.txt").write_text("built\n", encoding="utf-8")
+            (room / "04-readiness-card.txt").write_text("a card\n", encoding="utf-8")
+            (room / "argv.json").write_text("{}\n", encoding="utf-8")
+            return {**self.scored(tag), "overall": overall}
+
+        self.attempted = attempted
+        return score_one
+
+    def test_only_the_named_runs_are_measured_in_the_sweeps_order(self) -> None:
+        status, _, _ = self.run_sweep(
+            self.scoring(45), False, "--only", "ready", "empty"
+        )
+        self.assertEqual(status, 0)
+        self.assertEqual(["empty", "ready"], self.attempted)
+
+    def test_a_run_the_sweep_does_not_make_is_refused_before_anything_runs(
+        self,
+    ) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            self.run_sweep(self.scoring(45), False, "--only", "no-such-run")
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn(
+            "--only names runs the sweep does not make: no-such-run",
+            self.complained.getvalue(),
+        )
+        self.assertEqual([], self.attempted)
+
+    def test_the_guides_vocabulary_is_recorded_with_the_runs(self) -> None:
+        self.assertEqual(STUB_CONDITIONS, self.results()["conditions"])
+
+    def test_a_partial_publish_puts_its_rows_in_and_leaves_the_rest(self) -> None:
+        before_rows = self.results()["runs"]
+        untouched = {
+            name: digest
+            for name, digest in fingerprint(self.cards).items()
+            if not name.startswith("ready/") and name != "results.json"
+        }
+        status, _, _ = self.run_sweep(self.scoring(77), True, "--only", "ready")
+        self.assertEqual(status, 0)
+        after_rows = self.results()["runs"]
+        assert isinstance(before_rows, list) and isinstance(after_rows, list)
+        self.assertEqual(
+            [row["tag"] for row in before_rows], [row["tag"] for row in after_rows]
+        )
+        for was, now in zip(before_rows, after_rows):
+            if now["tag"] == "ready":
+                self.assertEqual(77, now["overall"])
+            else:
+                self.assertEqual(was, now)
+        self.assertEqual(
+            untouched,
+            {
+                name: digest
+                for name, digest in fingerprint(self.cards).items()
+                if not name.startswith("ready/") and name != "results.json"
+            },
+        )
+
+    def test_a_partial_publish_of_what_reproduces_leaves_the_table_as_it_was(
+        self,
+    ) -> None:
+        """The property the CI comparison of the whole bank depends on."""
+        table = (self.cards / "results.json").read_bytes()
+        status, _, _ = self.run_sweep(self.scoring(45), True, "--only", "ready")
+        self.assertEqual(status, 0)
+        self.assertEqual(table, (self.cards / "results.json").read_bytes())
+
+    def test_a_partial_publish_will_not_mix_two_revisions(self) -> None:
+        table = self.results()
+        table["guide_revision"] = "another-revision"
+        (self.cards / "results.json").write_text(json.dumps(table), encoding="utf-8")
+        before = fingerprint(self.cards)
+        status, _, complained = self.run_sweep(
+            self.scoring(45), True, "--only", "ready"
+        )
+        self.assertEqual(status, 3)
+        self.assertIn("two revisions", complained)
+        self.assertEqual(before, fingerprint(self.cards))
+
+    def test_a_partial_publish_needs_the_environment_the_cards_were_taken_in(
+        self,
+    ) -> None:
+        """Else it rewrites some cards under another interpreter, and the record then
+        disagrees with itself about which one it was measured on -- which is the error
+        `--recorded-environment` and CI's whole-bank comparison stop on."""
+        self.harness.environment_mismatch = lambda recorded: [
+            "python is 3.13.0 here and 3.12.3 on the committed cards"
+        ]
+        before = fingerprint(self.cards)
+        with self.assertRaises(SystemExit) as caught:
+            self.run_sweep(self.scoring(45), True, "--only", "ready")
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("3.13.0 here", self.complained.getvalue())
+        self.assertEqual([], self.attempted, "it built something before refusing")
+        self.assertEqual(before, fingerprint(self.cards))
+
+    def test_the_recorded_environment_is_not_a_subset(self) -> None:
+        """`--only` means nothing to it, so naming runs there is refused, not ignored."""
+        with self.assertRaises(SystemExit) as caught:
+            self.run_sweep(
+                self.scoring(45), False, "--recorded-environment", "--only", "x"
+            )
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("--only", self.complained.getvalue())
+
+    def test_a_partial_compare_reads_only_the_runs_it_names(self) -> None:
+        status, said, _ = self.run_sweep(
+            self.scoring(45), False, "--compare", "--only", "ready"
+        )
+        self.assertEqual(status, 0, said)
+        self.assertIn("compared 1 cards byte for byte", said)
+        # A card the comparison was not asked about is not its business ...
+        (self.cards / "empty" / "04-readiness-card.txt").write_text(
+            "edited\n", encoding="utf-8"
+        )
+        status, said, _ = self.run_sweep(
+            self.scoring(45), False, "--compare", "--only", "ready"
+        )
+        self.assertEqual(status, 0, said)
+        # ... and a card it was asked about is, and so is the row.
+        (self.cards / "ready" / "04-readiness-card.txt").write_text(
+            "edited\n", encoding="utf-8"
+        )
+        status, said, _ = self.run_sweep(
+            self.scoring(46), False, "--compare", "--only", "ready"
+        )
+        self.assertEqual(status, 4)
+        self.assertIn("ready/04-readiness-card.txt: line 1 was 'edited'", said)
+        self.assertIn("results.json row ready:", said)
+
+    def test_a_partial_compare_of_a_run_the_record_lacks_is_a_difference(
+        self,
+    ) -> None:
+        table = self.results()
+        runs = table["runs"]
+        assert isinstance(runs, list)
+        table["runs"] = [row for row in runs if row["tag"] != "ready"]
+        (self.cards / "results.json").write_text(json.dumps(table), encoding="utf-8")
+        status, said, _ = self.run_sweep(
+            self.scoring(45), False, "--compare", "--only", "ready"
+        )
+        self.assertEqual(status, 4)
+        self.assertIn("no committed row for ready", said)
 
 
 class TheComparisonNeedsTheRecordedEnvironment(HarnessTestCase):

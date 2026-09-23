@@ -26,6 +26,20 @@ committed directory of every run that produced a card, and leaves alone the dire
 run that did not -- a refused run's staged output is the two or three files it reached before
 the refusal, and moving that over a committed card deletes the card itself.
 
+**`--only RUN ...` makes the named runs and no others.** With `--compare` it compares their
+cards, their rows of `results.json` and the guide's recorded vocabulary; with `--publish` it
+replaces their cards and puts their rows into the committed `results.json` in the order a
+whole sweep writes them, leaving every other row exactly as it was -- and, like `--compare`, only in the environment
+the committed cards record. Adding a run then costs
+its own build rather than the bank's, and the whole-bank `--compare` in CI is what checks
+that everything it did not repeat still reproduces.
+
+**It records what the guide can say.** `results.json` carries `conditions` beside the runs:
+every cap condition the pinned `readiness.py` can raise, with the remedy and the ranked
+ceiling it gives each, read from the guide's own tables by the same probe that reads its
+document contracts. The suite holds the cards to it -- every condition is on a card or is
+named as unreached, with the reason.
+
 Standard library only, like `build.py`. It needs a checkout of the guide, because the
 scripts it runs are the guide's, and it never reaches the network.
 
@@ -131,7 +145,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 # The guide commit every figure under cards/ was measured at. Changing this is a deliberate
 # re-measurement, never a side effect of somebody's checkout having moved. WORKING_REVISION is
@@ -296,6 +310,22 @@ GRID: tuple[tuple[str, str, str], ...] = (
     ("grid-normalized-exact--code-sql", "normalized-exact", "code-sql"),
     ("grid-exact--structured", "exact", "structured"),
 )
+
+
+def sweep() -> list[tuple[str, tuple[str, ...], dict[str, Any]]]:
+    """Every run, as (tag, build flags, options), in the order `results.json` lists them.
+
+    One list for the whole sweep, a partial one and the merge a partial `--publish` makes,
+    so a run cannot be measured under one set of flags and filed under another.
+    """
+    return (
+        [(preset, ("--preset", preset), {}) for preset in PRESETS]
+        + [(tag, flags, dict(options)) for tag, flags, options in VARIANTS]
+        + [
+            (tag, ("--preset", "checked"), {"method": declared, "task_kind": kind})
+            for tag, declared, kind in GRID
+        ]
+    )
 
 
 class MeasurementError(RuntimeError):
@@ -618,6 +648,12 @@ def capture_json(
 # asks the revision in front of it instead of keeping a second copy of a contract that has
 # already moved twice. The three constants are the three independently editable contracts
 # the guide enforces on these two documents: the top level, the knobs half, the build half.
+#
+# The same import answers one more question, which is what the guide can say at all: every
+# cap condition it can raise, with the remedy and the ranked ceiling it gives each. Read
+# from `CAP_CEILING` and `ACTION_FOR_CONDITION`, the two tables `readiness.py` holds equal
+# by its own test, so the vocabulary the cards are checked against is the pinned guide's
+# and never a list kept here. `results.json` records it beside the runs.
 CONTRACT_PROBE = """
 import importlib.util
 import json
@@ -640,12 +676,24 @@ def listed(name):
     return None
 
 
+def conditions():
+    ceilings = getattr(module, "CAP_CEILING", None)
+    remedies = getattr(module, "ACTION_FOR_CONDITION", None)
+    if not isinstance(ceilings, dict) or not isinstance(remedies, dict):
+        return None
+    return {
+        condition: {"action": remedies.get(condition), "ceiling": ceilings[condition]}
+        for condition in sorted(ceilings)
+    }
+
+
 print(
     json.dumps(
         {
             "document": listed("AGENT_KNOBS_DOCUMENT_FIELDS"),
             "knob": listed("DISCOVERED_KNOB_FIELDS"),
             "build": listed("BUILD_CHECK_FIELDS"),
+            "conditions": conditions(),
         }
     )
 )
@@ -658,21 +706,8 @@ print(
 REQUIRED_BUILD_FIELD = "source_lines"
 
 
-def contract_mismatch(scripts: Path) -> tuple[list[str], list[str]]:
-    """Where the guide in front of us and the documents beside us disagree, in its terms.
-
-    The pin and the documents' schema are two independently editable facts. This check
-    detects disagreement before anything is built, against `readiness.py`'s own field
-    constants rather than against a copy of them kept in this file.
-
-    Returns the disagreements and, beside them, what could not be checked at all -- a
-    revision that renames or reshapes one of those constants makes this gate a no-op for
-    that half, and a gate that has quietly stopped gating has to say so on the way past.
-
-    What it does *not* claim to derive: requiredness. Requiredness is not expressible from
-    field constants alone, so the settled/undetermined distinction is read from the document
-    exactly as the guide reads it, and the field name is written down above.
-    """
+def read_guide(scripts: Path) -> dict[str, Any]:
+    """What `CONTRACT_PROBE` reads out of the guide's `readiness.py`, as an object."""
     probe = run_step(
         [sys.executable, "-c", CONTRACT_PROBE, str(scripts / "readiness.py")],
         HERE,
@@ -700,7 +735,24 @@ def contract_mismatch(scripts: Path) -> tuple[list[str], list[str]]:
         raise HarnessFault(
             f"the contract probe answered with a {type(contracts).__name__}, not an object"
         )
+    return contracts
 
+
+def contract_mismatch(contracts: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """Where the guide in front of us and the documents beside us disagree, in its terms.
+
+    The pin and the documents' schema are two independently editable facts. This check
+    detects disagreement before anything is built, against `readiness.py`'s own field
+    constants rather than against a copy of them kept in this file.
+
+    Returns the disagreements and, beside them, what could not be checked at all -- a
+    revision that renames or reshapes one of those constants makes this gate a no-op for
+    that half, and a gate that has quietly stopped gating has to say so on the way past.
+
+    What it does *not* claim to derive: requiredness. Requiredness is not expressible from
+    field constants alone, so the settled/undetermined distinction is read from the document
+    exactly as the guide reads it, and the field name is written down above.
+    """
     complaints: list[str] = []
     unchecked: list[str] = []
     for half, label in (
@@ -1202,59 +1254,130 @@ def environment_mismatch(recorded: dict[str, str]) -> list[str]:
     ]
 
 
-def compare_with_record(staging: Path) -> tuple[list[str], int, list[str]]:
+def compare_with_record(
+    staging: Path, only: Sequence[str] | None = None
+) -> tuple[list[str], int, list[str]]:
     """What a fresh measurement under `staging` says that the committed record does not.
 
     Returns the differences, how many cards were compared byte for byte, and the runs the
     record says were refused. A refused run's committed directory is the older card
     `--publish` deliberately leaves in place, so there is nothing fresh to compare it with;
     its refusal is compared instead, as a row of `results.json`, which is compared whole.
+
+    With `only`, the comparison is of those runs and nothing else: their cards, their rows
+    of `results.json`, and the guide's recorded vocabulary, which every sweep reads. A run
+    named there that the record does not hold is a difference -- a subset that compares a
+    card nobody has published agrees with nothing, it does not agree with everything.
     """
     record = ours(CARDS / "results.json", "the committed cards/results.json")
     differences: list[str] = []
-    fresh_table = (staging / "results.json").read_bytes()
-    if fresh_table != (CARDS / "results.json").read_bytes():
-        differences.append(
-            "results.json: "
-            + first_difference(
-                (CARDS / "results.json").read_bytes().decode("utf-8"),
-                fresh_table.decode("utf-8"),
+    if only is None:
+        fresh_table = (staging / "results.json").read_bytes()
+        if fresh_table != (CARDS / "results.json").read_bytes():
+            differences.append(
+                "results.json: "
+                + first_difference(
+                    (CARDS / "results.json").read_bytes().decode("utf-8"),
+                    fresh_table.decode("utf-8"),
+                )
             )
-        )
-    runs = [run["tag"] for run in record.get("runs", [])]
-    refused = [run["tag"] for run in record.get("runs", []) if run.get("refused")]
+        rows = record.get("runs", [])
+    else:
+        fresh = ours(staging / "results.json", "this run's own results.json")
+        for field in ("guide_revision", "conditions"):
+            if fresh.get(field) != record.get(field):
+                differences.append(
+                    f"results.json: {field} differs from the committed record"
+                )
+        committed_rows = {row["tag"]: row for row in record.get("runs", [])}
+        fresh_rows = {row["tag"]: row for row in fresh.get("runs", [])}
+        rows = []
+        for tag in only:
+            if tag not in committed_rows:
+                differences.append(f"results.json: no committed row for {tag}")
+                continue
+            rows.append(committed_rows[tag])
+            if fresh_rows.get(tag) != committed_rows[tag]:
+                differences.append(
+                    f"results.json row {tag}: "
+                    + first_difference(
+                        json.dumps(committed_rows[tag], indent=2),
+                        json.dumps(fresh_rows.get(tag), indent=2),
+                    )
+                )
+    runs = [run["tag"] for run in rows]
+    refused = [run["tag"] for run in rows if run.get("refused")]
     compared = 0
     for tag in runs:
         if tag in refused:
             continue
-        committed, fresh = files_under(CARDS / tag), files_under(staging / tag)
-        for name in sorted(set(committed) | set(fresh)):
-            if name not in fresh:
+        committed, produced = files_under(CARDS / tag), files_under(staging / tag)
+        for name in sorted(set(committed) | set(produced)):
+            if name not in produced:
                 differences.append(f"{tag}/{name}: committed, and not produced now")
             elif name not in committed:
                 differences.append(f"{tag}/{name}: produced now, and not committed")
-            elif committed[name] != fresh[name]:
+            elif committed[name] != produced[name]:
                 differences.append(
                     f"{tag}/{name}: "
                     + first_difference(
                         committed[name].decode("utf-8", "replace"),
-                        fresh[name].decode("utf-8", "replace"),
+                        produced[name].decode("utf-8", "replace"),
                     )
                 )
         compared += 1
-    unmeasured = sorted(
-        entry.name
-        for entry in CARDS.iterdir()
-        if entry.is_dir() and entry.name not in runs
-    )
-    for name in unmeasured:
-        differences.append(f"{name}/: a committed card no run in the record produces")
-    if compared == 0 or compared != len(runs) - len(refused):
+    if only is None:
+        unmeasured = sorted(
+            entry.name
+            for entry in CARDS.iterdir()
+            if entry.is_dir() and entry.name not in runs
+        )
+        for name in unmeasured:
+            differences.append(
+                f"{name}/: a committed card no run in the record produces"
+            )
+    if (only is None and compared == 0) or compared != len(runs) - len(refused):
         differences.append(
             f"compared {compared} cards where the record has {len(runs) - len(refused)} "
             "that scored; a comparison of nothing agrees with everything"
         )
     return differences, compared, refused
+
+
+def merged_record(fresh: dict[str, Any]) -> dict[str, Any]:
+    """The committed `results.json` with the rows a partial sweep measured put in.
+
+    Every other row stays exactly as committed, and the rows keep the order a whole sweep
+    writes them in, so the table a partial `--publish` leaves is the one a whole one would
+    write wherever the runs it did not repeat still reproduce -- which is what the CI
+    comparison of the whole bank then checks. Refused, rather than guessed at: a record
+    taken at another revision, and a record holding a run this sweep no longer names.
+    """
+    committed = ours(CARDS / "results.json", "the committed cards/results.json")
+    if committed.get("guide_revision") != fresh["guide_revision"]:
+        raise HarnessFault(
+            f"cards/results.json records guide {committed.get('guide_revision')} and "
+            f"this run measured {fresh['guide_revision']}; a partial --publish cannot "
+            "leave one table measured at two revisions"
+        )
+    order = [tag for tag, _, _ in sweep()]
+    kept = {row["tag"]: row for row in committed.get("runs", [])}
+    stray = sorted(set(kept) - set(order))
+    if stray:
+        raise HarnessFault(
+            f"cards/results.json holds {', '.join(stray)}, which this sweep no longer "
+            "names; a whole --publish rewrites the table"
+        )
+    measured = {row["tag"]: row for row in fresh["runs"]}
+    return {
+        "guide_revision": fresh["guide_revision"],
+        "conditions": fresh["conditions"],
+        "runs": [
+            measured.get(tag, kept.get(tag))
+            for tag in order
+            if tag in measured or tag in kept
+        ],
+    }
 
 
 def files_under(directory: Path) -> dict[str, bytes]:
@@ -1338,9 +1461,22 @@ def main() -> int:
         help="print the guide revision, Python, traigent and litellm the committed "
         "cards were measured with, as name=value lines, and exit",
     )
+    parser.add_argument(
+        "--only",
+        nargs="+",
+        metavar="RUN",
+        help="measure these runs and no others: with --compare, compare their cards "
+        "and their rows of results.json; with --publish, replace their cards and put "
+        "their rows into the committed results.json, leaving every other row as it is",
+    )
     arguments = parser.parse_args()
 
     if arguments.recorded_environment:
+        if arguments.only:
+            parser.error(
+                "--recorded-environment reads the committed record whole and measures "
+                "nothing, so --only has no runs to name for it"
+            )
         try:
             recorded = recorded_environment()
         except HarnessFault as broken:
@@ -1350,6 +1486,16 @@ def main() -> int:
         return 0
     if arguments.guide is None:
         parser.error("--guide is required to measure")
+    runs = sweep()
+    only: list[str] | None = None
+    if arguments.only:
+        only = list(dict.fromkeys(arguments.only))
+        unknown = sorted(set(only) - {tag for tag, _, _ in runs})
+        if unknown:
+            parser.error(
+                f"--only names runs the sweep does not make: {', '.join(unknown)}"
+            )
+        runs = [run for run in runs if run[0] in only]
 
     scripts = (
         arguments.guide.expanduser().resolve()
@@ -1391,6 +1537,12 @@ def main() -> int:
                 f"--compare needs the pinned revision {PINNED_REVISION[:8]}, the one the "
                 "committed cards record"
             )
+    # A partial publish writes some cards beside others it leaves as they were, so it has
+    # to be taken where they were: a card from another interpreter is a record that
+    # disagrees with itself about what it was measured on, which `--recorded-environment`
+    # and the CI comparison of the whole bank both stop on. A whole publish rewrites every
+    # card in one environment and needs no such check.
+    if arguments.compare or (arguments.publish and only is not None):
         try:
             mismatch = environment_mismatch(recorded_environment())
         except HarnessFault as broken:
@@ -1398,7 +1550,8 @@ def main() -> int:
         if mismatch:
             parser.error(
                 "this interpreter is not the environment the committed cards were "
-                "measured in, so every card would differ for that reason alone:\n    "
+                "measured in, so every card it made would differ for that reason "
+                "alone:\n    "
                 + "\n    ".join(mismatch)
                 + "\n  `--recorded-environment` prints what to install."
             )
@@ -1408,9 +1561,18 @@ def main() -> int:
     # property of the pair, not of any one run, so it stops the sweep in one sentence
     # instead of 26 refusals over a rewritten cards/.
     try:
-        disagreements, unchecked = contract_mismatch(scripts)
+        contracts = read_guide(scripts)
+        disagreements, unchecked = contract_mismatch(contracts)
     except HarnessFault as broken:
         return harness_fault(broken, None)
+    vocabulary = contracts.get("conditions")
+    if not isinstance(vocabulary, dict):
+        vocabulary = None
+        unchecked.append(
+            "this revision publishes no condition table (CAP_CEILING and "
+            "ACTION_FOR_CONDITION), so results.json records none and nothing checks "
+            "the cards against what the guide can raise"
+        )
     for gap in unchecked:
         # A gate that has become a no-op says so rather than passing silently.
         print(f"note: {gap}", file=sys.stderr)
@@ -1492,29 +1654,28 @@ def main() -> int:
         )
 
     try:
-        for preset in PRESETS:
-            measure(preset, ("--preset", preset))
-        for tag, flags, options in VARIANTS:
+        for tag, flags, options in runs:
             measure(tag, flags, **options)
-        for tag, declared, kind in GRID:
-            measure(tag, ("--preset", "checked"), method=declared, task_kind=kind)
     except HarnessFault as broken:
         return harness_fault(broken, staging)
 
+    record = {"guide_revision": revision, "conditions": vocabulary, "runs": results}
     (staging / "results.json").write_text(
-        json.dumps({"guide_revision": revision, "runs": results}, indent=2) + "\n",
-        encoding="utf-8",
+        json.dumps(record, indent=2) + "\n", encoding="utf-8"
     )
     refused = [row for row in results if row.get("refused")]
     print(f"\nguide revision {revision}")
 
     if arguments.compare:
         try:
-            differences, compared, recorded_refusals = compare_with_record(staging)
+            differences, compared, recorded_refusals = compare_with_record(
+                staging, only
+            )
         except HarnessFault as broken:
             return harness_fault(broken, staging)
         print(
-            f"compared {compared} cards byte for byte with cards/, and results.json whole"
+            f"compared {compared} cards byte for byte with cards/, and "
+            + ("results.json whole" if only is None else "their rows of results.json")
             + (
                 f"; refusals compared as recorded: {', '.join(recorded_refusals)}"
                 if recorded_refusals
@@ -1549,6 +1710,17 @@ def main() -> int:
         # cannot be produced again. Promotion is a loop of moves rather than one atomic
         # rename, so an interruption leaves cards/ part old and part new; re-run it.
         incomplete = {row["tag"] for row in refused}
+        # A partial sweep's own table holds only the runs it made, so the committed one
+        # with those rows put in replaces it before promotion -- and before anything
+        # moves, so a table that cannot be merged leaves every card where it was.
+        if only is not None:
+            try:
+                table = merged_record(record)
+            except HarnessFault as broken:
+                return harness_fault(broken, staging)
+            (staging / "results.json").write_text(
+                json.dumps(table, indent=2) + "\n", encoding="utf-8"
+            )
         CARDS.mkdir(parents=True, exist_ok=True)
         for produced in sorted(staging.iterdir()):
             if produced.name in incomplete:
