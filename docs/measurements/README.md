@@ -69,7 +69,9 @@ calibration tool to run the execution scorer against the project's databases, an
 refuses to import a scorer whose walk reaches a SQL engine (exit 2). The sweep records the
 refusal in `results.json` and leaves `cards/best-case--off-method-calibration/` as it was: the
 `6ec2b9c1` card, 91 EXCELLENT, kept as the evidence for a number the README no longer prints
-and a run the guide no longer performs.
+and a run the guide no longer performs. Being kept as it was, its `argv.json` still records the
+build without the `demo` subcommand, a recording fault every other card has since been
+republished without; its `01-build.txt` shows the command that ran.
 
 The sweep checks one more thing before it builds anything: that the documents under
 `agent-knobs/` carry only fields the guide at the pin reads. It reads `readiness.py`'s own
@@ -98,7 +100,7 @@ answered when it could.
 | `cards/<run>/03-calibration.json` | `calibrate_evaluator.py --json` output, where calibration ran |
 | `cards/<run>/04-readiness-card.txt` | **the rendered card** -- the thing the documentation quotes |
 | `cards/<run>/05-readiness.json` | the same score machine-readable: pillars, sub-scores, caps |
-| `cards/<run>/argv.json` | the build, preflight and readiness invocations, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$KNOBS`, `$EVIDENCE`. A calibrated run records `calibration_ran` here and its argv in `03-calibration-stderr.txt`, which is where `slow-scorer`'s `--timeout 5` -- the flag its cap depends on -- is written down |
+| `cards/<run>/argv.json` | the build, preflight and readiness invocations, with this machine's paths replaced by `$GUIDE`, `$PROJECT`, `$DEMO`, `$KNOBS`, `$EVIDENCE`. A calibrated run records `calibration_ran` here and its argv in `03-calibration-stderr.txt`, which is where `slow-scorer`'s `--timeout 5` -- the flag its cap depends on -- is written down |
 | `cards/results.json` | one row per run: score, band, action, pillars, caps, what was declared. A run that could not be scored -- the guide refused it, or the step it needed returned no JSON -- carries a `refused` object naming the step, the exit status and that step's own first line instead of a score, and the sweep continues past it: one row lost rather than the bank. The reason is where the two are told apart (`Refusing to calibrate: ...` is the guide declining; `cannot read scoring input: ...` is an input of ours it would not read) |
 
 Two things about the rows at `d07b62cd`. A cap's `ceiling` may be `null` in `results.json`

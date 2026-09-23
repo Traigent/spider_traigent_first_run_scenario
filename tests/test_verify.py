@@ -23,6 +23,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
@@ -774,6 +775,75 @@ class VerifyHoldsTheDemoToItsRecord(unittest.TestCase):
         relative = "sql_explainer/dataset.jsonl"
         self.rewrite(out, [*self.lines(out, relative), "not json"], relative)
         self.assert_reported(out, "the second agent cannot be checked")
+
+    def test_a_record_describing_no_damage_is_caught(self) -> None:
+        """A clean build relabelled as a damaged state, with a detail naming no damage.
+
+        Every claim then agrees with the rows -- there is nothing to disagree about -- so
+        the only thing that can catch it is that the state has to show some damage.
+        """
+        cases = {
+            "duplicated": ({"repeated_ids": []}, "names no repeated row"),
+            "split-by-database": (
+                {"held_out_databases": []},
+                "names no held-out database",
+            ),
+            "mostly-synthetic": (
+                {
+                    "provenance": build.SYNTHETIC_PROVENANCE,
+                    "slice_says": "real",
+                    "declared_rows": 0,
+                    "of_rows": 300,
+                },
+                "declares 0 of 300 rows, which is not most of them",
+            ),
+            "generated-answers": (
+                {
+                    "output_provenance": build.GENERATED_ANSWER_PROVENANCE,
+                    "slice_says": build.SLICE_DECLARES_NO_ANSWER_PROVENANCE,
+                    "declared_rows": 0,
+                    "of_rows": 300,
+                },
+                "declares 0 of 300 rows, and it declares every row",
+            ),
+        }
+        clean = Path(tempfile.mkdtemp(dir=self.workspace)) / "demo"
+        build_or_raise("demo", "--dataset", "ready", "--out", str(clean))
+        for state, (detail, reason) in cases.items():
+            with self.subTest(state=state):
+                holder = Path(tempfile.mkdtemp(dir=self.workspace))
+                out = holder / "demo"
+                shutil.copytree(clean, out)
+
+                def relabel(manifest: dict) -> None:  # type: ignore[type-arg]
+                    dataset = manifest["components"]["dataset"]
+                    dataset.update(state=state, damage=state, damage_detail=detail)
+
+                self.edit_record(out, relabel)
+                self.assert_reported(out, reason)
+
+    def test_a_field_the_state_records_is_required(self) -> None:
+        out = self.copy("mostly-synthetic")
+
+        def drop(manifest: dict) -> None:  # type: ignore[type-arg]
+            del manifest["components"]["dataset"]["damage_detail"]["of_rows"]
+
+        self.edit_record(out, drop)
+        self.assert_reported(out, "damage_detail has no of_rows")
+
+    def test_a_record_nested_too_deep_to_parse_is_reported(self) -> None:
+        out = self.copy("duplicated")
+        (out / "demo.json").write_text("[" * 200_000 + "]" * 200_000)
+        self.assert_reported(out, "the build record cannot be read")
+
+    def test_a_demo_verify_cannot_finish_is_reported_not_raised(self) -> None:
+        out = self.copy("duplicated")
+        for failure in (ValueError("boom"), RecursionError("deep")):
+            with self.subTest(failure=type(failure).__name__):
+                with mock.patch.object(build, "verify_demo", side_effect=failure):
+                    problems = build.verified(out)
+                self.assertEqual(1, len(problems), problems)
+                self.assertIn("verify could not finish on this demo", problems[0])
 
     def test_a_torn_line_cut_somewhere_else_is_caught(self) -> None:
         out = self.copy("torn")

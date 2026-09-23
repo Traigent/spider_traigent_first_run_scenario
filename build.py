@@ -2528,8 +2528,8 @@ def verify_demo(root: Path) -> list[str]:
         return [f"no project at {project}"]
     try:
         manifest = json.loads(record.read_text(encoding="utf-8"))
-    except (ValueError, OSError) as error:
-        return [f"the build record cannot be read: {error}"]
+    except (ValueError, RecursionError, OSError) as error:
+        return [f"the build record cannot be read: {error!r}"]
     # The checks below read the record as the builder writes it. A record of another
     # shape is a problem to report -- never a traceback, which ends `verify` for this demo
     # and, before `cmd_verify` contained each one, for every demo after it in a bank.
@@ -2662,7 +2662,7 @@ def verify_demo(root: Path) -> list[str]:
             catalog = json.loads((project / "catalog.json").read_text(encoding="utf-8"))
             questions = [row[keys["input"]] for row in rows]
             databases = sorted({row["metadata"]["db_id"] for row in rows})
-        except (ValueError, KeyError, TypeError, OSError) as error:
+        except (ValueError, KeyError, TypeError, RecursionError, OSError) as error:
             problems.append(f"the rows or the catalog cannot be read: {error}")
         else:
             if any(question not in catalog for question in questions):
@@ -2758,7 +2758,7 @@ def contained(
     """
     try:
         check(problems)
-    except (ValueError, KeyError, TypeError, OSError) as error:
+    except (ValueError, KeyError, TypeError, RecursionError, OSError) as error:
         problems.append(f"{name} cannot be checked: {error!r}")
 
 
@@ -2999,6 +2999,25 @@ def dataset_record_problems(
                 problems.append(
                     f"rows outside damage_detail.{field} say {sorted(map(str, others))}"
                 )
+    # Every claim above compares the record with the rows, so a record describing no
+    # damage passes against rows that were never damaged. Each state has to show some.
+    if detail.get("repeated_ids") == []:
+        problems.append("damage_detail.repeated_ids names no repeated row")
+    if detail.get("held_out_databases") == []:
+        problems.append("damage_detail.held_out_databases names no held-out database")
+    declared, of_rows = detail.get("declared_rows"), detail.get("of_rows")
+    if isinstance(declared, int) and isinstance(of_rows, int):
+        if str(state).startswith("mostly-"):
+            if not of_rows / 2 < declared < of_rows:
+                problems.append(
+                    f"--dataset {state} declares {declared} of {of_rows} rows, which "
+                    "is not most of them and not all"
+                )
+        elif not 0 < declared == of_rows:
+            problems.append(
+                f"--dataset {state} declares {declared} of {of_rows} rows, and it "
+                "declares every row"
+            )
     for field in sorted(unchecked):
         problems.append(f"damage_detail.{field} is a claim verify has no check for")
     return problems
@@ -3129,7 +3148,14 @@ def verified(root: Path) -> list[str]:
     """
     try:
         return verify_demo(root)
-    except (ValueError, KeyError, TypeError, AttributeError, OSError) as error:
+    except (
+        ValueError,
+        KeyError,
+        TypeError,
+        AttributeError,
+        RecursionError,
+        OSError,
+    ) as error:
         return [f"verify could not finish on this demo: {error!r}"]
 
 
