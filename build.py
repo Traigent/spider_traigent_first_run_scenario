@@ -2321,7 +2321,8 @@ def plan_demo(args: argparse.Namespace) -> Plan:
     if args.guide == "local":
         check_guide_source(args.guide_src)
         guide_source = args.guide_src
-        assert guide_source is not None  # check_guide_source refuses None
+        if guide_source is None:  # check_guide_source refuses None
+            raise BuildError("--guide local needs --guide-src")
         guide_sha = guide_revision(guide_source.expanduser().resolve())
     if calibration == "present":
         check_calibration_source(evaluator)
