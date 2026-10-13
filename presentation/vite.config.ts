@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
-import { viteSingleFile } from "vite-plugin-singlefile";
+import { inlineSingleFile } from "./scripts/inline-single-file";
 
 // The development server needs a WebSocket back to itself for hot reloads.
 // The built file connects nowhere, and its policy says so.
@@ -24,7 +24,7 @@ function releaseContentSecurityPolicy(): Plugin {
 
 export default defineConfig({
   base: "./",
-  plugins: [react(), viteSingleFile(), releaseContentSecurityPolicy()],
+  plugins: [react(), inlineSingleFile(), releaseContentSecurityPolicy()],
   build: {
     outDir: "dist",
     emptyOutDir: true,
