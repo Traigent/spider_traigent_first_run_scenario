@@ -1,9 +1,9 @@
 """Acceptance checks for the repository's GitHub Actions workflow policy."""
 
 import os
-from pathlib import Path
 import re
 import unittest
+from pathlib import Path
 
 ROOT = Path(os.environ.get("CI_CONFIG_ROOT", Path(__file__).resolve().parents[1]))
 WORKFLOW_PATH = ROOT / ".github" / "workflows" / "ci.yml"
